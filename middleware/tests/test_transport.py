@@ -38,7 +38,7 @@ class TransportTests(unittest.TestCase):
             await transport.initialize()
             thread_id = await transport.start_thread("C:/repo", branch="feature/cardputer")
             replies = []
-            async for reply in transport.start_turn("Hello Codex"):
+            async for reply in transport.start_turn("Hello Codex", thread_id=thread_id, cwd="C:/repo"):
                 replies.append(asdict(reply))
             websocket = transport._ws
             assert websocket is not None
@@ -51,6 +51,9 @@ class TransportTests(unittest.TestCase):
         self.assertIn('"method": "thread/start"', sent[1])
         self.assertIn('"method": "thread/metadata/update"', sent[2])
         self.assertIn('"method": "turn/start"', sent[3])
+        self.assertIn('"threadId": "thr_123"', sent[3])
+        self.assertIn('"cwd": "C:/repo"', sent[3])
+        self.assertIn('"input": [{"type": "text", "text": "Hello Codex"}]', sent[3])
         self.assertEqual(
             replies,
             [

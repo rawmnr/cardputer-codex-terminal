@@ -34,7 +34,7 @@ class CodexTransport(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
+    async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
         raise NotImplementedError
 
 
@@ -52,7 +52,7 @@ class MockCodexTransport(CodexTransport):
     async def update_thread_metadata(self, thread_id: str, branch: str | None = None) -> None:
         return None
 
-    async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
+    async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
         yield CodexReply("status", "mock_codex_ready")
         yield CodexReply("delta", f"Received: {prompt}")
         yield CodexReply("delta", "This transport is a local placeholder.")
@@ -159,18 +159,24 @@ class LocalWebSocketCodexTransport(CodexTransport):
             raise RuntimeError(f"Codex thread metadata update failed: {response['error']}")
         return None
 
-    async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
+    async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
         ws = await self._ensure_connection()
         if not self._initialized:
             await self.initialize()
             ws = await self._ensure_connection()
+
+        params: dict[str, Any] = {"input": [{"type": "text", "text": prompt}]}
+        if thread_id is not None:
+            params["threadId"] = thread_id
+        if cwd is not None:
+            params["cwd"] = cwd
 
         await ws.send(
             json.dumps(
                 {
                     "id": "turn-start-1",
                     "method": "turn/start",
-                    "params": {"text": prompt},
+                    "params": params,
                 }
             )
         )

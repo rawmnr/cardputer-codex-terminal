@@ -32,6 +32,7 @@ class PushToCodexApp final : public App {
   void onEnter(DeviceState& state) override;
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
+  void onSubmit(const String& command, DeviceState& state) override;
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
 

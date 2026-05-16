@@ -1,4 +1,5 @@
 .pio/
+.platformio-home/
 __pycache__/
 *.bin
 *.elf
