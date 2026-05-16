@@ -50,6 +50,47 @@ class MiddlewareApp:
         self.session.thread_id = await self.transport.resume_thread(thread_id)
         return Event(EventType.CODEX_STATUS, {"kind": "thread_selected", "content": thread_id, "thread_id": thread_id})
 
+    def _set_pending_approval(self, data: dict[str, object]) -> Event:
+        approval_id = str(data.get("approvalId") or data.get("approval_id") or "")
+        title = str(data.get("title") or data.get("summary") or "Approval requested")
+        detail = str(data.get("detail") or data.get("message") or "")
+        timeout_seconds_raw = data.get("timeoutSeconds") or data.get("timeout_seconds")
+        timeout_seconds = int(timeout_seconds_raw) if isinstance(timeout_seconds_raw, int) else None
+
+        self.session.pending_approval_id = approval_id or None
+        self.session.pending_approval_title = title
+        self.session.pending_approval_detail = detail
+        self.session.pending_approval_timeout_seconds = timeout_seconds
+
+        return Event(
+            EventType.APPROVAL_REQUEST,
+            {
+                "approval_id": self.session.pending_approval_id,
+                "title": title,
+                "detail": detail,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+    async def handle_approval_response(self, approved: bool, approval_id: str | None = None, note: str | None = None) -> Event:
+        pending_id = approval_id or self.session.pending_approval_id
+        if pending_id is None:
+            return Event(EventType.ERROR, {"content": "No approval is pending."})
+
+        await self.transport.submit_approval(pending_id, approved, note=note)
+        self.session.pending_approval_id = None
+        self.session.pending_approval_title = None
+        self.session.pending_approval_detail = None
+        self.session.pending_approval_timeout_seconds = None
+        return Event(
+            EventType.APPROVAL_RESPONSE,
+            {
+                "approval_id": pending_id,
+                "approved": approved,
+                "note": note,
+            },
+        )
+
     async def _ensure_thread(self) -> None:
         if self.session.thread_id:
             return
@@ -59,6 +100,9 @@ class MiddlewareApp:
         await self._ensure_thread()
         events: list[Event] = []
         async for reply in self.transport.start_turn(text, thread_id=self.session.thread_id, cwd=self.session.workspace_path):
+            if reply.kind == "approval_request":
+                events.append(self._set_pending_approval(reply.data))
+                break
             events.append(
                 Event(
                     EventType.CODEX_DELTA
@@ -86,6 +130,15 @@ class MiddlewareApp:
         if message.type == CardputerMessageType.THREAD_SELECT:
             return [await self.select_thread(str(message.payload.get("thread_id", "")))]
 
+        if message.type == CardputerMessageType.APPROVAL_RESPONSE:
+            return [
+                await self.handle_approval_response(
+                    bool(message.payload.get("approved", False)),
+                    approval_id=str(message.payload.get("approval_id") or message.payload.get("approvalId") or ""),
+                    note=(str(message.payload.get("note")) if message.payload.get("note") is not None else None),
+                )
+            ]
+
         if message.type == CardputerMessageType.STATUS_REQUEST:
             return [
                 Event(
@@ -95,6 +148,9 @@ class MiddlewareApp:
                         "workspace_path": self.session.workspace_path,
                         "branch": self.session.branch,
                         "thread_id": self.session.thread_id,
+                        "approval_id": self.session.pending_approval_id,
+                        "approval_title": self.session.pending_approval_title,
+                        "approval_detail": self.session.pending_approval_detail,
                     },
                 )
             ]

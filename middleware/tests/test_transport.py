@@ -61,3 +61,29 @@ class TransportTests(unittest.TestCase):
                 {"kind": "completed", "content": "done", "data": {}},
             ],
         )
+
+    def test_transport_submits_approval_response(self) -> None:
+        async def connect_factory(_: str) -> FakeWebSocket:
+            return FakeWebSocket(
+                [
+                    {"kind": "status", "content": "initialized"},
+                    {"kind": "status", "content": "approval recorded"},
+                ]
+            )
+
+        async def scenario() -> list[str]:
+            transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000", connect_factory=connect_factory)
+            await transport.initialize()
+            await transport.submit_approval("appr_123", True, note="Approved on the Cardputer")
+            websocket = transport._ws
+            assert websocket is not None
+            return websocket.sent
+
+        sent = asyncio.run(scenario())
+
+        self.assertEqual(len(sent), 2)
+        self.assertIn('"method": "initialize"', sent[0])
+        self.assertIn('"method": "approval/respond"', sent[1])
+        self.assertIn('"approvalId": "appr_123"', sent[1])
+        self.assertIn('"approved": true', sent[1])
+        self.assertIn('"note": "Approved on the Cardputer"', sent[1])

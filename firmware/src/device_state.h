@@ -42,6 +42,11 @@ struct DeviceState {
   String codex_workspace_path = ".";
   String codex_branch;
   String codex_thread_id;
+  String approval_id;
+  String approval_title;
+  String approval_detail_line;
+  int approval_timeout_seconds = 0;
+  bool approval_pending = false;
   String wifi_ssid;
   String wifi_ip;
   String network_status_line;

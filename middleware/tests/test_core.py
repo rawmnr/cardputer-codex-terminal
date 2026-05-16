@@ -123,6 +123,101 @@ class MiddlewareAppTests(unittest.TestCase):
             [{"type": EventType.CODEX_STATUS.value, "payload": {"content": "done", "kind": "completed", "data": {}}}],
         )
 
+    def test_approval_request_and_response_flow_updates_session_and_transport(self) -> None:
+        class FakeWebSocket:
+            def __init__(self) -> None:
+                self.sent: list[str] = []
+                self.messages = [
+                    json.dumps({"kind": "status", "content": "initialized"}),
+                    json.dumps({"thread": {"id": "thr_456"}}),
+                    json.dumps(
+                        {
+                            "kind": "approval_request",
+                            "approvalId": "appr_123",
+                            "title": "Delete generated files",
+                            "detail": "Codex needs approval before removing build artifacts.",
+                            "timeoutSeconds": 45,
+                        }
+                    ),
+                    json.dumps({"kind": "status", "content": "approval acknowledged"}),
+                ]
+
+            async def send(self, message: str) -> None:
+                self.sent.append(message)
+
+            async def recv(self) -> str:
+                return self.messages.pop(0)
+
+        async def connect_factory(_: str) -> FakeWebSocket:
+            return FakeWebSocket()
+
+        async def scenario() -> tuple[list[dict], list[dict], dict[str, object]]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=False,
+                )
+            )
+            assert isinstance(app.transport, LocalWebSocketCodexTransport)
+            app.transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000", connect_factory=connect_factory)
+
+            await app.initialize()
+            prompt_events = await app.handle_text_prompt("Please remove the build artifacts")
+            response_events = await app.handle_cardputer_message(
+                CardputerMessage(
+                    CardputerMessageType.APPROVAL_RESPONSE,
+                    {"approved": True, "approval_id": "appr_123", "note": "Looks good to me."},
+                )
+            )
+            websocket = app.transport._ws
+            assert websocket is not None
+            return (
+                [event.to_dict() for event in prompt_events],
+                [event.to_dict() for event in response_events],
+                {
+                    "session": {
+                        "workspace_path": app.session.workspace_path,
+                        "branch": app.session.branch,
+                        "thread_id": app.session.thread_id,
+                        "pending_approval_id": app.session.pending_approval_id,
+                    },
+                    "sent": websocket.sent,
+                },
+            )
+
+        prompt_events, response_events, state = asyncio.run(scenario())
+
+        self.assertEqual(
+            prompt_events,
+            [
+                {
+                    "type": EventType.APPROVAL_REQUEST.value,
+                    "payload": {
+                        "approval_id": "appr_123",
+                        "detail": "Codex needs approval before removing build artifacts.",
+                        "timeout_seconds": 45,
+                        "title": "Delete generated files",
+                    },
+                }
+            ],
+        )
+        self.assertEqual(
+            response_events,
+            [
+                {
+                    "type": EventType.APPROVAL_RESPONSE.value,
+                    "payload": {"approval_id": "appr_123", "approved": True, "note": "Looks good to me."},
+                }
+            ],
+        )
+        self.assertEqual(
+            state["session"],
+            {"workspace_path": ".", "branch": None, "thread_id": "thr_456", "pending_approval_id": None},
+        )
+        self.assertTrue(any('"method": "approval/respond"' in item for item in state["sent"]))
+
     def test_local_websocket_transport_reports_target_url(self) -> None:
         class FakeWebSocket:
             def __init__(self) -> None:

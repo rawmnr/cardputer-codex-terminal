@@ -53,6 +53,9 @@ void TextScreen::drawHeader(const DeviceState& state) {
   M5Cardputer.Display.setCursor(112, 34);
   M5Cardputer.Display.printf("%4d", state.battery_voltage_mv);
   M5Cardputer.Display.drawString("Cdx:", 172, 34);
+  if (state.approval_pending) {
+    M5Cardputer.Display.drawString("apr", 188, 34);
+  }
   switch (state.codex_state) {
     case CodexState::Offline:
       M5Cardputer.Display.drawString("off", 206, 34);

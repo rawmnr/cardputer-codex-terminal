@@ -89,6 +89,16 @@ void BuddyApp::render(Print& out, const DeviceState& state) {
   out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
   out.print("Thread: ");
   out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
+  out.print("Approval: ");
+  out.println(state.approval_pending ? "pending" : "clear");
+  if (state.approval_pending) {
+    out.print("Request: ");
+    out.println(state.approval_title.length() > 0 ? state.approval_title : "(untitled)");
+    if (state.approval_detail_line.length() > 0) {
+      out.print("Detail: ");
+      out.println(state.approval_detail_line);
+    }
+  }
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);
@@ -257,6 +267,12 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
   out.print("Thread: ");
   out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
+  out.print("Approval: ");
+  out.println(state.approval_pending ? "pending" : "clear");
+  if (state.approval_pending && state.approval_detail_line.length() > 0) {
+    out.print("Approval detail: ");
+    out.println(state.approval_detail_line);
+  }
   out.print("Status: ");
   out.println(state.status_line);
   out.println("Hold SPACE to record, release to finalize.");
@@ -315,6 +331,17 @@ void PagerApp::render(Print& out, const DeviceState& state) {
   out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
   out.print("Thread: ");
   out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
+  out.print("Approval: ");
+  out.println(state.approval_pending ? "pending" : "clear");
+  if (state.approval_pending) {
+    out.print("Approval request: ");
+    out.println(state.approval_title.length() > 0 ? state.approval_title : "(untitled)");
+    if (state.approval_detail_line.length() > 0) {
+      out.print("Detail: ");
+      out.println(state.approval_detail_line);
+    }
+    out.println("Keys: Enter=approve, Del=reject");
+  }
   out.println("Recent activity:");
   const size_t log_count = state.activity_log_count;
   if (log_count == 0) {
@@ -353,6 +380,10 @@ void McpBridgeApp::tick(DeviceState& state) {
 void McpBridgeApp::render(Print& out, const DeviceState& state) {
   out.println("=== Cardputer MCP Bridge ===");
   out.println("Planned tools: notify, ask, confirm.");
+  if (state.approval_pending) {
+    out.print("Approval pending: ");
+    out.println(state.approval_title.length() > 0 ? state.approval_title : "(untitled)");
+  }
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);

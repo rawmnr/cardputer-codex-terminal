@@ -15,6 +15,8 @@ class AppShell {
   void render();
   void handleKeyboardInput(const String& typed, bool submit, bool backspace);
   void handlePushToTalk(bool pressed);
+  bool hasPendingApproval() const;
+  void handleApprovalDecision(bool approved);
   bool isPushToCodexActive() const;
 
  private:

@@ -22,6 +22,11 @@ void AppShell::begin() {
   state_.codex_workspace_path = ".";
   state_.codex_branch = "";
   state_.codex_thread_id = "";
+  state_.approval_id = "";
+  state_.approval_title = "";
+  state_.approval_detail_line = "";
+  state_.approval_timeout_seconds = 0;
+  state_.approval_pending = false;
   append_activity_event(state_, "Booted and waiting for middleware");
 
   input_line_ = "";
@@ -44,6 +49,8 @@ void AppShell::handleCommand(const String& command) {
     Serial.println("  /workspace <path>");
     Serial.println("  /branch <name>");
     Serial.println("  /thread <id>");
+    Serial.println("  /approval <detail>");
+    Serial.println("  /approve | /reject");
     Serial.println("  /battery <0-100>");
     Serial.println("  /status <text>");
     Serial.println("  anything else is forwarded to the active app");
@@ -112,6 +119,29 @@ void AppShell::handleCommand(const String& command) {
     state_.codex_thread_id = trimmed.substring(8);
     append_activity_event(state_, String("Thread: ") + state_.codex_thread_id);
     render();
+    return;
+  }
+
+  if (trimmed.startsWith("/approval ")) {
+    state_.approval_pending = true;
+    state_.approval_id = "local-approval";
+    state_.approval_title = "Approval requested";
+    state_.approval_detail_line = trimmed.substring(10);
+    state_.approval_timeout_seconds = 0;
+    state_.codex_state = CodexState::WaitingForApproval;
+    state_.status_line = "Approval pending";
+    append_activity_event(state_, String("Approval requested: ") + state_.approval_detail_line);
+    render();
+    return;
+  }
+
+  if (trimmed == "/approve") {
+    handleApprovalDecision(true);
+    return;
+  }
+
+  if (trimmed == "/reject") {
+    handleApprovalDecision(false);
     return;
   }
 
@@ -192,6 +222,30 @@ void AppShell::handlePushToTalk(bool pressed) {
     append_activity_event(state_, pressed ? "Push-to-talk pressed" : "Push-to-talk released");
     render();
   }
+}
+
+bool AppShell::hasPendingApproval() const {
+  return state_.approval_pending;
+}
+
+void AppShell::handleApprovalDecision(bool approved) {
+  if (!state_.approval_pending) {
+    state_.status_line = approved ? "No approval pending to accept" : "No approval pending to reject";
+    append_activity_event(state_, state_.status_line);
+    render();
+    return;
+  }
+
+  const String outcome = approved ? "Approval accepted" : "Approval rejected";
+  state_.approval_pending = false;
+  state_.approval_id = "";
+  state_.approval_title = "";
+  state_.approval_detail_line = "";
+  state_.approval_timeout_seconds = 0;
+  state_.codex_state = CodexState::Idle;
+  state_.status_line = outcome;
+  append_activity_event(state_, outcome);
+  render();
 }
 
 bool AppShell::isPushToCodexActive() const {

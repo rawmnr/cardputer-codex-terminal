@@ -18,9 +18,18 @@ class CardputerRouter:
 
         if message.type == CardputerMessageType.APPROVAL_RESPONSE:
             approved = bool(message.payload.get("approved", False))
+            approval_id = str(message.payload.get("approval_id") or message.payload.get("approvalId") or "")
+            note = str(message.payload.get("note") or "")
             return RouterResult(
                 status_line="approval accepted" if approved else "approval rejected",
-                outbound_events=[{"kind": "approval_response", "approved": approved}],
+                outbound_events=[
+                    {
+                        "kind": "approval_response",
+                        "approved": approved,
+                        "approval_id": approval_id,
+                        "note": note,
+                    }
+                ],
             )
 
         if message.type == CardputerMessageType.STATUS_REQUEST:

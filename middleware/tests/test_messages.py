@@ -32,12 +32,18 @@ class MessageTests(unittest.TestCase):
 
     def test_router_handles_approval_response(self) -> None:
         router = CardputerRouter()
-        message = CardputerMessage(CardputerMessageType.APPROVAL_RESPONSE, {"approved": True})
+        message = CardputerMessage(
+            CardputerMessageType.APPROVAL_RESPONSE,
+            {"approved": True, "approval_id": "appr_123", "note": "Approved"},
+        )
 
         result = router.route(message)
 
         self.assertEqual(result.status_line, "approval accepted")
-        self.assertEqual(result.outbound_events, [{"kind": "approval_response", "approved": True}])
+        self.assertEqual(
+            result.outbound_events,
+            [{"kind": "approval_response", "approved": True, "approval_id": "appr_123", "note": "Approved"}],
+        )
 
     def test_router_handles_project_and_branch_selection(self) -> None:
         router = CardputerRouter()

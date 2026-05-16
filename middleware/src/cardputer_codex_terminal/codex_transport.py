@@ -35,6 +35,10 @@ class CodexTransport(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def submit_approval(self, approval_id: str, approved: bool, note: str | None = None) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
         raise NotImplementedError
 
@@ -51,6 +55,9 @@ class MockCodexTransport(CodexTransport):
         return thread_id
 
     async def update_thread_metadata(self, thread_id: str, branch: str | None = None) -> None:
+        return None
+
+    async def submit_approval(self, approval_id: str, approved: bool, note: str | None = None) -> None:
         return None
 
     async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
@@ -161,6 +168,30 @@ class LocalWebSocketCodexTransport(CodexTransport):
             raise RuntimeError(f"Codex thread metadata update failed: {response['error']}")
         return None
 
+    async def submit_approval(self, approval_id: str, approved: bool, note: str | None = None) -> None:
+        ws = await self._ensure_connection()
+        if not self._initialized:
+            await self.initialize()
+            ws = await self._ensure_connection()
+
+        await ws.send(
+            json.dumps(
+                {
+                    "id": "approval-respond-1",
+                    "method": "approval/respond",
+                    "params": {
+                        "approvalId": approval_id,
+                        "approved": approved,
+                        "note": note,
+                    },
+                }
+            )
+        )
+        response = await self._read_json(ws)
+        if response.get("error") is not None:
+            raise RuntimeError(f"Codex approval response failed: {response['error']}")
+        return None
+
     async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
         ws = await self._ensure_connection()
         if not self._initialized:
@@ -237,6 +268,10 @@ class LocalWebSocketCodexTransport(CodexTransport):
             return CodexReply("status", str(content), data)
         if kind in {"delta", "item/agentMessage/delta"}:
             return CodexReply("delta", str(content), data)
+        if kind in {"approval_request", "approval/requested", "approval/request"} or (
+            "approval" in str(kind) and "request" in str(kind)
+        ):
+            return CodexReply("approval_request", str(content or "approval requested"), self._format_approval_request_data(message))
         if kind in {"usage", "thread/tokenUsage/updated", "account/rateLimits/updated"}:
             return CodexReply("usage", str(content or self._format_usage_content(message)), data or message)
         if kind in {"completed", "turn/completed"}:
@@ -287,3 +322,14 @@ class LocalWebSocketCodexTransport(CodexTransport):
         if isinstance(thread_id, str) and thread_id:
             return thread_id
         return None
+
+    def _format_approval_request_data(self, message: dict[str, Any]) -> dict[str, Any]:
+        payload = {
+            key: value
+            for key, value in message.items()
+            if key not in {"kind", "type", "event", "content", "text", "message"}
+        }
+        approval_data = payload.get("data")
+        if isinstance(approval_data, dict):
+            return approval_data
+        return payload

@@ -36,10 +36,18 @@ void poll_keyboard_input() {
   }
 
   if (status.del) {
+    if (g_shell.hasPendingApproval() && typed.length() == 0) {
+      g_shell.handleApprovalDecision(false);
+      return;
+    }
     g_shell.handleKeyboardInput("", false, true);
   }
 
   if (status.enter) {
+    if (g_shell.hasPendingApproval() && typed.length() == 0) {
+      g_shell.handleApprovalDecision(true);
+      return;
+    }
     g_shell.handleKeyboardInput(typed, true, false);
     return;
   }
