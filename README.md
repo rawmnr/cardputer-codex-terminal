@@ -36,6 +36,7 @@ Windows workspace
 ```text
 docs/
   architecture.md          System overview
+  product-scope.md         Feature parity with cardputer-claude-os, adapted for Codex
   hardware.md              Cardputer ADV hardware notes
   networking.md            Remote access, Tailscale, MicroLink
   middleware.md            Python bridge role and STT pipeline

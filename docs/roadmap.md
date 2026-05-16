@@ -3,6 +3,7 @@
 ## Phase 0 - Scoping
 
 - Initialize the repository.
+- Define product parity against `cardputer-claude-os`.
 - Document architecture, hardware, networking, middleware, and firmware.
 - List risks and open questions.
 
