@@ -14,6 +14,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--codex-ws-url", default="ws://127.0.0.1:9000")
+    parser.add_argument("--workspace", default=".")
+    parser.add_argument("--branch", default=None)
+    parser.add_argument("--thread-id", default=None)
     parser.add_argument("--real-codex", action="store_true", help="Use the real Codex transport when implemented.")
     parser.add_argument("--prompt", default="Hello Codex, start.")
     return parser
@@ -26,6 +29,9 @@ async def run_async(args: argparse.Namespace) -> int:
             port=args.port,
             codex_ws_url=args.codex_ws_url,
             use_mock_codex=not args.real_codex,
+            workspace_path=args.workspace,
+            branch=args.branch,
+            thread_id=args.thread_id,
         )
     )
     await app.initialize()

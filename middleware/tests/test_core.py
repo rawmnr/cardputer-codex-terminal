@@ -9,6 +9,7 @@ from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
 from cardputer_codex_terminal.codex_transport import LocalWebSocketCodexTransport
 from cardputer_codex_terminal.events import EventType
+from cardputer_codex_terminal.messages import CardputerMessage, CardputerMessageType
 
 
 class MiddlewareAppTests(unittest.TestCase):
@@ -45,6 +46,70 @@ class MiddlewareAppTests(unittest.TestCase):
                     "payload": {"content": "mock_turn_completed", "kind": "completed"},
                 },
             ],
+        )
+
+    def test_project_and_branch_selection_update_session_and_thread(self) -> None:
+        class FakeWebSocket:
+            def __init__(self) -> None:
+                self.sent: list[str] = []
+                self.messages = [
+                    json.dumps({"kind": "status", "content": "initialized"}),
+                    json.dumps({"thread": {"id": "thr_123"}}),
+                    json.dumps({"thread": {"id": "thr_123"}}),
+                    json.dumps({"kind": "completed", "content": "done"}),
+                ]
+
+            async def send(self, message: str) -> None:
+                self.sent.append(message)
+
+            async def recv(self) -> str:
+                return self.messages.pop(0)
+
+        async def connect_factory(_: str) -> FakeWebSocket:
+            return FakeWebSocket()
+
+        async def scenario() -> tuple[list[str], dict[str, object]]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=False,
+                )
+            )
+            assert isinstance(app.transport, LocalWebSocketCodexTransport)
+            app.transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000", connect_factory=connect_factory)
+
+            await app.initialize()
+            await app.handle_cardputer_message(
+                CardputerMessage(CardputerMessageType.PROJECT_SELECT, {"workspace_path": "C:/repo"})
+            )
+            await app.handle_cardputer_message(
+                CardputerMessage(CardputerMessageType.BRANCH_SELECT, {"branch": "feature/cardputer"})
+            )
+            events = await app.handle_cardputer_message(
+                CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": "Hello Codex"})
+            )
+            websocket = app.transport._ws
+            assert websocket is not None
+            return websocket.sent, {
+                "session": {
+                    "workspace_path": app.session.workspace_path,
+                    "branch": app.session.branch,
+                    "thread_id": app.session.thread_id,
+                },
+                "events": [event.to_dict() for event in events],
+            }
+
+        sent, state = asyncio.run(scenario())
+
+        self.assertEqual(state["session"], {"workspace_path": "C:/repo", "branch": "feature/cardputer", "thread_id": "thr_123"})
+        self.assertTrue(any('"method": "thread/start"' in item for item in sent))
+        self.assertTrue(any('"method": "thread/metadata/update"' in item for item in sent))
+        self.assertTrue(any('"method": "turn/start"' in item for item in sent))
+        self.assertEqual(
+            state["events"],
+            [{"type": EventType.CODEX_STATUS.value, "payload": {"content": "done", "kind": "completed"}}],
         )
 
     def test_local_websocket_transport_reports_target_url(self) -> None:

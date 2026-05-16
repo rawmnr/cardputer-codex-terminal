@@ -26,5 +26,25 @@ class CardputerRouter:
         if message.type == CardputerMessageType.STATUS_REQUEST:
             return RouterResult(status_line="status requested", outbound_events=[{"kind": "status_request"}])
 
-        return RouterResult(status_line="ping")
+        if message.type == CardputerMessageType.PROJECT_SELECT:
+            workspace_path = str(message.payload.get("workspace_path", ""))
+            return RouterResult(
+                status_line=f"project selected: {workspace_path}",
+                outbound_events=[{"kind": "project_select", "workspace_path": workspace_path}],
+            )
 
+        if message.type == CardputerMessageType.BRANCH_SELECT:
+            branch = str(message.payload.get("branch", ""))
+            return RouterResult(
+                status_line=f"branch selected: {branch}",
+                outbound_events=[{"kind": "branch_select", "branch": branch}],
+            )
+
+        if message.type == CardputerMessageType.THREAD_SELECT:
+            thread_id = str(message.payload.get("thread_id", ""))
+            return RouterResult(
+                status_line=f"thread selected: {thread_id}",
+                outbound_events=[{"kind": "thread_select", "thread_id": thread_id}],
+            )
+
+        return RouterResult(status_line="ping")

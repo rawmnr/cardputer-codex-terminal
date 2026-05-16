@@ -32,7 +32,20 @@ class MessageTests(unittest.TestCase):
         self.assertEqual(result.status_line, "approval accepted")
         self.assertEqual(result.outbound_events, [{"kind": "approval_response", "approved": True}])
 
+    def test_router_handles_project_and_branch_selection(self) -> None:
+        router = CardputerRouter()
+
+        project_result = router.route(CardputerMessage(CardputerMessageType.PROJECT_SELECT, {"workspace_path": "C:/repo"}))
+        branch_result = router.route(CardputerMessage(CardputerMessageType.BRANCH_SELECT, {"branch": "feature/cardputer"}))
+        thread_result = router.route(CardputerMessage(CardputerMessageType.THREAD_SELECT, {"thread_id": "thr_123"}))
+
+        self.assertEqual(project_result.status_line, "project selected: C:/repo")
+        self.assertEqual(project_result.outbound_events, [{"kind": "project_select", "workspace_path": "C:/repo"}])
+        self.assertEqual(branch_result.status_line, "branch selected: feature/cardputer")
+        self.assertEqual(branch_result.outbound_events, [{"kind": "branch_select", "branch": "feature/cardputer"}])
+        self.assertEqual(thread_result.status_line, "thread selected: thr_123")
+        self.assertEqual(thread_result.outbound_events, [{"kind": "thread_select", "thread_id": "thr_123"}])
+
     def test_message_from_dict_rejects_invalid_types(self) -> None:
         with self.assertRaises(ValueError):
             CardputerMessage.from_dict({"type": "unknown", "payload": {}})
-

@@ -22,12 +22,34 @@ class CodexTransport(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def start_thread(self, cwd: str, branch: str | None = None) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def resume_thread(self, thread_id: str) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_thread_metadata(self, thread_id: str, branch: str | None = None) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
         raise NotImplementedError
 
 
 class MockCodexTransport(CodexTransport):
     async def initialize(self) -> None:
+        return None
+
+    async def start_thread(self, cwd: str, branch: str | None = None) -> str:
+        suffix = branch or "main"
+        return f"mock-thread:{cwd}:{suffix}"
+
+    async def resume_thread(self, thread_id: str) -> str:
+        return thread_id
+
+    async def update_thread_metadata(self, thread_id: str, branch: str | None = None) -> None:
         return None
 
     async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
@@ -64,6 +86,78 @@ class LocalWebSocketCodexTransport(CodexTransport):
             raise RuntimeError(f"Codex initialization failed: {response['error']}")
 
         self._initialized = True
+
+    async def start_thread(self, cwd: str, branch: str | None = None) -> str:
+        ws = await self._ensure_connection()
+        if not self._initialized:
+            await self.initialize()
+            ws = await self._ensure_connection()
+
+        await ws.send(
+            json.dumps(
+                {
+                    "id": "thread-start-1",
+                    "method": "thread/start",
+                    "params": {"cwd": cwd},
+                }
+            )
+        )
+        response = await self._read_json(ws)
+        thread_id = self._extract_thread_id(response)
+        if not thread_id:
+            raise RuntimeError("Codex thread start did not return a thread id.")
+
+        if branch is not None:
+            await self.update_thread_metadata(thread_id, branch=branch)
+
+        return thread_id
+
+    async def resume_thread(self, thread_id: str) -> str:
+        ws = await self._ensure_connection()
+        if not self._initialized:
+            await self.initialize()
+            ws = await self._ensure_connection()
+
+        await ws.send(
+            json.dumps(
+                {
+                    "id": "thread-resume-1",
+                    "method": "thread/resume",
+                    "params": {"threadId": thread_id},
+                }
+            )
+        )
+        response = await self._read_json(ws)
+        resumed_thread_id = self._extract_thread_id(response)
+        if not resumed_thread_id:
+            raise RuntimeError("Codex thread resume did not return a thread id.")
+        return resumed_thread_id
+
+    async def update_thread_metadata(self, thread_id: str, branch: str | None = None) -> None:
+        if branch is None:
+            return None
+
+        ws = await self._ensure_connection()
+        if not self._initialized:
+            await self.initialize()
+            ws = await self._ensure_connection()
+
+        await ws.send(
+            json.dumps(
+                {
+                    "id": "thread-metadata-update-1",
+                    "method": "thread/metadata/update",
+                    "params": {
+                        "threadId": thread_id,
+                        "gitInfo": {"branch": branch},
+                    },
+                }
+            )
+        )
+        response = await self._read_json(ws)
+        if response.get("error") is not None:
+            raise RuntimeError(f"Codex thread metadata update failed: {response['error']}")
+        return None
 
     async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
         ws = await self._ensure_connection()
@@ -136,4 +230,24 @@ class LocalWebSocketCodexTransport(CodexTransport):
             return CodexReply("completed", str(content or "turn_completed"))
         if kind in {"error", "turn/error"}:
             return CodexReply("status", f"error: {content}")
+        return None
+
+    def _extract_thread_id(self, message: dict[str, Any]) -> str | None:
+        thread = message.get("thread")
+        if isinstance(thread, dict):
+            thread_id = thread.get("id")
+            if isinstance(thread_id, str) and thread_id:
+                return thread_id
+
+        params = message.get("params")
+        if isinstance(params, dict):
+            thread = params.get("thread")
+            if isinstance(thread, dict):
+                thread_id = thread.get("id")
+                if isinstance(thread_id, str) and thread_id:
+                    return thread_id
+
+        thread_id = message.get("threadId")
+        if isinstance(thread_id, str) and thread_id:
+            return thread_id
         return None

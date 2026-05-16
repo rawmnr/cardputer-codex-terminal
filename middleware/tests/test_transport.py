@@ -26,6 +26,8 @@ class TransportTests(unittest.TestCase):
             return FakeWebSocket(
                 [
                     {"kind": "status", "content": "initialized"},
+                    {"thread": {"id": "thr_123"}},
+                    {"thread": {"id": "thr_123"}},
                     {"kind": "delta", "content": "hello"},
                     {"kind": "completed", "content": "done"},
                 ]
@@ -34,6 +36,7 @@ class TransportTests(unittest.TestCase):
         async def scenario() -> tuple[list[str], list[dict]]:
             transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000", connect_factory=connect_factory)
             await transport.initialize()
+            thread_id = await transport.start_thread("C:/repo", branch="feature/cardputer")
             replies = []
             async for reply in transport.start_turn("Hello Codex"):
                 replies.append(asdict(reply))
@@ -43,9 +46,11 @@ class TransportTests(unittest.TestCase):
 
         sent, replies = asyncio.run(scenario())
 
-        self.assertEqual(len(sent), 2)
+        self.assertEqual(len(sent), 4)
         self.assertIn('"method": "initialize"', sent[0])
-        self.assertIn('"method": "turn/start"', sent[1])
+        self.assertIn('"method": "thread/start"', sent[1])
+        self.assertIn('"method": "thread/metadata/update"', sent[2])
+        self.assertIn('"method": "turn/start"', sent[3])
         self.assertEqual(
             replies,
             [

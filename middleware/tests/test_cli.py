@@ -13,6 +13,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.host, "127.0.0.1")
         self.assertEqual(args.port, 8765)
         self.assertEqual(args.codex_ws_url, "ws://127.0.0.1:9000")
+        self.assertEqual(args.workspace, ".")
+        self.assertIsNone(args.branch)
+        self.assertIsNone(args.thread_id)
         self.assertFalse(args.real_codex)
         self.assertEqual(args.prompt, "Hello Codex, start.")
-
