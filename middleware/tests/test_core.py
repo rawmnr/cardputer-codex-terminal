@@ -32,18 +32,29 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertEqual(
             payloads,
             [
-                {"type": EventType.CODEX_STATUS.value, "payload": {"content": "mock_codex_ready", "kind": "status"}},
                 {
-                    "type": EventType.CODEX_DELTA.value,
-                    "payload": {"content": "Received: Hello Codex", "kind": "delta"},
+                    "type": EventType.CODEX_STATUS.value,
+                    "payload": {"content": "mock_codex_ready", "kind": "status", "data": {}},
                 },
                 {
                     "type": EventType.CODEX_DELTA.value,
-                    "payload": {"content": "This transport is a local placeholder.", "kind": "delta"},
+                    "payload": {"content": "Received: Hello Codex", "kind": "delta", "data": {}},
+                },
+                {
+                    "type": EventType.CODEX_USAGE.value,
+                    "payload": {
+                        "content": "mock_usage_update",
+                        "kind": "usage",
+                        "data": {"threadId": "mock-thread:.:main", "cwd": ".", "usedPercent": 12},
+                    },
+                },
+                {
+                    "type": EventType.CODEX_DELTA.value,
+                    "payload": {"content": "This transport is a local placeholder.", "kind": "delta", "data": {}},
                 },
                 {
                     "type": EventType.CODEX_STATUS.value,
-                    "payload": {"content": "mock_turn_completed", "kind": "completed"},
+                    "payload": {"content": "mock_turn_completed", "kind": "completed", "data": {}},
                 },
             ],
         )
@@ -109,7 +120,7 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertTrue(any('"method": "turn/start"' in item for item in sent))
         self.assertEqual(
             state["events"],
-            [{"type": EventType.CODEX_STATUS.value, "payload": {"content": "done", "kind": "completed"}}],
+            [{"type": EventType.CODEX_STATUS.value, "payload": {"content": "done", "kind": "completed", "data": {}}}],
         )
 
     def test_local_websocket_transport_reports_target_url(self) -> None:
@@ -145,7 +156,62 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertEqual(
             payloads,
             [
-                {"kind": "delta", "content": "partial"},
-                {"kind": "completed", "content": "done"},
+                {"kind": "delta", "content": "partial", "data": {}},
+                {"kind": "completed", "content": "done", "data": {}},
+            ],
+        )
+
+    def test_local_websocket_transport_parses_usage_notifications(self) -> None:
+        class FakeWebSocket:
+            def __init__(self) -> None:
+                self.sent: list[str] = []
+                self.messages = [
+                    json.dumps({"kind": "status", "content": "initialized"}),
+                    json.dumps(
+                        {
+                            "kind": "thread/tokenUsage/updated",
+                            "tokenUsage": {"inputTokens": 120, "outputTokens": 42, "cachedInputTokens": 8, "reasoningTokens": 16},
+                        }
+                    ),
+                    json.dumps({"kind": "completed", "content": "done"}),
+                ]
+
+            async def send(self, message: str) -> None:
+                self.sent.append(message)
+
+            async def recv(self) -> str:
+                return self.messages.pop(0)
+
+        async def connect_factory(_: str) -> FakeWebSocket:
+            return FakeWebSocket()
+
+        transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000", connect_factory=connect_factory)
+
+        async def scenario() -> list[dict]:
+            await transport.initialize()
+            replies = []
+            async for reply in transport.start_turn("Hello Codex"):
+                replies.append(asdict(reply))
+            return replies
+
+        replies = asyncio.run(scenario())
+
+        self.assertEqual(
+            replies,
+            [
+                {
+                    "kind": "usage",
+                    "content": "thread usage input=120 output=42 cached=8 reasoning=16",
+                    "data": {
+                        "tokenUsage": {
+                            "inputTokens": 120,
+                            "outputTokens": 42,
+                            "cachedInputTokens": 8,
+                            "reasoningTokens": 16,
+                        },
+                        "kind": "thread/tokenUsage/updated",
+                    },
+                },
+                {"kind": "completed", "content": "done", "data": {}},
             ],
         )

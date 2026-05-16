@@ -61,8 +61,12 @@ class MiddlewareApp:
         async for reply in self.transport.start_turn(text, thread_id=self.session.thread_id, cwd=self.session.workspace_path):
             events.append(
                 Event(
-                    EventType.CODEX_DELTA if reply.kind == "delta" else EventType.CODEX_STATUS,
-                    {"content": reply.content, "kind": reply.kind},
+                    EventType.CODEX_DELTA
+                    if reply.kind == "delta"
+                    else EventType.CODEX_USAGE
+                    if reply.kind == "usage"
+                    else EventType.CODEX_STATUS,
+                    {"content": reply.content, "kind": reply.kind, "data": reply.data},
                 )
             )
         return events

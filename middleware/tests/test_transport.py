@@ -57,7 +57,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(
             replies,
             [
-                {"kind": "delta", "content": "hello"},
-                {"kind": "completed", "content": "done"},
+                {"kind": "delta", "content": "hello", "data": {}},
+                {"kind": "completed", "content": "done", "data": {}},
             ],
         )

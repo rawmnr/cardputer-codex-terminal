@@ -36,10 +36,15 @@ struct DeviceState {
   int battery_percent = 0;
   int battery_voltage_mv = 0;
   int ptt_peak_amplitude = 0;
+  int codex_usage_percent = -1;
+  int codex_usage_window_minutes = 0;
+  uint32_t codex_usage_resets_at = 0;
   String wifi_ssid;
   String wifi_ip;
   String network_status_line;
   String status_line;
+  String codex_usage_label;
+  String codex_usage_detail_line;
   size_t ptt_samples_captured = 0;
   size_t ptt_sample_limit = 0;
   uint32_t ptt_sample_rate_hz = 16000;

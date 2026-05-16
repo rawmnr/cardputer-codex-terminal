@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from typing import AsyncIterator
 from typing import Callable, Awaitable, Any
@@ -14,6 +14,7 @@ WebSocketFactory = Callable[[str], Awaitable[Any]]
 class CodexReply:
     kind: str
     content: str
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 class CodexTransport(ABC):
@@ -55,6 +56,7 @@ class MockCodexTransport(CodexTransport):
     async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
         yield CodexReply("status", "mock_codex_ready")
         yield CodexReply("delta", f"Received: {prompt}")
+        yield CodexReply("usage", "mock_usage_update", {"threadId": thread_id, "cwd": cwd, "usedPercent": 12})
         yield CodexReply("delta", "This transport is a local placeholder.")
         yield CodexReply("completed", "mock_turn_completed")
 
@@ -227,16 +229,44 @@ class LocalWebSocketCodexTransport(CodexTransport):
     def _decode_reply(self, message: dict[str, Any]) -> CodexReply | None:
         kind = message.get("kind") or message.get("type") or message.get("event")
         content = message.get("content") or message.get("text") or message.get("message") or ""
+        data = message.get("data")
+        if not isinstance(data, dict):
+            data = {}
 
         if kind in {"status", "turn/status"}:
-            return CodexReply("status", str(content))
+            return CodexReply("status", str(content), data)
         if kind in {"delta", "item/agentMessage/delta"}:
-            return CodexReply("delta", str(content))
+            return CodexReply("delta", str(content), data)
+        if kind in {"usage", "thread/tokenUsage/updated", "account/rateLimits/updated"}:
+            return CodexReply("usage", str(content or self._format_usage_content(message)), data or message)
         if kind in {"completed", "turn/completed"}:
-            return CodexReply("completed", str(content or "turn_completed"))
+            return CodexReply("completed", str(content or "turn_completed"), data)
         if kind in {"error", "turn/error"}:
-            return CodexReply("status", f"error: {content}")
+            return CodexReply("status", f"error: {content}", data)
         return None
+
+    def _format_usage_content(self, message: dict[str, Any]) -> str:
+        if "primary" in message or "rateLimits" in message:
+            rate_limits = message.get("rateLimits") or message
+            if isinstance(rate_limits, dict):
+                primary = rate_limits.get("primary")
+                if isinstance(primary, dict):
+                    used = primary.get("usedPercent")
+                    window = primary.get("windowDurationMins")
+                    reset = primary.get("resetsAt")
+                    return f"rate limit used={used}% window={window}m reset={reset}"
+        if "inputTokens" in message or "outputTokens" in message or "tokenUsage" in message:
+            token_usage = message.get("tokenUsage") if isinstance(message.get("tokenUsage"), dict) else message
+            if isinstance(token_usage, dict):
+                input_tokens = token_usage.get("inputTokens")
+                output_tokens = token_usage.get("outputTokens")
+                cached_tokens = token_usage.get("cachedInputTokens")
+                reasoning_tokens = token_usage.get("reasoningTokens")
+                return (
+                    f"thread usage input={input_tokens} output={output_tokens} "
+                    f"cached={cached_tokens} reasoning={reasoning_tokens}"
+                )
+        return "usage update"
 
     def _extract_thread_id(self, message: dict[str, Any]) -> str | None:
         thread = message.get("thread")

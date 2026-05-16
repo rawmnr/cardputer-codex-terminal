@@ -21,7 +21,7 @@ const char* app_label(AppId app_id) {
 void print_common_footer(Print& out) {
   out.println();
   out.println("Commands: /app buddy|push|pager|mcp | /wifi on|off | /codex idle|busy|approval|offline");
-  out.println("          /battery <0-100> | /status <text> | /help");
+  out.println("          /battery <0-100> | /usage <0-100> | /status <text> | /help");
 }
 }  // namespace
 
@@ -50,6 +50,20 @@ void BuddyApp::render(Print& out, const DeviceState& state) {
   out.println(state.wifi_connected ? "connected" : "offline");
   out.print("Net: ");
   out.println(state.network_status_line);
+  out.print("Usage: ");
+  if (state.codex_usage_percent >= 0) {
+    out.print(state.codex_usage_percent);
+    out.print("%");
+    if (state.codex_usage_window_minutes > 0) {
+      out.print(" / ");
+      out.print(state.codex_usage_window_minutes);
+      out.println("m window");
+    } else {
+      out.println();
+    }
+  } else {
+    out.println("unknown");
+  }
   out.print("Codex: ");
   switch (state.codex_state) {
     case CodexState::Offline:
@@ -204,6 +218,13 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.println(state.ptt_sample_limit);
   out.print("Peak: ");
   out.println(state.ptt_peak_amplitude);
+  out.print("Usage: ");
+  if (state.codex_usage_percent >= 0) {
+    out.print(state.codex_usage_percent);
+    out.println("%");
+  } else {
+    out.println("unknown");
+  }
   out.print("Detail: ");
   out.println(state.ptt_detail_line);
   out.print("Net: ");
@@ -254,6 +275,27 @@ void PagerApp::render(Print& out, const DeviceState& state) {
   out.println(app_label(state.active_app));
   out.print("Net: ");
   out.println(state.network_status_line);
+  out.print("Usage: ");
+  if (state.codex_usage_percent >= 0) {
+    out.print(state.codex_usage_percent);
+    out.print("%");
+    if (state.codex_usage_window_minutes > 0) {
+      out.print(" window ");
+      out.print(state.codex_usage_window_minutes);
+      out.print("m");
+    }
+    if (state.codex_usage_resets_at > 0) {
+      out.print(" reset ");
+      out.print(state.codex_usage_resets_at);
+    }
+    out.println();
+  } else {
+    out.println("unknown");
+  }
+  if (state.codex_usage_detail_line.length() > 0) {
+    out.print("Usage detail: ");
+    out.println(state.codex_usage_detail_line);
+  }
   out.println("Recent activity:");
   const size_t log_count = state.activity_log_count;
   if (log_count == 0) {

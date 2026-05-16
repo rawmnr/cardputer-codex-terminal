@@ -102,6 +102,18 @@ void AppShell::handleCommand(const String& command) {
     return;
   }
 
+  if (trimmed.startsWith("/usage ")) {
+    const int value = trimmed.substring(7).toInt();
+    state_.codex_usage_percent = constrain(value, 0, 100);
+    state_.codex_usage_label = "codex";
+    state_.codex_usage_window_minutes = 15;
+    state_.codex_usage_resets_at = 0;
+    state_.codex_usage_detail_line = String("Usage ") + String(state_.codex_usage_percent) + "%";
+    append_activity_event(state_, String("Usage set to ") + String(state_.codex_usage_percent) + "%");
+    render();
+    return;
+  }
+
   if (active_app_ != nullptr) {
     if (state_.active_app == AppId::PushToCodex) {
       active_app_->onSubmit(trimmed, state_);

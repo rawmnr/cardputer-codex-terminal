@@ -12,6 +12,7 @@ class EventType(StrEnum):
     APPROVAL_RESPONSE = "approval_response"
     CODEX_DELTA = "codex_delta"
     CODEX_STATUS = "codex_status"
+    CODEX_USAGE = "codex_usage"
     ERROR = "error"
 
 
