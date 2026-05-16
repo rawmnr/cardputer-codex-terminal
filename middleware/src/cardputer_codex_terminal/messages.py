@@ -11,6 +11,7 @@ PROTOCOL_VERSION = 1
 class CardputerMessageType(StrEnum):
     TEXT_PROMPT = "text_prompt"
     AUDIO_CHUNK = "audio_chunk"
+    VOICE_PROMPT_READY = "voice_prompt_ready"
     APPROVAL_RESPONSE = "approval_response"
     STATUS_REQUEST = "status_request"
     PROJECT_SELECT = "project_select"

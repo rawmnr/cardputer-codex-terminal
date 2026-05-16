@@ -8,6 +8,7 @@ from .events import Event, EventType
 from .messages import CardputerMessage, CardputerMessageType
 from .router import CardputerRouter
 from .session import CodexSession
+from .voice import MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
 
 @dataclass(slots=True)
@@ -16,6 +17,8 @@ class MiddlewareApp:
     transport: CodexTransport = field(init=False)
     router: CardputerRouter = field(default_factory=CardputerRouter)
     session: CodexSession = field(init=False)
+    voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
+    transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
 
     def __post_init__(self) -> None:
         self.transport = (
@@ -49,6 +52,28 @@ class MiddlewareApp:
     async def select_thread(self, thread_id: str) -> Event:
         self.session.thread_id = await self.transport.resume_thread(thread_id)
         return Event(EventType.CODEX_STATUS, {"kind": "thread_selected", "content": thread_id, "thread_id": thread_id})
+
+    def append_audio_chunk(self, pcm_b64: str, chunk_id: int | None = None) -> Event:
+        sample_count = self.voice_buffer.append_chunk(pcm_b64)
+        return Event(
+            EventType.AUDIO_CHUNK,
+            {
+                "chunk_id": chunk_id,
+                "sample_count": sample_count,
+                "chunk_count": self.voice_buffer.chunk_count,
+                "byte_count": self.voice_buffer.byte_count(),
+            },
+        )
+
+    async def finalize_voice_prompt(self, sample_rate_hz: int) -> list[Event]:
+        self.voice_buffer.sample_rate_hz = sample_rate_hz
+        if not self.voice_buffer.has_audio():
+            return [Event(EventType.ERROR, {"content": "No voice audio is buffered."})]
+
+        transcript = await self.voice_buffer.transcribe(self.transcriber)
+        events = [Event(EventType.CODEX_STATUS, {"kind": "voice_prompt_transcribed", "content": transcript})]
+        events.extend(await self.handle_text_prompt(transcript))
+        return events
 
     def _set_pending_approval(self, data: dict[str, object]) -> Event:
         approval_id = str(data.get("approvalId") or data.get("approval_id") or "")
@@ -123,6 +148,17 @@ class MiddlewareApp:
 
         if message.type == CardputerMessageType.PROJECT_SELECT:
             return [await self.select_workspace(str(message.payload.get("workspace_path", ".")))]
+
+        if message.type == CardputerMessageType.AUDIO_CHUNK:
+            return [
+                self.append_audio_chunk(
+                    str(message.payload.get("pcm_b64", "")),
+                    chunk_id=int(message.payload.get("chunk_id", 0)),
+                )
+            ]
+
+        if message.type == CardputerMessageType.VOICE_PROMPT_READY:
+            return await self.finalize_voice_prompt(int(message.payload.get("sample_rate_hz", 16000)))
 
         if message.type == CardputerMessageType.BRANCH_SELECT:
             return [await self.select_branch(str(message.payload.get("branch", "")))]

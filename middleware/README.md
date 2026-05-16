@@ -9,6 +9,7 @@ The initial scaffold provides:
 - a Codex transport abstraction;
 - a mock for early local testing;
 - a WebSocket bridge for Cardputer clients.
+- a buffered voice prompt pipeline with a transcriber hook.
 
 The Cardputer message contract is versioned. Current protocol version: `1`.
 

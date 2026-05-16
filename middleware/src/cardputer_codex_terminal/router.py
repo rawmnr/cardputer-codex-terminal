@@ -16,6 +16,20 @@ class CardputerRouter:
             chunk_id = int(message.payload.get("chunk_id", 0))
             return RouterResult(status_line="audio chunk queued", outbound_events=[{"kind": "audio_chunk", "chunk_id": chunk_id}])
 
+        if message.type == CardputerMessageType.VOICE_PROMPT_READY:
+            sample_rate_hz = int(message.payload.get("sample_rate_hz", 16000))
+            sample_count = int(message.payload.get("sample_count", 0))
+            return RouterResult(
+                status_line="voice prompt ready",
+                outbound_events=[
+                    {
+                        "kind": "voice_prompt_ready",
+                        "sample_rate_hz": sample_rate_hz,
+                        "sample_count": sample_count,
+                    }
+                ],
+            )
+
         if message.type == CardputerMessageType.APPROVAL_RESPONSE:
             approved = bool(message.payload.get("approved", False))
             approval_id = str(message.payload.get("approval_id") or message.payload.get("approvalId") or "")

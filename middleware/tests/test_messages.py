@@ -30,6 +30,21 @@ class MessageTests(unittest.TestCase):
         self.assertEqual(result.status_line, "text prompt received")
         self.assertEqual(result.outbound_events, [{"kind": "text_prompt", "text": "hello"}])
 
+    def test_router_handles_voice_prompt_ready(self) -> None:
+        router = CardputerRouter()
+        message = CardputerMessage(
+            CardputerMessageType.VOICE_PROMPT_READY,
+            {"sample_rate_hz": 16000, "sample_count": 2400},
+        )
+
+        result = router.route(message)
+
+        self.assertEqual(result.status_line, "voice prompt ready")
+        self.assertEqual(
+            result.outbound_events,
+            [{"kind": "voice_prompt_ready", "sample_rate_hz": 16000, "sample_count": 2400}],
+        )
+
     def test_router_handles_approval_response(self) -> None:
         router = CardputerRouter()
         message = CardputerMessage(

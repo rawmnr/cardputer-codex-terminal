@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import unittest
 from dataclasses import asdict
@@ -58,6 +59,55 @@ class MiddlewareAppTests(unittest.TestCase):
                 },
             ],
         )
+
+    def test_voice_prompt_buffer_transcribes_to_prompt_flow(self) -> None:
+        async def scenario() -> tuple[list[dict], dict[str, object]]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=True,
+                )
+            )
+            await app.initialize()
+            chunk = base64.b64encode(b"\x01\x00\x02\x00\x03\x00\x04\x00").decode("ascii")
+            chunk_event = await app.handle_cardputer_message(
+                CardputerMessage(CardputerMessageType.AUDIO_CHUNK, {"chunk_id": 1, "pcm_b64": chunk})
+            )
+            voice_events = await app.handle_cardputer_message(
+                CardputerMessage(CardputerMessageType.VOICE_PROMPT_READY, {"sample_rate_hz": 16000})
+            )
+            return (
+                [event.to_dict() for event in chunk_event + voice_events],
+                {
+                    "buffered_chunks": app.voice_buffer.chunk_count,
+                    "buffered_samples": app.voice_buffer.sample_count(),
+                },
+            )
+
+        events, state = asyncio.run(scenario())
+
+        self.assertEqual(
+            events[0],
+            {
+                "type": EventType.AUDIO_CHUNK.value,
+                "payload": {"chunk_id": 1, "sample_count": 4, "chunk_count": 1, "byte_count": 8},
+            },
+        )
+        self.assertEqual(
+            events[1],
+            {
+                "type": EventType.CODEX_STATUS.value,
+                "payload": {
+                    "kind": "voice_prompt_transcribed",
+                    "content": "Voice prompt captured (4 samples, 0 ms at 16000 Hz).",
+                },
+            },
+        )
+        self.assertEqual(events[2]["type"], EventType.CODEX_STATUS.value)
+        self.assertEqual(events[-1]["type"], EventType.CODEX_STATUS.value)
+        self.assertEqual(state, {"buffered_chunks": 0, "buffered_samples": 0})
 
     def test_project_and_branch_selection_update_session_and_thread(self) -> None:
         class FakeWebSocket:

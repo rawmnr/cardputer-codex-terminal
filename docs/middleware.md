@@ -27,6 +27,12 @@ Cardputer-facing messages use a versioned envelope. The current protocol version
 
 The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.
 
+The voice pipeline is intentionally split into three steps:
+
+1. collect PCM chunks from the Cardputer;
+2. buffer them until the user releases push-to-talk;
+3. transcribe the buffered audio into a prompt before handing it to Codex.
+
 ## Target Voice Pipeline
 
 ```text
