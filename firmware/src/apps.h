@@ -47,11 +47,13 @@ class PushToCodexApp final : public App {
   void finishRecording(DeviceState& state);
   void appendChunk(const int16_t* data, size_t length, DeviceState& state);
   void updatePttState(DeviceState& state);
+  void emitVoicePromptEnvelope(const DeviceState& state) const;
 
   String draft_;
   std::array<int16_t, kChunkSamples> chunk_buffer_{};
   std::array<int16_t, kMaxSamples> captured_samples_{};
   size_t captured_sample_count_ = 0;
+  int peak_amplitude_ = 0;
   bool recording_ = false;
   bool mic_started_ = false;
 };

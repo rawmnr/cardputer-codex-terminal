@@ -78,11 +78,14 @@ const char* PushToCodexApp::title() const { return "Push to Codex"; }
 void PushToCodexApp::onEnter(DeviceState& state) {
   draft_ = "";
   captured_sample_count_ = 0;
+  peak_amplitude_ = 0;
   recording_ = false;
   mic_started_ = false;
   state.ptt_state = PushToTalkState::Armed;
   state.ptt_samples_captured = 0;
   state.ptt_sample_limit = kMaxSamples;
+  state.ptt_sample_rate_hz = 16000;
+  state.ptt_peak_amplitude = 0;
   state.ptt_detail_line = "Hold SPACE to record a voice prompt";
   state.status_line = "Hold SPACE to record a voice prompt";
   if (!M5.Mic.isEnabled()) {
@@ -192,6 +195,8 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.print(state.ptt_samples_captured);
   out.print("/");
   out.println(state.ptt_sample_limit);
+  out.print("Peak: ");
+  out.println(state.ptt_peak_amplitude);
   out.print("Detail: ");
   out.println(state.ptt_detail_line);
   out.print("Net: ");
@@ -288,9 +293,11 @@ void PushToCodexApp::beginRecording(DeviceState& state) {
   }
 
   captured_sample_count_ = 0;
+  peak_amplitude_ = 0;
   recording_ = true;
   state.ptt_state = PushToTalkState::Recording;
   state.ptt_samples_captured = 0;
+  state.ptt_peak_amplitude = 0;
   state.ptt_detail_line = "Recording voice prompt...";
   state.status_line = "Recording voice prompt...";
 }
@@ -311,6 +318,7 @@ void PushToCodexApp::finishRecording(DeviceState& state) {
 
   recording_ = false;
   if (captured_sample_count_ > 0) {
+    emitVoicePromptEnvelope(state);
     state.ptt_state = PushToTalkState::Ready;
     state.ptt_detail_line = "Voice prompt ready for middleware";
     state.status_line = "Voice prompt ready for middleware";
@@ -334,9 +342,14 @@ void PushToCodexApp::appendChunk(const int16_t* data, size_t length, DeviceState
 
   for (size_t i = 0; i < actual; ++i) {
     captured_samples_[captured_sample_count_ + i] = data[i];
+    const int amplitude = abs(static_cast<int>(data[i]));
+    if (amplitude > peak_amplitude_) {
+      peak_amplitude_ = amplitude;
+    }
   }
   captured_sample_count_ += actual;
   state.ptt_samples_captured = captured_sample_count_;
+  state.ptt_peak_amplitude = peak_amplitude_;
 
   if (captured_sample_count_ >= kMaxSamples) {
     state.ptt_state = PushToTalkState::Ready;
@@ -356,8 +369,21 @@ void PushToCodexApp::updatePttState(DeviceState& state) {
     state.ptt_state = PushToTalkState::Ready;
     const size_t duration_ms = captured_sample_count_ * 1000 / 16000;
     state.ptt_detail_line = String("Captured ") + String(duration_ms) + " ms";
+    state.ptt_peak_amplitude = peak_amplitude_;
   } else if (state.ptt_state != PushToTalkState::Error) {
     state.ptt_state = PushToTalkState::Armed;
     state.ptt_detail_line = "Hold SPACE to record a voice prompt";
   }
+}
+
+void PushToCodexApp::emitVoicePromptEnvelope(const DeviceState& state) const {
+  Serial.print("{\"type\":\"voice_prompt_ready\",\"sample_rate_hz\":");
+  Serial.print(state.ptt_sample_rate_hz);
+  Serial.print(",\"sample_count\":");
+  Serial.print(state.ptt_samples_captured);
+  Serial.print(",\"duration_ms\":");
+  Serial.print((state.ptt_samples_captured * 1000UL) / state.ptt_sample_rate_hz);
+  Serial.print(",\"peak_amplitude\":");
+  Serial.print(state.ptt_peak_amplitude);
+  Serial.println("}");
 }
