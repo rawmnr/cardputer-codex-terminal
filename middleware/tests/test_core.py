@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import unittest
+from dataclasses import asdict
 
 from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
@@ -46,10 +48,39 @@ class MiddlewareAppTests(unittest.TestCase):
         )
 
     def test_local_websocket_transport_reports_target_url(self) -> None:
-        transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000")
+        class FakeWebSocket:
+            def __init__(self) -> None:
+                self.sent: list[str] = []
+                self.messages = [
+                    json.dumps({"kind": "status", "content": "initialized"}),
+                    json.dumps({"kind": "delta", "content": "partial"}),
+                    json.dumps({"kind": "completed", "content": "done"}),
+                ]
 
-        with self.assertRaises(NotImplementedError) as ctx:
-            asyncio.run(transport.initialize())
+            async def send(self, message: str) -> None:
+                self.sent.append(message)
 
-        self.assertIn("ws://127.0.0.1:9000", str(ctx.exception))
+            async def recv(self) -> str:
+                return self.messages.pop(0)
 
+        async def connect_factory(_: str) -> FakeWebSocket:
+            return FakeWebSocket()
+
+        transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000", connect_factory=connect_factory)
+
+        async def scenario() -> list[dict]:
+            await transport.initialize()
+            events = []
+            async for reply in transport.start_turn("Hello Codex"):
+                events.append(reply)
+            return [asdict(event) for event in events]
+
+        payloads = asyncio.run(scenario())
+
+        self.assertEqual(
+            payloads,
+            [
+                {"kind": "delta", "content": "partial"},
+                {"kind": "completed", "content": "done"},
+            ],
+        )
