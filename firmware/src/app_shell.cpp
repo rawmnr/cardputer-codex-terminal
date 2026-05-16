@@ -14,11 +14,14 @@ void AppShell::begin() {
   state_.battery_percent = 0;
   state_.battery_voltage_mv = 0;
   state_.wifi_connected = false;
-  state_.charging = false;
+  state_.wifi_ssid = "";
+  state_.wifi_ip = "";
+  state_.network_status_line = "Wi-Fi disabled - no credentials configured";
   state_.codex_state = CodexState::Idle;
   state_.status_line = "Waiting for middleware connection";
 
   input_line_ = "";
+  network_.begin();
   screen_.begin();
   switchTo(AppId::Buddy);
 }
@@ -93,7 +96,11 @@ void AppShell::handleCommand(const String& command) {
   }
 
   if (active_app_ != nullptr) {
-    active_app_->onCommand(trimmed, state_);
+    if (state_.active_app == AppId::PushToCodex) {
+      active_app_->onSubmit(trimmed, state_);
+    } else {
+      active_app_->onCommand(trimmed, state_);
+    }
     render();
   }
 }
@@ -101,7 +108,7 @@ void AppShell::handleCommand(const String& command) {
 void AppShell::tick() {
   state_.battery_percent = M5Cardputer.Power.getBatteryLevel();
   state_.battery_voltage_mv = M5Cardputer.Power.getBatteryVoltage();
-  state_.charging = M5Cardputer.Power.isCharging();
+  network_.tick(state_);
 
   if (active_app_ != nullptr) {
     active_app_->tick(state_);

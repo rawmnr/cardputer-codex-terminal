@@ -26,7 +26,8 @@ void TextScreen::drawHeader(const DeviceState& state) {
   M5Cardputer.Display.setTextColor(WHITE, DARKGREY);
   M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.drawString(state.firmware_name.c_str(), 4, 4);
-  M5Cardputer.Display.drawString(state.wifi_connected ? "Wi-Fi" : "Offline", M5Cardputer.Display.width() - 56, 4);
+  const String network_label = state.wifi_connected ? String("Wi-Fi") : String("Off");
+  M5Cardputer.Display.drawString(network_label.c_str(), M5Cardputer.Display.width() - 48, 4);
   M5Cardputer.Display.setTextColor(WHITE, BLACK);
   M5Cardputer.Display.fillRect(0, 20, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 20, BLACK);
   M5Cardputer.Display.drawRect(0, 42, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 62, DARKGREY);
@@ -48,20 +49,22 @@ void TextScreen::drawHeader(const DeviceState& state) {
   M5Cardputer.Display.drawString("Battery:", 4, 34);
   M5Cardputer.Display.setCursor(60, 34);
   M5Cardputer.Display.printf("%3d%%", state.battery_percent);
-  M5Cardputer.Display.drawString(state.charging ? "chg" : "dis", 92, 34);
-  M5Cardputer.Display.drawString("Codex:", 120, 34);
+  M5Cardputer.Display.drawString("mV", 92, 34);
+  M5Cardputer.Display.setCursor(112, 34);
+  M5Cardputer.Display.printf("%4d", state.battery_voltage_mv);
+  M5Cardputer.Display.drawString("Cdx:", 172, 34);
   switch (state.codex_state) {
     case CodexState::Offline:
-      M5Cardputer.Display.drawString("offline", 170, 34);
+      M5Cardputer.Display.drawString("off", 206, 34);
       break;
     case CodexState::Idle:
-      M5Cardputer.Display.drawString("idle", 170, 34);
+      M5Cardputer.Display.drawString("idl", 206, 34);
       break;
     case CodexState::Busy:
-      M5Cardputer.Display.drawString("busy", 170, 34);
+      M5Cardputer.Display.drawString("bsy", 206, 34);
       break;
     case CodexState::WaitingForApproval:
-      M5Cardputer.Display.drawString("approval", 170, 34);
+      M5Cardputer.Display.drawString("app", 206, 34);
       break;
   }
 }

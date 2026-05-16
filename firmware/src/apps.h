@@ -11,6 +11,7 @@ class App {
   virtual void onEnter(DeviceState& state) = 0;
   virtual void onExit(DeviceState& state) = 0;
   virtual void onCommand(const String& command, DeviceState& state) = 0;
+  virtual void onSubmit(const String& command, DeviceState& state) { onCommand(command, state); }
   virtual void tick(DeviceState& state) = 0;
   virtual void render(Print& out, const DeviceState& state) = 0;
 };

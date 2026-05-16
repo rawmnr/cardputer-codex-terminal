@@ -45,6 +45,8 @@ void BuddyApp::render(Print& out, const DeviceState& state) {
   out.println("=== Codex Buddy ===");
   out.print("Wi-Fi: ");
   out.println(state.wifi_connected ? "connected" : "offline");
+  out.print("Net: ");
+  out.println(state.network_status_line);
   out.print("Codex: ");
   switch (state.codex_state) {
     case CodexState::Offline:
@@ -84,6 +86,11 @@ void PushToCodexApp::onCommand(const String& command, DeviceState& state) {
   state.status_line = "Prompt staged for delivery";
 }
 
+void PushToCodexApp::onSubmit(const String& command, DeviceState& state) {
+  draft_ = command;
+  state.status_line = "Prompt submitted to middleware bridge";
+}
+
 void PushToCodexApp::tick(DeviceState& state) {
   (void)state;
 }
@@ -92,6 +99,8 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.println("=== Push to Codex ===");
   out.print("Draft: ");
   out.println(draft_.length() > 0 ? draft_ : "(empty)");
+  out.print("Net: ");
+  out.println(state.network_status_line);
   out.print("Codex state: ");
   switch (state.codex_state) {
     case CodexState::Offline:
@@ -136,6 +145,8 @@ void PagerApp::render(Print& out, const DeviceState& state) {
   out.println("=== Codex Pager ===");
   out.print("Active app: ");
   out.println(app_label(state.active_app));
+  out.print("Net: ");
+  out.println(state.network_status_line);
   out.println("Inbox, session detail, interrupts, and approvals will land here.");
   out.print("Status: ");
   out.println(state.status_line);

@@ -4,6 +4,7 @@
 
 #include "apps.h"
 #include "device_state.h"
+#include "network_manager.h"
 #include "text_screen.h"
 
 class AppShell {
@@ -18,6 +19,7 @@ class AppShell {
   void switchTo(AppId app_id);
 
   DeviceState state_;
+  NetworkManager network_;
   TextScreen screen_;
   String input_line_;
   BuddyApp buddy_app_;
