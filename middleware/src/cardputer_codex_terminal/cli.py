@@ -7,6 +7,7 @@ import json
 from .config import AppConfig
 from .core import MiddlewareApp
 from .messages import CardputerMessage, CardputerMessageType
+from .server import CardputerBridgeServer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--thread-id", default=None)
     parser.add_argument("--real-codex", action="store_true", help="Use the real Codex transport when implemented.")
     parser.add_argument("--prompt", default="Hello Codex, start.")
+    parser.add_argument("--serve", action="store_true", help="Run the Cardputer WebSocket bridge instead of a one-shot prompt.")
     return parser
 
 
@@ -35,6 +37,19 @@ async def run_async(args: argparse.Namespace) -> int:
         )
     )
     await app.initialize()
+
+    if args.serve:
+        import websockets  # type: ignore
+
+        bridge = CardputerBridgeServer(app)
+
+        async def handler(websocket: object, *_: object) -> None:
+            await bridge.handle_connection(websocket)
+
+        async with websockets.serve(handler, args.host, args.port):
+            print(f"Cardputer bridge listening on ws://{args.host}:{args.port}")
+            await asyncio.Future()
+
     events = await app.handle_cardputer_message(
         CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt})
     )

@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Romain Meunier" }]
-dependencies = []
+dependencies = [
+    "websockets>=12.0",
+]
 
 [project.scripts]
 cardputer-codex-middleware = "cardputer_codex_terminal.cli:main"

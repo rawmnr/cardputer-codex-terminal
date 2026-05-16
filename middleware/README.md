@@ -7,7 +7,8 @@ The initial scaffold provides:
 - a CLI;
 - an event model;
 - a Codex transport abstraction;
-- a mock for early local testing.
+- a mock for early local testing;
+- a WebSocket bridge for Cardputer clients.
 
 The Cardputer message contract is versioned. Current protocol version: `1`.
 
@@ -25,6 +26,12 @@ Run the CLI:
 
 ```bash
 uv run cardputer-codex-middleware --help
+```
+
+Run the bridge server:
+
+```bash
+uv run cardputer-codex-middleware --serve
 ```
 
 ## Tests

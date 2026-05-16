@@ -17,4 +17,5 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(args.branch)
         self.assertIsNone(args.thread_id)
         self.assertFalse(args.real_codex)
+        self.assertFalse(args.serve)
         self.assertEqual(args.prompt, "Hello Codex, start.")

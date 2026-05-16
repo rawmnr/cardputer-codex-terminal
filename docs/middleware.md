@@ -25,6 +25,8 @@ Cardputer-facing messages use a versioned envelope. The current protocol version
 - Relay deltas and status updates back to the Cardputer.
 - Handle approval requests.
 
+The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.
+
 ## Target Voice Pipeline
 
 ```text
