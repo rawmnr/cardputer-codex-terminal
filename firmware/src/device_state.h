@@ -39,6 +39,9 @@ struct DeviceState {
   int codex_usage_percent = -1;
   int codex_usage_window_minutes = 0;
   uint32_t codex_usage_resets_at = 0;
+  String codex_workspace_path = ".";
+  String codex_branch;
+  String codex_thread_id;
   String wifi_ssid;
   String wifi_ip;
   String network_status_line;

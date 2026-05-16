@@ -19,6 +19,9 @@ void AppShell::begin() {
   state_.network_status_line = "Wi-Fi disabled - no credentials configured";
   state_.codex_state = CodexState::Idle;
   state_.status_line = "Waiting for middleware connection";
+  state_.codex_workspace_path = ".";
+  state_.codex_branch = "";
+  state_.codex_thread_id = "";
   append_activity_event(state_, "Booted and waiting for middleware");
 
   input_line_ = "";
@@ -38,6 +41,9 @@ void AppShell::handleCommand(const String& command) {
     Serial.println("  /app buddy|push|pager|mcp");
     Serial.println("  /wifi on|off");
     Serial.println("  /codex idle|busy|approval|offline");
+    Serial.println("  /workspace <path>");
+    Serial.println("  /branch <name>");
+    Serial.println("  /thread <id>");
     Serial.println("  /battery <0-100>");
     Serial.println("  /status <text>");
     Serial.println("  anything else is forwarded to the active app");
@@ -83,6 +89,28 @@ void AppShell::handleCommand(const String& command) {
       state_.codex_state = CodexState::Offline;
     }
     append_activity_event(state_, String("Codex state: ") + value);
+    render();
+    return;
+  }
+
+  if (trimmed.startsWith("/workspace ")) {
+    state_.codex_workspace_path = trimmed.substring(11);
+    state_.codex_thread_id = "";
+    append_activity_event(state_, String("Workspace: ") + state_.codex_workspace_path);
+    render();
+    return;
+  }
+
+  if (trimmed.startsWith("/branch ")) {
+    state_.codex_branch = trimmed.substring(8);
+    append_activity_event(state_, String("Branch: ") + state_.codex_branch);
+    render();
+    return;
+  }
+
+  if (trimmed.startsWith("/thread ")) {
+    state_.codex_thread_id = trimmed.substring(8);
+    append_activity_event(state_, String("Thread: ") + state_.codex_thread_id);
     render();
     return;
   }

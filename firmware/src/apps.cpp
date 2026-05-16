@@ -21,6 +21,7 @@ const char* app_label(AppId app_id) {
 void print_common_footer(Print& out) {
   out.println();
   out.println("Commands: /app buddy|push|pager|mcp | /wifi on|off | /codex idle|busy|approval|offline");
+  out.println("          /workspace <path> | /branch <name> | /thread <id>");
   out.println("          /battery <0-100> | /usage <0-100> | /status <text> | /help");
 }
 }  // namespace
@@ -82,6 +83,12 @@ void BuddyApp::render(Print& out, const DeviceState& state) {
   out.print("Battery: ");
   out.print(state.battery_percent);
   out.println("%");
+  out.print("Session: ");
+  out.println(state.codex_workspace_path);
+  out.print("Branch: ");
+  out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
+  out.print("Thread: ");
+  out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);
@@ -244,6 +251,12 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
       out.println("waiting for approval");
       break;
   }
+  out.print("Workspace: ");
+  out.println(state.codex_workspace_path);
+  out.print("Branch: ");
+  out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
+  out.print("Thread: ");
+  out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
   out.print("Status: ");
   out.println(state.status_line);
   out.println("Hold SPACE to record, release to finalize.");
@@ -296,6 +309,12 @@ void PagerApp::render(Print& out, const DeviceState& state) {
     out.print("Usage detail: ");
     out.println(state.codex_usage_detail_line);
   }
+  out.print("Workspace: ");
+  out.println(state.codex_workspace_path);
+  out.print("Branch: ");
+  out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
+  out.print("Thread: ");
+  out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
   out.println("Recent activity:");
   const size_t log_count = state.activity_log_count;
   if (log_count == 0) {
