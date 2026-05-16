@@ -5,6 +5,9 @@ from enum import StrEnum
 from typing import Any
 
 
+PROTOCOL_VERSION = 1
+
+
 class CardputerMessageType(StrEnum):
     TEXT_PROMPT = "text_prompt"
     AUDIO_CHUNK = "audio_chunk"
@@ -20,12 +23,23 @@ class CardputerMessageType(StrEnum):
 class CardputerMessage:
     type: CardputerMessageType
     payload: dict[str, Any] = field(default_factory=dict)
+    protocol_version: int = PROTOCOL_VERSION
 
     def to_dict(self) -> dict[str, Any]:
-        return {"type": self.type.value, "payload": self.payload}
+        return {
+            "protocol_version": self.protocol_version,
+            "type": self.type.value,
+            "payload": self.payload,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CardputerMessage":
+        protocol_version = data.get("protocol_version", PROTOCOL_VERSION)
+        if not isinstance(protocol_version, int):
+            raise ValueError("Protocol version must be an integer.")
+        if protocol_version != PROTOCOL_VERSION:
+            raise ValueError(f"Unsupported protocol version: {protocol_version}")
+
         if "type" not in data:
             raise ValueError("Missing message type.")
         if not isinstance(data["type"], str):
@@ -35,7 +49,7 @@ class CardputerMessage:
         payload = data.get("payload", {})
         if not isinstance(payload, dict):
             raise ValueError("Message payload must be an object.")
-        return cls(message_type, payload)
+        return cls(message_type, payload, protocol_version)
 
 
 @dataclass(slots=True)

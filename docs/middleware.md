@@ -12,6 +12,8 @@ uv run cardputer-codex-middleware
 uv run python -m unittest discover -s tests -v
 ```
 
+Cardputer-facing messages use a versioned envelope. The current protocol version is `1`.
+
 ## Responsibilities
 
 - Expose a WebSocket server to the Cardputer.

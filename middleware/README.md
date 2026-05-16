@@ -9,6 +9,8 @@ The initial scaffold provides:
 - a Codex transport abstraction;
 - a mock for early local testing.
 
+The Cardputer message contract is versioned. Current protocol version: `1`.
+
 ## Tooling
 
 This package is managed with `uv`.
