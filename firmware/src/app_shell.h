@@ -14,6 +14,8 @@ class AppShell {
   void tick();
   void render();
   void handleKeyboardInput(const String& typed, bool submit, bool backspace);
+  void handlePushToTalk(bool pressed);
+  bool isPushToCodexActive() const;
 
  private:
   void switchTo(AppId app_id);

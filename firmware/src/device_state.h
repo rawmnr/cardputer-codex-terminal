@@ -16,10 +16,19 @@ enum class CodexState {
   WaitingForApproval,
 };
 
+enum class PushToTalkState {
+  Idle,
+  Armed,
+  Recording,
+  Ready,
+  Error,
+};
+
 struct DeviceState {
   String firmware_name;
   AppId active_app = AppId::Buddy;
   CodexState codex_state = CodexState::Offline;
+  PushToTalkState ptt_state = PushToTalkState::Idle;
   bool wifi_connected = false;
   int battery_percent = 0;
   int battery_voltage_mv = 0;
@@ -27,4 +36,7 @@ struct DeviceState {
   String wifi_ip;
   String network_status_line;
   String status_line;
+  size_t ptt_samples_captured = 0;
+  size_t ptt_sample_limit = 0;
+  String ptt_detail_line;
 };

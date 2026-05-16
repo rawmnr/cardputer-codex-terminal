@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <Arduino.h>
 
 #include "device_state.h"
@@ -12,6 +13,7 @@ class App {
   virtual void onExit(DeviceState& state) = 0;
   virtual void onCommand(const String& command, DeviceState& state) = 0;
   virtual void onSubmit(const String& command, DeviceState& state) { onCommand(command, state); }
+  virtual void onPushToTalk(bool pressed, DeviceState& state) { (void)pressed; (void)state; }
   virtual void tick(DeviceState& state) = 0;
   virtual void render(Print& out, const DeviceState& state) = 0;
 };
@@ -33,11 +35,25 @@ class PushToCodexApp final : public App {
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
   void onSubmit(const String& command, DeviceState& state) override;
+  void onPushToTalk(bool pressed, DeviceState& state) override;
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
 
  private:
+  static constexpr size_t kChunkSamples = 256;
+  static constexpr size_t kMaxSamples = 24000;
+
+  void beginRecording(DeviceState& state);
+  void finishRecording(DeviceState& state);
+  void appendChunk(const int16_t* data, size_t length, DeviceState& state);
+  void updatePttState(DeviceState& state);
+
   String draft_;
+  std::array<int16_t, kChunkSamples> chunk_buffer_{};
+  std::array<int16_t, kMaxSamples> captured_samples_{};
+  size_t captured_sample_count_ = 0;
+  bool recording_ = false;
+  bool mic_started_ = false;
 };
 
 class PagerApp final : public App {

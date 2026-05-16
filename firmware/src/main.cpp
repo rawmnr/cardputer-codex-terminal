@@ -5,18 +5,34 @@
 
 namespace {
 AppShell g_shell;
+bool g_last_space_state = false;
 
 void poll_keyboard_input() {
   M5Cardputer.update();
 
-  if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) {
+  if (!M5Cardputer.Keyboard.isChange()) {
     return;
   }
 
   const auto status = M5Cardputer.Keyboard.keysState();
+  const bool push_mode = g_shell.isPushToCodexActive();
   String typed;
   for (auto ch : status.word) {
+    if (ch == ' ' && push_mode) {
+      continue;
+    }
     typed += ch;
+  }
+
+  if (status.space != g_last_space_state) {
+    g_last_space_state = status.space;
+    if (push_mode) {
+      g_shell.handlePushToTalk(status.space);
+    }
+  }
+
+  if (!M5Cardputer.Keyboard.isPressed()) {
+    return;
   }
 
   if (status.del) {

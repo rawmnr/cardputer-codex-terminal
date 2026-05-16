@@ -138,6 +138,17 @@ void AppShell::handleKeyboardInput(const String& typed, bool submit, bool backsp
   render();
 }
 
+void AppShell::handlePushToTalk(bool pressed) {
+  if (active_app_ != nullptr) {
+    active_app_->onPushToTalk(pressed, state_);
+    render();
+  }
+}
+
+bool AppShell::isPushToCodexActive() const {
+  return state_.active_app == AppId::PushToCodex;
+}
+
 void AppShell::switchTo(AppId app_id) {
   if (active_app_ != nullptr) {
     active_app_->onExit(state_);

@@ -1,5 +1,8 @@
 #include "apps.h"
 
+#include <array>
+#include <M5Cardputer.h>
+
 namespace {
 const char* app_label(AppId app_id) {
   switch (app_id) {
@@ -74,7 +77,29 @@ const char* PushToCodexApp::title() const { return "Push to Codex"; }
 
 void PushToCodexApp::onEnter(DeviceState& state) {
   draft_ = "";
-  state.status_line = "Compose a prompt and send it to Codex";
+  captured_sample_count_ = 0;
+  recording_ = false;
+  mic_started_ = false;
+  state.ptt_state = PushToTalkState::Armed;
+  state.ptt_samples_captured = 0;
+  state.ptt_sample_limit = kMaxSamples;
+  state.ptt_detail_line = "Hold SPACE to record a voice prompt";
+  state.status_line = "Hold SPACE to record a voice prompt";
+  if (!M5.Mic.isEnabled()) {
+    state.ptt_state = PushToTalkState::Error;
+    state.ptt_detail_line = "Microphone not enabled";
+    state.status_line = "Microphone unavailable";
+    return;
+  }
+
+  M5.Mic.setSampleRate(16000);
+  if (M5.Mic.begin()) {
+    mic_started_ = true;
+  } else {
+    state.ptt_state = PushToTalkState::Error;
+    state.ptt_detail_line = "Failed to start microphone";
+    state.status_line = "Mic start failed";
+  }
 }
 
 void PushToCodexApp::onExit(DeviceState& state) {
@@ -88,17 +113,87 @@ void PushToCodexApp::onCommand(const String& command, DeviceState& state) {
 
 void PushToCodexApp::onSubmit(const String& command, DeviceState& state) {
   draft_ = command;
-  state.status_line = "Prompt submitted to middleware bridge";
+  state.status_line = "Text prompt staged for middleware bridge";
+}
+
+void PushToCodexApp::onPushToTalk(bool pressed, DeviceState& state) {
+  if (state.ptt_state == PushToTalkState::Error) {
+    return;
+  }
+
+  if (pressed) {
+    beginRecording(state);
+  } else {
+    finishRecording(state);
+  }
 }
 
 void PushToCodexApp::tick(DeviceState& state) {
-  (void)state;
+  if (!recording_) {
+    updatePttState(state);
+    return;
+  }
+
+  if (!mic_started_) {
+    state.ptt_state = PushToTalkState::Error;
+    state.ptt_detail_line = "Microphone is not ready";
+    state.status_line = "Microphone is not ready";
+    recording_ = false;
+    return;
+  }
+
+  if (captured_sample_count_ >= kMaxSamples) {
+    state.ptt_state = PushToTalkState::Ready;
+    state.ptt_detail_line = "Capture buffer full";
+    state.status_line = "Capture buffer full";
+    recording_ = false;
+    return;
+  }
+
+  const size_t remaining = kMaxSamples - captured_sample_count_;
+  const size_t chunk_length = remaining < kChunkSamples ? remaining : kChunkSamples;
+  if (chunk_length == 0) {
+    state.ptt_state = PushToTalkState::Ready;
+    state.ptt_detail_line = "Capture complete";
+    state.status_line = "Capture complete";
+    recording_ = false;
+    return;
+  }
+
+  if (M5.Mic.record(chunk_buffer_.data(), chunk_length, 16000)) {
+    appendChunk(chunk_buffer_.data(), chunk_length, state);
+  }
+  updatePttState(state);
 }
 
 void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.println("=== Push to Codex ===");
   out.print("Draft: ");
   out.println(draft_.length() > 0 ? draft_ : "(empty)");
+  out.print("PTT: ");
+  switch (state.ptt_state) {
+    case PushToTalkState::Idle:
+      out.println("idle");
+      break;
+    case PushToTalkState::Armed:
+      out.println("armed");
+      break;
+    case PushToTalkState::Recording:
+      out.println("recording");
+      break;
+    case PushToTalkState::Ready:
+      out.println("ready");
+      break;
+    case PushToTalkState::Error:
+      out.println("error");
+      break;
+  }
+  out.print("Samples: ");
+  out.print(state.ptt_samples_captured);
+  out.print("/");
+  out.println(state.ptt_sample_limit);
+  out.print("Detail: ");
+  out.println(state.ptt_detail_line);
   out.print("Net: ");
   out.println(state.network_status_line);
   out.print("Codex state: ");
@@ -118,7 +213,7 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
   }
   out.print("Status: ");
   out.println(state.status_line);
-  out.println("Type a prompt, then forward it to the middleware in a later step.");
+  out.println("Hold SPACE to record, release to finalize.");
   print_common_footer(out);
 }
 
@@ -178,4 +273,91 @@ void McpBridgeApp::render(Print& out, const DeviceState& state) {
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);
+}
+
+void PushToCodexApp::beginRecording(DeviceState& state) {
+  if (recording_) {
+    return;
+  }
+
+  if (!mic_started_) {
+    state.ptt_state = PushToTalkState::Error;
+    state.ptt_detail_line = "Microphone is not ready";
+    state.status_line = "Microphone is not ready";
+    return;
+  }
+
+  captured_sample_count_ = 0;
+  recording_ = true;
+  state.ptt_state = PushToTalkState::Recording;
+  state.ptt_samples_captured = 0;
+  state.ptt_detail_line = "Recording voice prompt...";
+  state.status_line = "Recording voice prompt...";
+}
+
+void PushToCodexApp::finishRecording(DeviceState& state) {
+  if (!recording_) {
+    if (captured_sample_count_ > 0) {
+      state.ptt_state = PushToTalkState::Ready;
+      state.ptt_detail_line = "Voice prompt ready for middleware";
+      state.status_line = "Voice prompt ready for middleware";
+    } else if (state.ptt_state != PushToTalkState::Error) {
+      state.ptt_state = PushToTalkState::Armed;
+      state.ptt_detail_line = "Hold SPACE to record a voice prompt";
+      state.status_line = "Hold SPACE to record a voice prompt";
+    }
+    return;
+  }
+
+  recording_ = false;
+  if (captured_sample_count_ > 0) {
+    state.ptt_state = PushToTalkState::Ready;
+    state.ptt_detail_line = "Voice prompt ready for middleware";
+    state.status_line = "Voice prompt ready for middleware";
+  } else {
+    state.ptt_state = PushToTalkState::Armed;
+    state.ptt_detail_line = "No audio captured";
+    state.status_line = "No audio captured";
+  }
+}
+
+void PushToCodexApp::appendChunk(const int16_t* data, size_t length, DeviceState& state) {
+  const size_t remaining = kMaxSamples - captured_sample_count_;
+  const size_t actual = remaining < length ? remaining : length;
+  if (actual == 0) {
+    state.ptt_state = PushToTalkState::Ready;
+    state.ptt_detail_line = "Capture buffer full";
+    state.status_line = "Capture buffer full";
+    recording_ = false;
+    return;
+  }
+
+  for (size_t i = 0; i < actual; ++i) {
+    captured_samples_[captured_sample_count_ + i] = data[i];
+  }
+  captured_sample_count_ += actual;
+  state.ptt_samples_captured = captured_sample_count_;
+
+  if (captured_sample_count_ >= kMaxSamples) {
+    state.ptt_state = PushToTalkState::Ready;
+    state.ptt_detail_line = "Capture buffer full";
+    state.status_line = "Capture buffer full";
+    recording_ = false;
+  }
+}
+
+void PushToCodexApp::updatePttState(DeviceState& state) {
+  if (recording_) {
+    state.ptt_state = PushToTalkState::Recording;
+    const size_t duration_ms = captured_sample_count_ * 1000 / 16000;
+    state.ptt_detail_line = String("Recording ") + String(duration_ms) + " ms";
+    state.status_line = "Recording voice prompt...";
+  } else if (captured_sample_count_ > 0) {
+    state.ptt_state = PushToTalkState::Ready;
+    const size_t duration_ms = captured_sample_count_ * 1000 / 16000;
+    state.ptt_detail_line = String("Captured ") + String(duration_ms) + " ms";
+  } else if (state.ptt_state != PushToTalkState::Error) {
+    state.ptt_state = PushToTalkState::Armed;
+    state.ptt_detail_line = "Hold SPACE to record a voice prompt";
+  }
 }
