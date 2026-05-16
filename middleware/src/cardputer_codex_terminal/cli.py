@@ -6,6 +6,7 @@ import json
 
 from .config import AppConfig
 from .core import MiddlewareApp
+from .messages import CardputerMessage, CardputerMessageType
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,7 +29,9 @@ async def run_async(args: argparse.Namespace) -> int:
         )
     )
     await app.initialize()
-    events = await app.handle_text_prompt(args.prompt)
+    events = await app.handle_cardputer_message(
+        CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt})
+    )
     for event in events:
         print(json.dumps(event.to_dict(), ensure_ascii=False))
     return 0
