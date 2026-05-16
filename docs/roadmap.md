@@ -1,38 +1,37 @@
 # Roadmap
 
-## Phase 0 - Cadrage
+## Phase 0 - Scoping
 
-- Initialiser le depot.
-- Documenter architecture, materiel, reseau, middleware et firmware.
-- Lister les risques et questions ouvertes.
+- Initialize the repository.
+- Document architecture, hardware, networking, middleware, and firmware.
+- List risks and open questions.
 
-## Phase 1 - Prototype Local
+## Phase 1 - Local Prototype
 
-- Simuler un client Cardputer depuis un terminal desktop.
-- Connecter le middleware a Codex app-server local.
-- Relayer prompts texte et deltas.
+- Simulate a Cardputer client from a desktop terminal.
+- Connect the middleware to a local Codex app-server.
+- Relay text prompts and deltas.
 
-## Phase 2 - Firmware Minimal
+## Phase 2 - Minimal Firmware
 
-- Afficher le statut reseau.
-- Envoyer une commande clavier.
-- Recevoir et afficher une reponse streammee.
+- Display network status.
+- Send a keyboard command.
+- Receive and render a streamed response.
 
 ## Phase 3 - Audio
 
-- Capturer PCM depuis le microphone.
-- Streamer vers le middleware.
-- Ajouter transcription faster-whisper.
+- Capture PCM from the microphone.
+- Stream it to the middleware.
+- Add faster-whisper transcription.
 
-## Phase 4 - Remote Securise
+## Phase 4 - Secure Remote Access
 
-- Ajouter overlay VPN.
-- Valider usage hors LAN.
-- Documenter provisioning et revocation.
+- Add overlay VPN connectivity.
+- Validate usage outside the LAN.
+- Document provisioning and revocation.
 
-## Phase 5 - Approvals Et Pager
+## Phase 5 - Approvals And Pager
 
-- Afficher les approvals.
-- Accepter/refuser via touches physiques.
-- Ajouter suivi des taches longues.
-
+- Display approvals.
+- Accept or reject through physical keys.
+- Add long-task tracking.

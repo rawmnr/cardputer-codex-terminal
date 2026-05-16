@@ -1,31 +1,30 @@
-# Reseau Distant
+# Remote Networking
 
-## Besoin
+## Need
 
-Le Cardputer doit joindre une machine Windows distante qui execute Codex, meme derriere NAT ou pare-feu domestique.
+The Cardputer must reach a remote Windows machine running Codex, even behind NAT or a home firewall.
 
 ## Options
 
-| Option | Avantage | Limite |
+| Option | Advantage | Limitation |
 | --- | --- | --- |
-| Port forwarding | Simple en theorie | Expose l'hote, fragile avec CGNAT |
-| Tunnel inverse | Rapide pour prototype | Depend d'un tiers, latence, limites gratuites |
-| Overlay VPN | Stable et securise | Integration embarquee plus complexe |
+| Port forwarding | Simple in theory | Exposes the host, fragile with CGNAT |
+| Reverse tunnel | Fast for prototyping | Depends on a third party, adds latency, free tier limits |
+| Overlay VPN | Stable and secure | More complex embedded integration |
 
-## Direction Cible
+## Target Direction
 
-Utiliser un overlay VPN type Tailscale avec une integration embarquee compatible ESP32, par exemple MicroLink.
+Use a Tailscale-style overlay VPN with ESP32-compatible embedded integration, for example MicroLink.
 
-## Topologie
+## Topology
 
 ```text
-Cardputer -> Wi-Fi -> overlay VPN -> IP privee tailnet Windows -> middleware Python
+Cardputer -> Wi-Fi -> overlay VPN -> Windows tailnet private IP -> Python middleware
 ```
 
-## Decisions A Valider
+## Decisions To Validate
 
-- Bibliotheque VPN embarquee retenue.
-- Strategie de provisionnement de la cle d'authentification.
-- Rotation et revocation des secrets.
-- Mode degrade sans VPN pour developpement local.
-
+- Selected embedded VPN library.
+- Authentication key provisioning strategy.
+- Secret rotation and revocation.
+- Degraded mode without VPN for local development.

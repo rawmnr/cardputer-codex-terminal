@@ -1,39 +1,38 @@
-# Integration Codex App Server
+# Codex App Server Integration
 
 ## Transport
 
-Le middleware cible une connexion WebSocket locale vers :
+The middleware targets a local WebSocket connection to:
 
 ```text
 codex app-server --listen ws://127.0.0.1:PORT
 ```
 
-Si le serveur est expose hors loopback, l'authentification par jeton et la restriction reseau deviennent obligatoires.
+If the server is exposed beyond loopback, token authentication and network restriction become mandatory.
 
-## Cycle De Session
+## Session Flow
 
-1. Ouvrir le WebSocket.
-2. Envoyer `initialize` avec les capacites client.
-3. Envoyer `initialized`.
-4. Creer ou reprendre un thread.
-5. Envoyer les prompts via `turn/start`.
-6. Ecouter les notifications et deltas.
-7. Relayer les approvals vers le Cardputer.
+1. Open the WebSocket.
+2. Send `initialize` with client capabilities.
+3. Send `initialized`.
+4. Create or resume a thread.
+5. Send prompts via `turn/start`.
+6. Listen for notifications and deltas.
+7. Relay approvals back to the Cardputer.
 
-## Evenements A Relayer
+## Events To Relay
 
-- Debut et fin d'items.
-- Deltas de message agent.
-- Statut du tour.
-- Requetes d'approbation.
-- Erreurs transport ou protocole.
+- Item start and completion.
+- Agent message deltas.
+- Turn status.
+- Approval requests.
+- Transport or protocol errors.
 
-## Politique D'approbation
+## Approval Policy
 
-Le Cardputer doit afficher une demande concise et permettre :
+The Cardputer should display a concise request and allow:
 
-- approbation explicite ;
-- refus explicite ;
-- timeout configurable ;
-- trace minimale cote middleware.
-
+- explicit approval;
+- explicit rejection;
+- configurable timeout;
+- minimal tracing on the middleware side.

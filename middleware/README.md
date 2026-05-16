@@ -1,11 +1,10 @@
 # Middleware
 
-Ce dossier contient le premier prototype du pont Windows entre le Cardputer et Codex.
+This folder contains the first Windows bridge prototype between the Cardputer and Codex.
 
-Le socle initial apporte :
+The initial scaffold provides:
 
-- une CLI;
-- un modele d'evenements;
-- une abstraction de transport Codex;
-- un mock pour les premiers tests locaux.
-
+- a CLI;
+- an event model;
+- a Codex transport abstraction;
+- a mock for early local testing.

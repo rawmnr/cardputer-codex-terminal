@@ -1,30 +1,29 @@
-# Middleware Windows
+# Windows Middleware
 
 ## Role
 
-Le middleware sert de pont entre le Cardputer et Codex. Il compense les limites du microcontroleur et isole le protocole Codex du firmware.
+The middleware acts as the bridge between the Cardputer and Codex. It compensates for the microcontroller's limits and isolates the Codex protocol from the firmware.
 
-## Responsabilites
+## Responsibilities
 
-- Exposer un serveur WebSocket au Cardputer.
-- Recevoir les commandes texte.
-- Recevoir les fragments audio PCM.
-- Transcrire l'audio en texte.
-- Ouvrir une session JSON-RPC vers `codex app-server`.
-- Demarrer ou reprendre les threads Codex.
-- Relayer les deltas et statuts vers le Cardputer.
-- Gerer les demandes d'approbation.
+- Expose a WebSocket server to the Cardputer.
+- Receive text commands.
+- Receive PCM audio fragments.
+- Transcribe audio to text.
+- Open a JSON-RPC session to `codex app-server`.
+- Start or resume Codex threads.
+- Relay deltas and status updates back to the Cardputer.
+- Handle approval requests.
 
-## Pipeline Vocal Cible
+## Target Voice Pipeline
 
 ```text
-PCM int16 -> buffer memoire -> VAD optionnel -> resampling 16 kHz si besoin -> faster-whisper -> texte -> turn/start
+PCM int16 -> memory buffer -> optional VAD -> resample to 16 kHz if needed -> faster-whisper -> text -> turn/start
 ```
 
-## Contraintes
+## Constraints
 
-- Boucle asynchrone non bloquante.
-- Pas de stockage audio persistant par defaut.
-- Journalisation prudente pour eviter d'ecrire des secrets ou prompts sensibles.
-- Mode simulation utile avant firmware reel.
-
+- Non-blocking async loop.
+- No persistent audio storage by default.
+- Careful logging to avoid writing secrets or sensitive prompts.
+- Simulation mode is useful before the real firmware exists.

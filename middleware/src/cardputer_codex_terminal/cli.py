@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--codex-ws-url", default="ws://127.0.0.1:9000")
     parser.add_argument("--real-codex", action="store_true", help="Use the real Codex transport when implemented.")
-    parser.add_argument("--prompt", default="Salut Codex, demarre.")
+    parser.add_argument("--prompt", default="Hello Codex, start.")
     return parser
 
 

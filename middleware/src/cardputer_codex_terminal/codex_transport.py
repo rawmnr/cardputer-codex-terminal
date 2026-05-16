@@ -27,8 +27,8 @@ class MockCodexTransport(CodexTransport):
 
     async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
         yield CodexReply("status", "mock_codex_ready")
-        yield CodexReply("delta", f"Recu: {prompt}")
-        yield CodexReply("delta", "Ce transport est un placeholder local.")
+        yield CodexReply("delta", f"Received: {prompt}")
+        yield CodexReply("delta", "This transport is a local placeholder.")
         yield CodexReply("completed", "mock_turn_completed")
 
 

@@ -1,31 +1,30 @@
-# Securite
+# Security
 
-## Surfaces Sensibles
+## Sensitive Surfaces
 
-- Cle d'authentification overlay VPN.
-- Jeton eventuel du Codex app-server.
-- Prompts utilisateur.
-- Sorties Codex.
-- Commandes shell proposees par Codex.
-- Acces aux fichiers du workspace Windows.
+- Overlay VPN authentication key.
+- Possible Codex app-server token.
+- User prompts.
+- Codex output.
+- Shell commands proposed by Codex.
+- Access to Windows workspace files.
 
-## Principes
+## Principles
 
-- Ne pas exposer Codex directement sur Internet.
-- Preferer loopback entre middleware et Codex.
-- Utiliser l'overlay VPN pour l'acces distant.
-- Demander confirmation physique pour les actions critiques.
-- Reduire les logs par defaut.
-- Prevoir une procedure de revocation des cles.
+- Do not expose Codex directly to the Internet.
+- Prefer loopback between the middleware and Codex.
+- Use the overlay VPN for remote access.
+- Require physical confirmation for critical actions.
+- Minimize logging by default.
+- Plan a clear key revocation procedure.
 
-## Approbations
+## Approvals
 
-Les approvals sont un point central du design. Une action destructive ou intrusive doit etre lisible sur l'ecran du Cardputer avant validation.
+Approvals are a central part of the design. A destructive or intrusive action should be visible on the Cardputer display before it is accepted.
 
-## Questions Ouvertes
+## Open Questions
 
-- Niveau de detail affichable sur petit ecran pour les commandes longues.
-- Politique de timeout.
-- Mode verrouillage en cas de perte ou vol du Cardputer.
-- Chiffrement local des secrets sur l'ESP32-S3.
-
+- How much detail can be shown on the small screen for long commands.
+- Timeout policy.
+- Lock mode in case the Cardputer is lost or stolen.
+- Local secret encryption on the ESP32-S3.

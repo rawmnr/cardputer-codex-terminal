@@ -1,55 +1,54 @@
 # cardputer-codex-terminal
 
-Terminal agentique distant pour transformer le M5Stack Cardputer ADV en interface physique de pilotage d'une instance OpenAI Codex executee sur Windows.
+Remote agent terminal for turning the M5Stack Cardputer ADV into a physical control surface for an OpenAI Codex instance running on Windows.
 
-Ce depot est initialise comme un projet d'architecture. Il ne contient pas encore de code firmware ou middleware. L'objectif initial est de cadrer les composants, les protocoles, les risques et la feuille de route avant implementation.
+This repository is initialized as an architecture-first project. It does not yet contain firmware or middleware implementation code. The initial goal is to define the components, protocols, risks, and roadmap before implementation.
 
 ## Vision
 
-Le projet vise a relier un M5Stack Cardputer ADV a un hote Windows executant `codex app-server`, afin de fournir une interface mobile pour :
+The project connects a M5Stack Cardputer ADV to a Windows host running `codex app-server`, providing a mobile interface to:
 
-- envoyer des instructions texte depuis le clavier du Cardputer ;
-- dicter des requetes vocales via push-to-talk ;
-- suivre les reponses Codex en streaming ;
-- valider ou refuser les demandes d'approbation ;
-- superviser les taches longues a distance via un reseau prive overlay.
+- send text instructions from the Cardputer keyboard;
+- dictate voice prompts via push-to-talk;
+- follow Codex responses in streaming form;
+- approve or reject requests;
+- monitor long-running tasks remotely over a private overlay network.
 
-## Architecture Cible
+## Target Architecture
 
 ```text
 M5Stack Cardputer ADV
   | Wi-Fi + overlay VPN
   v
-Middleware Python sur Windows
+Python middleware on Windows
   | WebSocket / JSON-RPC
   v
 OpenAI Codex app-server
-  | outils locaux / MCP / shell
+  | local tools / MCP / shell
   v
-Workspace Windows
+Windows workspace
 ```
 
-## Structure Du Depot
+## Repository Structure
 
 ```text
 docs/
-  architecture.md          Vue d'ensemble systeme
-  hardware.md              Notes materiel Cardputer ADV
-  networking.md            Acces distant, Tailscale, MicroLink
-  middleware.md            Role du pont Python et pipeline STT
-  firmware.md              Design du firmware embarque
-  codex-app-server.md      Integration JSON-RPC avec Codex
-  security.md              Menaces, approbations, secrets
-  roadmap.md               Phases de realisation
-  references.md            Sources et projets connexes
-firmware/                  Futur firmware ESP32-S3
-middleware/                Futur serveur Python Windows
-hardware/                  Notes, schemas, pinout, assets techniques
+  architecture.md          System overview
+  hardware.md              Cardputer ADV hardware notes
+  networking.md            Remote access, Tailscale, MicroLink
+  middleware.md            Python bridge role and STT pipeline
+  firmware.md              Embedded firmware design
+  codex-app-server.md      JSON-RPC integration with Codex
+  security.md              Threats, approvals, secrets
+  roadmap.md               Delivery phases
+  references.md            Sources and related projects
+firmware/                  Future ESP32-S3 firmware
+middleware/                Future Windows Python server
+hardware/                  Notes, diagrams, pinout, technical assets
 ```
 
-## Statut
+## Status
 
-Phase 0 : cadrage du projet et structure du depot.
+Phase 0: project scoping and repository structure.
 
-Le code sera ajoute dans une phase ulterieure, apres validation des choix de transport, de securite et d'experience utilisateur.
-
+Code will be added later, after the transport, security, and user experience choices are validated.

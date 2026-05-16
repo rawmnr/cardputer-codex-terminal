@@ -1,32 +1,31 @@
-# Materiel
+# Hardware
 
-## Plateforme
+## Platform
 
-Materiel cible : M5Stack Cardputer ADV, base sur ESP32-S3.
+Target hardware: M5Stack Cardputer ADV, based on the ESP32-S3.
 
-## Capacites Pertinentes
+## Relevant Capabilities
 
-- SoC ESP32-S3 avec deux coeurs Xtensa LX7.
-- Wi-Fi integre.
-- Ecran TFT ST7789V2.
-- Clavier physique 56 touches.
-- Microphone numerique MEMS PDM.
-- Haut-parleur integre.
-- Batterie interne et base d'extension.
+- ESP32-S3 SoC with two Xtensa LX7 cores.
+- Built-in Wi-Fi.
+- ST7789V2 TFT display.
+- 56-key physical keyboard.
+- PDM MEMS digital microphone.
+- Built-in speaker.
+- Internal battery plus expansion base.
 
-## Pinout Fonctionnel
+## Functional Pinout
 
-| Peripherique | Interface | Broches | Usage Projet |
+| Peripheral | Interface | Pins | Project Use |
 | --- | --- | --- | --- |
-| Microphone SPM1423 | I2S/PDM entree | DAT GPIO 46, CLK GPIO 43 | Capture push-to-talk |
-| Haut-parleur NS4168 | I2S sortie | BCLK 41, SDATA 42, LRCLK 43 | Alertes et notifications |
-| Ecran ST7789V2 | SPI | CS 37, SCK 36, DAT 35, RST 33, RS 34, BL 38 | Terminal visuel |
-| Clavier | Matrice GPIO | interne | Commandes texte et approvals |
+| SPM1423 microphone | I2S/PDM input | DAT GPIO 46, CLK GPIO 43 | Push-to-talk capture |
+| NS4168 speaker | I2S output | BCLK 41, SDATA 42, LRCLK 43 | Alerts and notifications |
+| ST7789V2 display | SPI | CS 37, SCK 36, DAT 35, RST 33, RS 34, BL 38 | Visual terminal |
+| Keyboard | GPIO matrix | internal | Text commands and approvals |
 
-## Points D'attention
+## Notes
 
-- La broche GPIO 43 est partagee entre l'horloge microphone et LRCLK haut-parleur.
-- La capture audio doit privilegier DMA et buffers circulaires.
-- La PSRAM doit etre consideree pour les buffers audio et affichage.
-- L'autonomie depend fortement de l'usage Wi-Fi, ecran et chiffrement reseau.
-
+- GPIO 43 is shared between microphone clock and speaker LRCLK.
+- Audio capture should favor DMA and circular buffers.
+- PSRAM should be considered for audio and display buffers.
+- Battery life depends heavily on Wi-Fi, display, and network encryption usage.

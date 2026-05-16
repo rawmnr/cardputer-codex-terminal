@@ -1,41 +1,41 @@
 # Architecture
 
-## Objectif
+## Goal
 
-Construire une interface physique mobile pour OpenAI Codex, basee sur le M5Stack Cardputer ADV, capable de piloter une session Codex distante executee sur une machine Windows.
+Build a mobile physical interface for OpenAI Codex, based on the M5Stack Cardputer ADV, capable of driving a remote Codex session running on a Windows machine.
 
-## Strates
+## Layers
 
-1. **Firmware embarque**
-   - Capture clavier.
-   - Capture audio push-to-talk.
-   - Affichage du flux agentique.
-   - Transport WebSocket vers le middleware.
-   - Connexion reseau securisee via overlay VPN.
+1. **Embedded firmware**
+   - Keyboard capture.
+   - Push-to-talk audio capture.
+   - Agentic stream rendering.
+   - WebSocket transport to the middleware.
+   - Secure network connectivity via overlay VPN.
 
-2. **Middleware Windows**
-   - Serveur WebSocket pour le Cardputer.
-   - Reception audio PCM.
-   - Transcription speech-to-text.
-   - Client JSON-RPC pour Codex app-server.
-   - Routage des evenements Codex vers l'ecran du Cardputer.
+2. **Windows middleware**
+   - WebSocket server for the Cardputer.
+   - PCM audio reception.
+   - Speech-to-text transcription.
+   - JSON-RPC client for `codex app-server`.
+   - Routing of Codex events back to the Cardputer display.
 
 3. **Codex app-server**
-   - Gestion des threads.
-   - Execution des tours.
-   - Streaming des messages.
-   - Gestion des approvals.
-   - Acces aux outils locaux et MCP.
+   - Thread management.
+   - Turn execution.
+   - Streaming responses.
+   - Approval handling.
+   - Access to local tools and MCP.
 
-## Flux Principaux
+## Main Flows
 
-### Prompt Clavier
+### Keyboard Prompt
 
 ```text
 Cardputer keyboard -> middleware -> turn/start -> Codex -> streaming deltas -> Cardputer display
 ```
 
-### Prompt Vocal
+### Voice Prompt
 
 ```text
 Cardputer microphone -> PCM chunks -> middleware STT -> turn/start -> Codex -> streaming deltas -> Cardputer display
@@ -47,10 +47,9 @@ Cardputer microphone -> PCM chunks -> middleware STT -> turn/start -> Codex -> s
 Codex approval request -> middleware -> Cardputer alert -> user keypress -> middleware -> Codex approval response
 ```
 
-## Principes
+## Principles
 
-- Maintenir l'etat conversationnel cote Codex, pas sur le microcontroleur.
-- Garder le Cardputer comme terminal leger, robuste et reactif.
-- Eviter l'exposition publique directe du serveur Windows.
-- Separar clairement transport, transcription et protocole Codex.
-
+- Keep conversational state on the Codex side, not on the microcontroller.
+- Keep the Cardputer as a lightweight, robust, responsive terminal.
+- Avoid direct public exposure of the Windows server.
+- Separate transport, transcription, and Codex protocol handling cleanly.

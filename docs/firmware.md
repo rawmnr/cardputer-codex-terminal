@@ -1,41 +1,40 @@
-# Firmware Cardputer
+# Cardputer Firmware
 
 ## Role
 
-Le firmware transforme le Cardputer en terminal physique leger pour Codex.
+The firmware turns the Cardputer into a lightweight physical terminal for Codex.
 
-## Modules Prevus
+## Planned Modules
 
-- Gestion Wi-Fi.
-- Integration overlay VPN.
-- Client WebSocket.
-- Capture clavier.
-- Capture audio I2S/PDM.
-- Gestion affichage terminal.
-- Alertes sonores.
-- Gestion batterie et veille.
+- Wi-Fi management.
+- Overlay VPN integration.
+- WebSocket client.
+- Keyboard capture.
+- I2S/PDM audio capture.
+- Terminal display rendering.
+- Sound alerts.
+- Battery and sleep management.
 
-## Taches FreeRTOS Cibles
+## Target FreeRTOS Tasks
 
-| Tache | Responsabilite |
+| Task | Responsibility |
 | --- | --- |
-| network_task | Connexion, WebSocket, VPN |
-| input_task | Clavier et raccourcis |
-| audio_task | DMA microphone et push-to-talk |
-| display_task | Rendu texte, statut, approvals |
-| power_task | Batterie, veille, frequence CPU |
+| network_task | Connection, WebSocket, VPN |
+| input_task | Keyboard and shortcuts |
+| audio_task | Microphone DMA and push-to-talk |
+| display_task | Text rendering, status, approvals |
+| power_task | Battery, sleep, CPU frequency |
 
-## Interface Utilisateur
+## User Interface
 
-- Barre de statut : reseau, batterie, etat Codex.
-- Zone principale : flux agentique.
-- Ligne de saisie : prompt clavier.
-- Ecran approval : action demandee, accepter/refuser.
+- Status bar: network, battery, Codex state.
+- Main area: agent stream.
+- Input line: keyboard prompt.
+- Approval screen: requested action, accept/reject.
 
-## Contraintes
+## Constraints
 
-- L'ecran 240 x 135 impose un wrapping strict.
-- Le scrolling doit eviter les scintillements.
-- Le firmware ne doit pas porter la logique Codex complexe.
-- Les secrets doivent etre stockes et affiches avec prudence.
-
+- The 240 x 135 display requires strict wrapping.
+- Scrolling must avoid flicker.
+- The firmware should not carry complex Codex logic.
+- Secrets must be stored and displayed carefully.

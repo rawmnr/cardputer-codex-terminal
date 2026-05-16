@@ -1,21 +1,20 @@
 # References
 
-## Projets Connexes
+## Related Projects
 
 - `dakshaymehta/cardputer-claude-os`
 - `openai/codex`
-- Projets MicroLink / Tailscale sur ESP32
-- Implementations Whisper streaming et faster-whisper
+- MicroLink / Tailscale projects on ESP32
+- Whisper streaming and faster-whisper implementations
 
-## Documentation A Suivre
+## Documentation To Follow
 
 - OpenAI Codex app-server
 - OpenAI Codex CLI
-- Documentation M5Stack Cardputer ADV
-- Documentation ESP-IDF I2S PDM
-- Documentation Tailscale et WireGuard
+- M5Stack Cardputer ADV documentation
+- ESP-IDF I2S PDM documentation
+- Tailscale and WireGuard documentation
 
 ## Notes
 
-Les references exactes seront stabilisees au moment de l'implementation et devront etre verifiees contre les documentations officielles a jour.
-
+The exact references will be finalized during implementation and should be verified against current official documentation.
