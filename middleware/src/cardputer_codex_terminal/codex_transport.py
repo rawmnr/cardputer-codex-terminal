@@ -38,9 +38,9 @@ class LocalWebSocketCodexTransport(CodexTransport):
 
     async def initialize(self) -> None:
         raise NotImplementedError(
-            "Le transport WebSocket Codex n'est pas encore branche. "
-            f"URL cible actuelle: {self.ws_url}"
+            "The Codex WebSocket transport is not wired yet. "
+            f"Current target URL: {self.ws_url}"
         )
 
     async def start_turn(self, prompt: str) -> AsyncIterator[CodexReply]:
-        raise NotImplementedError("Le transport WebSocket Codex n'est pas encore branche.")
+        raise NotImplementedError("The Codex WebSocket transport is not wired yet.")

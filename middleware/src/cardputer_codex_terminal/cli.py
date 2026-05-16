@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-from dataclasses import asdict
 
 from .config import AppConfig
 from .core import MiddlewareApp

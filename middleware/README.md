@@ -8,3 +8,11 @@ The initial scaffold provides:
 - an event model;
 - a Codex transport abstraction;
 - a mock for early local testing.
+
+## Tests
+
+Run the middleware tests with:
+
+```bash
+python -m unittest discover -s tests
+```
