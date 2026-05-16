@@ -46,12 +46,15 @@ docs/
   roadmap.md               Delivery phases
   references.md            Sources and related projects
 firmware/                  Future ESP32-S3 firmware
+  platformio.ini           Firmware build configuration
+  src/                     Firmware app shell and build scaffold
+  tools/                   Build helpers such as binary renaming
 middleware/                Future Windows Python server
 hardware/                  Notes, diagrams, pinout, technical assets
 ```
 
 ## Status
 
-Phase 0: project scoping and repository structure.
+Phase 1: firmware source tree scaffold and product parity scope.
 
-Code will be added later, after the transport, security, and user experience choices are validated.
+Code is now landing in the firmware tree, starting with the build scaffold and app shell.
