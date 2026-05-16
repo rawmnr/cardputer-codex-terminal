@@ -55,6 +55,8 @@ middleware/                Future Windows Python server
 hardware/                  Notes, diagrams, pinout, technical assets
 ```
 
+The middleware package in `middleware/` is managed with `uv`.
+
 ## Status
 
 Phase 1: firmware source tree scaffold and product parity scope.

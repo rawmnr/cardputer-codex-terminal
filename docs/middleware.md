@@ -4,6 +4,14 @@
 
 The middleware acts as the bridge between the Cardputer and Codex. It compensates for the microcontroller's limits and isolates the Codex protocol from the firmware.
 
+The Python package in `middleware/` is managed with `uv`:
+
+```bash
+uv sync
+uv run cardputer-codex-middleware
+uv run python -m unittest discover -s tests -v
+```
+
 ## Responsibilities
 
 - Expose a WebSocket server to the Cardputer.

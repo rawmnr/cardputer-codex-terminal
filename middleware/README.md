@@ -9,10 +9,26 @@ The initial scaffold provides:
 - a Codex transport abstraction;
 - a mock for early local testing.
 
+## Tooling
+
+This package is managed with `uv`.
+
+Set up the environment:
+
+```bash
+uv sync
+```
+
+Run the CLI:
+
+```bash
+uv run cardputer-codex-middleware --help
+```
+
 ## Tests
 
 Run the middleware tests with:
 
 ```bash
-python -m unittest discover -s tests
+uv run python -m unittest discover -s tests -v
 ```
