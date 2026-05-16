@@ -36,16 +36,24 @@ void poll_keyboard_input() {
   }
 
   if (status.del) {
-    if (g_shell.hasPendingApproval() && typed.length() == 0) {
+    if (typed.length() == 0 && g_shell.hasPendingApproval()) {
       g_shell.handleApprovalDecision(false);
+      return;
+    }
+    if (typed.length() == 0 && g_shell.hasPendingBridgePrompt()) {
+      g_shell.handleBridgePromptDecision(false);
       return;
     }
     g_shell.handleKeyboardInput("", false, true);
   }
 
   if (status.enter) {
-    if (g_shell.hasPendingApproval() && typed.length() == 0) {
+    if (typed.length() == 0 && g_shell.hasPendingApproval()) {
       g_shell.handleApprovalDecision(true);
+      return;
+    }
+    if (typed.length() == 0 && g_shell.hasPendingBridgePrompt()) {
+      g_shell.handleBridgePromptDecision(true);
       return;
     }
     g_shell.handleKeyboardInput(typed, true, false);

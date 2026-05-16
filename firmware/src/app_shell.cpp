@@ -27,6 +27,12 @@ void AppShell::begin() {
   state_.approval_detail_line = "";
   state_.approval_timeout_seconds = 0;
   state_.approval_pending = false;
+  state_.bridge_prompt_kind = BridgePromptKind::None;
+  state_.bridge_prompt_pending = false;
+  state_.bridge_prompt_title = "";
+  state_.bridge_prompt_detail = "";
+  state_.bridge_prompt_option_count = 0;
+  state_.bridge_prompt_selected_index = 0;
   state_.codex_stream_line = "";
   state_.bridge_status_line = "Middleware bridge not configured";
   append_activity_event(state_, "Booted and waiting for middleware");
@@ -54,6 +60,10 @@ void AppShell::handleCommand(const String& command) {
     Serial.println("  /thread <id>");
     Serial.println("  /approval <detail>");
     Serial.println("  /approve | /reject");
+    Serial.println("  /notify <detail>");
+    Serial.println("  /ask <title> | <detail> | <opt1> | <opt2> | <opt3>");
+    Serial.println("  /confirm <detail>");
+    Serial.println("  /bridge select <1-3> | /bridge accept | /bridge reject");
     Serial.println("  /battery <0-100>");
     Serial.println("  /status <text>");
     Serial.println("  anything else is forwarded to the active app");
@@ -151,6 +161,18 @@ void AppShell::handleCommand(const String& command) {
     return;
   }
 
+  if (trimmed.startsWith("/notify ") || trimmed.startsWith("/ask ") || trimmed.startsWith("/confirm ") || trimmed.startsWith("/bridge ")) {
+    if (state_.active_app == AppId::McpBridge && active_app_ != nullptr) {
+      active_app_->onCommand(trimmed, state_);
+      render();
+      return;
+    }
+    state_.status_line = "Switch to MCP Bridge to use bridge commands";
+    append_activity_event(state_, state_.status_line);
+    render();
+    return;
+  }
+
   if (trimmed.startsWith("/battery ")) {
     const int value = trimmed.substring(9).toInt();
     state_.battery_percent = constrain(value, 0, 100);
@@ -235,6 +257,10 @@ bool AppShell::hasPendingApproval() const {
   return state_.approval_pending;
 }
 
+bool AppShell::hasPendingBridgePrompt() const {
+  return state_.bridge_prompt_pending;
+}
+
 void AppShell::handleApprovalDecision(bool approved) {
   if (!state_.approval_pending) {
     state_.status_line = approved ? "No approval pending to accept" : "No approval pending to reject";
@@ -253,6 +279,29 @@ void AppShell::handleApprovalDecision(bool approved) {
   state_.status_line = outcome;
   bridge_.sendApprovalResponse(approved);
   append_activity_event(state_, outcome);
+  render();
+}
+
+void AppShell::handleBridgePromptDecision(bool accepted) {
+  if (!state_.bridge_prompt_pending) {
+    state_.status_line = accepted ? "No bridge prompt pending to accept" : "No bridge prompt pending to reject";
+    append_activity_event(state_, state_.status_line);
+    render();
+    return;
+  }
+
+  const size_t selected_index = state_.bridge_prompt_selected_index;
+  const String selected_text =
+    selected_index < state_.bridge_prompt_option_count ? state_.bridge_prompt_options[selected_index] : "";
+  bridge_.sendBridgeResponse(accepted, selected_index, selected_text);
+  state_.bridge_prompt_pending = false;
+  state_.bridge_prompt_kind = BridgePromptKind::None;
+  state_.bridge_prompt_title = "";
+  state_.bridge_prompt_detail = "";
+  state_.bridge_prompt_option_count = 0;
+  state_.bridge_prompt_selected_index = 0;
+  state_.status_line = accepted ? "Bridge prompt accepted" : "Bridge prompt rejected";
+  append_activity_event(state_, state_.status_line);
   render();
 }
 
@@ -291,4 +340,5 @@ void AppShell::switchTo(AppId app_id) {
   }
 
   push_to_codex_app_.setBridge(&bridge_);
+  mcp_bridge_app_.setBridge(&bridge_);
 }

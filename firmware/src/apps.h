@@ -79,6 +79,16 @@ class McpBridgeApp final : public App {
   void onEnter(DeviceState& state) override;
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
+  void onSubmit(const String& command, DeviceState& state) override;
+  void setBridge(MiddlewareLink* bridge);
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
+
+ private:
+  void presentNotification(const String& title, const String& detail, DeviceState& state);
+  void presentQuestion(const String& title, const String& detail, const String& option1, const String& option2, const String& option3, DeviceState& state);
+  void presentConfirmation(const String& detail, DeviceState& state);
+  void respondToPrompt(bool accepted, DeviceState& state);
+
+  MiddlewareLink* bridge_ = nullptr;
 };

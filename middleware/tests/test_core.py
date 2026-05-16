@@ -173,6 +173,53 @@ class MiddlewareAppTests(unittest.TestCase):
             [{"type": EventType.CODEX_STATUS.value, "payload": {"content": "done", "kind": "completed", "data": {}}}],
         )
 
+    def test_bridge_prompt_flow_updates_session(self) -> None:
+        async def scenario() -> tuple[list[dict], list[dict], dict[str, object]]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=True,
+                )
+            )
+            await app.initialize()
+            notification_events = await app.handle_cardputer_message(
+                CardputerMessage(
+                    CardputerMessageType.BRIDGE_NOTIFICATION,
+                    {"title": "Build ready", "detail": "Firmware binary is ready."},
+                )
+            )
+            question_events = await app.handle_cardputer_message(
+                CardputerMessage(
+                    CardputerMessageType.BRIDGE_QUESTION,
+                    {"title": "Select workspace", "detail": "Choose one", "options": ["repo-a", "repo-b"]},
+                )
+            )
+            response_events = await app.handle_cardputer_message(
+                CardputerMessage(
+                    CardputerMessageType.BRIDGE_RESPONSE,
+                    {"accepted": True, "selected_index": 1, "note": "Use repo-b"},
+                )
+            )
+            return (
+                [event.to_dict() for event in notification_events],
+                [event.to_dict() for event in question_events + response_events],
+                {
+                    "bridge_prompt_kind": app.session.bridge_prompt_kind,
+                    "bridge_prompt_title": app.session.bridge_prompt_title,
+                    "bridge_prompt_options": list(app.session.bridge_prompt_options),
+                },
+            )
+
+        notification_events, response_events, session = asyncio.run(scenario())
+
+        self.assertEqual(notification_events[0]["payload"]["kind"], "bridge_notification")
+        self.assertEqual(notification_events[0]["payload"]["title"], "Build ready")
+        self.assertEqual(response_events[0]["payload"]["kind"], "bridge_question")
+        self.assertEqual(response_events[1]["payload"]["kind"], "bridge_response")
+        self.assertEqual(session, {"bridge_prompt_kind": None, "bridge_prompt_title": None, "bridge_prompt_options": []})
+
     def test_approval_request_and_response_flow_updates_session_and_transport(self) -> None:
         class FakeWebSocket:
             def __init__(self) -> None:

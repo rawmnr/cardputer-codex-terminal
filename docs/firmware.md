@@ -54,6 +54,8 @@ cardputer-codex-terminal.bin
 - push-to-talk audio chunks are streamed while recording;
 - release sends a voice prompt ready signal to trigger transcription on Windows;
 - streamed Codex deltas, usage, and approval requests are rendered in the app views.
+- the MCP bridge app can show notifications, questions, confirmations, and selection state.
+- the Cardputer can accept or reject pending prompts with physical keys.
 
 ## Constraints
 

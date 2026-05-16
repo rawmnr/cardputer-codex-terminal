@@ -48,6 +48,12 @@ Cardputer microphone -> PCM chunks -> middleware STT -> turn/start -> Codex -> s
 Codex approval request -> middleware -> Cardputer alert -> user keypress -> middleware -> Codex approval response
 ```
 
+### Local Bridge Prompt
+
+```text
+Local bridge notification or question -> Cardputer MCP Bridge -> physical selection or confirmation -> middleware echo or downstream integration
+```
+
 ## Principles
 
 - Keep conversational state on the Codex side, not on the microcontroller.

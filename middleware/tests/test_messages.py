@@ -80,6 +80,43 @@ class MessageTests(unittest.TestCase):
         self.assertEqual(thread_result.status_line, "thread selected: thr_123")
         self.assertEqual(thread_result.outbound_events, [{"kind": "thread_select", "thread_id": "thr_123"}])
 
+    def test_router_handles_bridge_prompt_messages(self) -> None:
+        router = CardputerRouter()
+
+        notification = router.route(
+            CardputerMessage(CardputerMessageType.BRIDGE_NOTIFICATION, {"title": "Build finished", "detail": "Cardputer OS build is ready."})
+        )
+        question = router.route(
+            CardputerMessage(
+                CardputerMessageType.BRIDGE_QUESTION,
+                {"title": "Choose workspace", "detail": "Select a target", "options": ["repo-a", "repo-b"]},
+            )
+        )
+        confirmation = router.route(
+            CardputerMessage(CardputerMessageType.BRIDGE_CONFIRMATION, {"title": "Restart", "detail": "Restart middleware?"})
+        )
+        response = router.route(
+            CardputerMessage(CardputerMessageType.BRIDGE_RESPONSE, {"accepted": True, "selected_index": 1, "note": "Proceed"})
+        )
+
+        self.assertEqual(notification.status_line, "bridge notification: Build finished")
+        self.assertEqual(notification.outbound_events, [{"kind": "bridge_notification", "title": "Build finished", "detail": "Cardputer OS build is ready."}])
+        self.assertEqual(question.status_line, "bridge question: Choose workspace")
+        self.assertEqual(
+            question.outbound_events,
+            [{"kind": "bridge_question", "title": "Choose workspace", "detail": "Select a target", "options": ["repo-a", "repo-b"]}],
+        )
+        self.assertEqual(confirmation.status_line, "bridge confirmation: Restart")
+        self.assertEqual(
+            confirmation.outbound_events,
+            [{"kind": "bridge_confirmation", "title": "Restart", "detail": "Restart middleware?"}],
+        )
+        self.assertEqual(response.status_line, "bridge response accepted")
+        self.assertEqual(
+            response.outbound_events,
+            [{"kind": "bridge_response", "accepted": True, "selected_index": 1, "note": "Proceed"}],
+        )
+
     def test_message_from_dict_rejects_invalid_types(self) -> None:
         with self.assertRaises(ValueError):
             CardputerMessage.from_dict({"type": "unknown", "payload": {}})

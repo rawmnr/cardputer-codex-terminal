@@ -25,6 +25,13 @@ enum class PushToTalkState {
   Error,
 };
 
+enum class BridgePromptKind {
+  None,
+  Notification,
+  Question,
+  Confirmation,
+};
+
 struct DeviceState {
   static constexpr size_t kActivityLogSize = 8;
 
@@ -49,6 +56,13 @@ struct DeviceState {
   bool approval_pending = false;
   String codex_stream_line;
   String bridge_status_line;
+  BridgePromptKind bridge_prompt_kind = BridgePromptKind::None;
+  bool bridge_prompt_pending = false;
+  String bridge_prompt_title;
+  String bridge_prompt_detail;
+  std::array<String, 3> bridge_prompt_options{};
+  size_t bridge_prompt_option_count = 0;
+  size_t bridge_prompt_selected_index = 0;
   String wifi_ssid;
   String wifi_ip;
   String network_status_line;

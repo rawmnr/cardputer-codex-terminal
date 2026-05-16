@@ -25,6 +25,7 @@ When the bridge is exposed beyond loopback, the server can require a shared `bri
 - Start or resume Codex threads.
 - Relay deltas and status updates back to the Cardputer.
 - Handle approval requests.
+- Handle local bridge notifications, questions, confirmations, and responses.
 
 The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.
 Use `--bridge-token` to require a shared secret for the Cardputer bridge.

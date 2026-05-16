@@ -53,6 +53,23 @@ class MiddlewareApp:
         self.session.thread_id = await self.transport.resume_thread(thread_id)
         return Event(EventType.CODEX_STATUS, {"kind": "thread_selected", "content": thread_id, "thread_id": thread_id})
 
+    def _set_bridge_prompt(self, kind: str, title: str, detail: str, options: tuple[str, ...] = ()) -> Event:
+        self.session.bridge_prompt_kind = kind
+        self.session.bridge_prompt_title = title
+        self.session.bridge_prompt_detail = detail
+        self.session.bridge_prompt_options = options
+        self.session.bridge_prompt_selected_index = 0
+        return Event(
+            EventType.CODEX_STATUS,
+            {
+                "kind": kind,
+                "content": title,
+                "title": title,
+                "detail": detail,
+                "options": list(options),
+            },
+        )
+
     def append_audio_chunk(self, pcm_b64: str, chunk_id: int | None = None) -> Event:
         sample_count = self.voice_buffer.append_chunk(pcm_b64)
         return Event(
@@ -175,6 +192,48 @@ class MiddlewareApp:
                 )
             ]
 
+        if message.type == CardputerMessageType.BRIDGE_NOTIFICATION:
+            title = str(message.payload.get("title") or "Notification")
+            detail = str(message.payload.get("detail") or "")
+            return [self._set_bridge_prompt("bridge_notification", title, detail)]
+
+        if message.type == CardputerMessageType.BRIDGE_QUESTION:
+            title = str(message.payload.get("title") or "Question")
+            detail = str(message.payload.get("detail") or "")
+            options = tuple(str(option) for option in (message.payload.get("options") or [])[:3])
+            return [self._set_bridge_prompt("bridge_question", title, detail, options)]
+
+        if message.type == CardputerMessageType.BRIDGE_CONFIRMATION:
+            title = str(message.payload.get("title") or "Confirmation")
+            detail = str(message.payload.get("detail") or "")
+            return [self._set_bridge_prompt("bridge_confirmation", title, detail, ("Accept", "Reject"))]
+
+        if message.type == CardputerMessageType.BRIDGE_RESPONSE:
+            accepted = bool(message.payload.get("accepted", False))
+            selected_index = int(message.payload.get("selected_index", 0))
+            note = str(message.payload.get("note") or "")
+            if self.session.bridge_prompt_kind is None:
+                return [Event(EventType.ERROR, {"content": "No bridge prompt is pending."})]
+            pending_kind = self.session.bridge_prompt_kind
+            self.session.bridge_prompt_kind = None
+            self.session.bridge_prompt_title = None
+            self.session.bridge_prompt_detail = None
+            self.session.bridge_prompt_options = ()
+            self.session.bridge_prompt_selected_index = 0
+            return [
+                Event(
+                    EventType.CODEX_STATUS,
+                    {
+                        "kind": "bridge_response",
+                        "content": "bridge response recorded",
+                        "accepted": accepted,
+                        "selected_index": selected_index,
+                        "note": note,
+                        "prompt_kind": pending_kind,
+                    },
+                )
+            ]
+
         if message.type == CardputerMessageType.STATUS_REQUEST:
             return [
                 Event(
@@ -187,6 +246,11 @@ class MiddlewareApp:
                         "approval_id": self.session.pending_approval_id,
                         "approval_title": self.session.pending_approval_title,
                         "approval_detail": self.session.pending_approval_detail,
+                        "bridge_prompt_kind": self.session.bridge_prompt_kind,
+                        "bridge_prompt_title": self.session.bridge_prompt_title,
+                        "bridge_prompt_detail": self.session.bridge_prompt_detail,
+                        "bridge_prompt_options": list(self.session.bridge_prompt_options),
+                        "bridge_prompt_selected_index": self.session.bridge_prompt_selected_index,
                     },
                 )
             ]

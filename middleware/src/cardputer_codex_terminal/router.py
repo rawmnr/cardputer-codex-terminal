@@ -70,4 +70,45 @@ class CardputerRouter:
                 outbound_events=[{"kind": "thread_select", "thread_id": thread_id}],
             )
 
+        if message.type == CardputerMessageType.BRIDGE_NOTIFICATION:
+            title = str(message.payload.get("title") or "Notification")
+            detail = str(message.payload.get("detail") or "")
+            return RouterResult(
+                status_line=f"bridge notification: {title}",
+                outbound_events=[{"kind": "bridge_notification", "title": title, "detail": detail}],
+            )
+
+        if message.type == CardputerMessageType.BRIDGE_QUESTION:
+            title = str(message.payload.get("title") or "Question")
+            detail = str(message.payload.get("detail") or "")
+            options = list(message.payload.get("options") or [])
+            return RouterResult(
+                status_line=f"bridge question: {title}",
+                outbound_events=[{"kind": "bridge_question", "title": title, "detail": detail, "options": options}],
+            )
+
+        if message.type == CardputerMessageType.BRIDGE_CONFIRMATION:
+            title = str(message.payload.get("title") or "Confirmation")
+            detail = str(message.payload.get("detail") or "")
+            return RouterResult(
+                status_line=f"bridge confirmation: {title}",
+                outbound_events=[{"kind": "bridge_confirmation", "title": title, "detail": detail}],
+            )
+
+        if message.type == CardputerMessageType.BRIDGE_RESPONSE:
+            accepted = bool(message.payload.get("accepted", False))
+            selected_index = int(message.payload.get("selected_index", 0))
+            note = str(message.payload.get("note") or "")
+            return RouterResult(
+                status_line="bridge response accepted" if accepted else "bridge response rejected",
+                outbound_events=[
+                    {
+                        "kind": "bridge_response",
+                        "accepted": accepted,
+                        "selected_index": selected_index,
+                        "note": note,
+                    }
+                ],
+            )
+
         return RouterResult(status_line="ping")

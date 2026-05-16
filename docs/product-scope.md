@@ -64,6 +64,7 @@ Planned capabilities:
 - banner notifications;
 - multiple-choice prompts;
 - physical confirmation for destructive actions;
+- local prompt handling when the middleware is not reachable;
 - local-only control path when Wi-Fi is unavailable;
 - future support for Codex-side integrations that need a small secure human-in-the-loop bridge.
 

@@ -17,7 +17,9 @@ class AppShell {
   void handleKeyboardInput(const String& typed, bool submit, bool backspace);
   void handlePushToTalk(bool pressed);
   bool hasPendingApproval() const;
+  bool hasPendingBridgePrompt() const;
   void handleApprovalDecision(bool approved);
+  void handleBridgePromptDecision(bool accepted);
   bool isPushToCodexActive() const;
   MiddlewareLink& bridge();
 

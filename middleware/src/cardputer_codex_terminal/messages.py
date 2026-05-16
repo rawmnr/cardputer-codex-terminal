@@ -17,6 +17,10 @@ class CardputerMessageType(StrEnum):
     PROJECT_SELECT = "project_select"
     BRANCH_SELECT = "branch_select"
     THREAD_SELECT = "thread_select"
+    BRIDGE_NOTIFICATION = "bridge_notification"
+    BRIDGE_QUESTION = "bridge_question"
+    BRIDGE_CONFIRMATION = "bridge_confirmation"
+    BRIDGE_RESPONSE = "bridge_response"
     PING = "ping"
 
 

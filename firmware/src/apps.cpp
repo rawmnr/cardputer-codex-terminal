@@ -21,6 +21,31 @@ const char* app_label(AppId app_id) {
   return "Unknown";
 }
 
+String trim_copy(String value) {
+  value.trim();
+  return value;
+}
+
+void clear_bridge_prompt(DeviceState& state) {
+  state.bridge_prompt_kind = BridgePromptKind::None;
+  state.bridge_prompt_pending = false;
+  state.bridge_prompt_title = "";
+  state.bridge_prompt_detail = "";
+  state.bridge_prompt_option_count = 0;
+  state.bridge_prompt_selected_index = 0;
+  for (size_t i = 0; i < state.bridge_prompt_options.size(); ++i) {
+    state.bridge_prompt_options[i] = "";
+  }
+}
+
+void set_bridge_options(DeviceState& state, const std::array<String, 3>& options, size_t count) {
+  state.bridge_prompt_option_count = count;
+  state.bridge_prompt_selected_index = 0;
+  for (size_t i = 0; i < state.bridge_prompt_options.size(); ++i) {
+    state.bridge_prompt_options[i] = i < count ? options[i] : "";
+  }
+}
+
 void print_common_footer(Print& out) {
   out.println();
   out.println("Commands: /app buddy|push|pager|mcp | /wifi on|off | /codex idle|busy|approval|offline");
@@ -399,8 +424,102 @@ void McpBridgeApp::onExit(DeviceState& state) {
 }
 
 void McpBridgeApp::onCommand(const String& command, DeviceState& state) {
-  (void)command;
-  state.status_line = "Notification, ask, and confirm flows will attach here";
+  const String trimmed = trim_copy(command);
+  if (trimmed.length() == 0) {
+    return;
+  }
+
+  if (trimmed.startsWith("/notify ") || trimmed.startsWith("notify ")) {
+    const String detail = trimmed.substring(trimmed.indexOf(' ') + 1);
+    presentNotification("Notification", detail, state);
+    if (bridge_ != nullptr) {
+      bridge_->sendBridgeNotification("Notification", detail);
+    }
+    return;
+  }
+
+  if (trimmed.startsWith("/confirm ") || trimmed.startsWith("confirm ")) {
+    const String detail = trimmed.substring(trimmed.indexOf(' ') + 1);
+    presentConfirmation(detail, state);
+    if (bridge_ != nullptr) {
+      bridge_->sendBridgeConfirmation("Confirmation", detail);
+    }
+    return;
+  }
+
+  if (trimmed.startsWith("/ask ") || trimmed.startsWith("ask ")) {
+    const String payload = trimmed.substring(trimmed.indexOf(' ') + 1);
+    std::array<String, 5> parts{};
+    size_t part_count = 0;
+    size_t start = 0;
+    while (start <= payload.length() && part_count < parts.size()) {
+      const int separator = payload.indexOf('|', start);
+      const String segment = trim_copy(separator < 0 ? payload.substring(start) : payload.substring(start, separator));
+      parts[part_count++] = segment;
+      if (separator < 0) {
+        break;
+      }
+      start = static_cast<size_t>(separator + 1);
+    }
+
+    const String title = part_count > 0 && parts[0].length() > 0 ? parts[0] : "Question";
+    const String detail = part_count > 1 ? parts[1] : "";
+    const String opt1 = part_count > 2 ? parts[2] : "Yes";
+    const String opt2 = part_count > 3 ? parts[3] : "No";
+    const String opt3 = part_count > 4 ? parts[4] : "";
+    presentQuestion(title, detail, opt1, opt2, opt3, state);
+    if (bridge_ != nullptr) {
+      std::array<String, 3> options{opt1, opt2, opt3};
+      bridge_->sendBridgeQuestion(title, detail, options, opt3.length() > 0 ? 3 : (opt2.length() > 0 ? 2 : 1));
+    }
+    return;
+  }
+
+  if (trimmed.startsWith("/bridge ")) {
+    const String payload = trimmed.substring(8);
+    if (payload.startsWith("select ")) {
+      const int index = constrain(payload.substring(7).toInt() - 1, 0, static_cast<int>(state.bridge_prompt_option_count > 0 ? state.bridge_prompt_option_count - 1 : 0));
+      state.bridge_prompt_selected_index = static_cast<size_t>(index);
+      state.status_line = String("Bridge option selected: ") +
+                          (state.bridge_prompt_option_count > 0 ? state.bridge_prompt_options[state.bridge_prompt_selected_index] : String(index + 1));
+      append_activity_event(state, state.status_line);
+      return;
+    }
+
+    if (payload == "accept") {
+      respondToPrompt(true, state);
+      return;
+    }
+
+    if (payload == "reject") {
+      respondToPrompt(false, state);
+      return;
+    }
+
+    if (payload == "next" && state.bridge_prompt_option_count > 0) {
+      state.bridge_prompt_selected_index = (state.bridge_prompt_selected_index + 1) % state.bridge_prompt_option_count;
+      state.status_line = String("Bridge option selected: ") + state.bridge_prompt_options[state.bridge_prompt_selected_index];
+      append_activity_event(state, state.status_line);
+      return;
+    }
+
+    if (payload == "prev" && state.bridge_prompt_option_count > 0) {
+      state.bridge_prompt_selected_index = (state.bridge_prompt_selected_index + state.bridge_prompt_option_count - 1) % state.bridge_prompt_option_count;
+      state.status_line = String("Bridge option selected: ") + state.bridge_prompt_options[state.bridge_prompt_selected_index];
+      append_activity_event(state, state.status_line);
+      return;
+    }
+  }
+
+  state.status_line = "Notification, ask, and confirm flows are ready";
+}
+
+void McpBridgeApp::onSubmit(const String& command, DeviceState& state) {
+  onCommand(command, state);
+}
+
+void McpBridgeApp::setBridge(MiddlewareLink* bridge) {
+  bridge_ = bridge;
 }
 
 void McpBridgeApp::tick(DeviceState& state) {
@@ -409,14 +528,101 @@ void McpBridgeApp::tick(DeviceState& state) {
 
 void McpBridgeApp::render(Print& out, const DeviceState& state) {
   out.println("=== Cardputer MCP Bridge ===");
-  out.println("Planned tools: notify, ask, confirm.");
-  if (state.approval_pending) {
-    out.print("Approval pending: ");
-    out.println(state.approval_title.length() > 0 ? state.approval_title : "(untitled)");
+  out.print("Bridge: ");
+  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
+  out.print("Prompt: ");
+  switch (state.bridge_prompt_kind) {
+    case BridgePromptKind::None:
+      out.println("none");
+      break;
+    case BridgePromptKind::Notification:
+      out.println("notification");
+      break;
+    case BridgePromptKind::Question:
+      out.println("question");
+      break;
+    case BridgePromptKind::Confirmation:
+      out.println("confirmation");
+      break;
   }
+  if (state.bridge_prompt_title.length() > 0) {
+    out.print("Title: ");
+    out.println(state.bridge_prompt_title);
+  }
+  if (state.bridge_prompt_detail.length() > 0) {
+    out.print("Detail: ");
+    out.println(state.bridge_prompt_detail);
+  }
+  if (state.bridge_prompt_option_count > 0) {
+    out.println("Options:");
+    for (size_t i = 0; i < state.bridge_prompt_option_count; ++i) {
+      out.print(i == state.bridge_prompt_selected_index ? " > " : "   ");
+      out.print(i + 1);
+      out.print(". ");
+      out.println(state.bridge_prompt_options[i]);
+    }
+    out.println("Keys: Enter=accept, Del=reject, /bridge select <n>");
+  }
+  out.print("Pending: ");
+  out.println(state.bridge_prompt_pending ? "yes" : "no");
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);
+}
+
+void McpBridgeApp::presentNotification(const String& title, const String& detail, DeviceState& state) {
+  clear_bridge_prompt(state);
+  state.bridge_prompt_kind = BridgePromptKind::Notification;
+  state.bridge_prompt_title = title;
+  state.bridge_prompt_detail = detail;
+  state.bridge_status_line = title;
+  state.status_line = detail.length() > 0 ? detail : title;
+  append_activity_event(state, String("Bridge notification: ") + title);
+}
+
+void McpBridgeApp::presentQuestion(const String& title, const String& detail, const String& option1, const String& option2, const String& option3, DeviceState& state) {
+  clear_bridge_prompt(state);
+  state.bridge_prompt_kind = BridgePromptKind::Question;
+  state.bridge_prompt_pending = true;
+  state.bridge_prompt_title = title;
+  state.bridge_prompt_detail = detail;
+  std::array<String, 3> options{option1, option2, option3};
+  const size_t count = option3.length() > 0 ? 3 : (option2.length() > 0 ? 2 : 1);
+  set_bridge_options(state, options, count);
+  state.bridge_status_line = "Bridge question pending";
+  state.status_line = detail.length() > 0 ? detail : title;
+  append_activity_event(state, String("Bridge question: ") + title);
+}
+
+void McpBridgeApp::presentConfirmation(const String& detail, DeviceState& state) {
+  clear_bridge_prompt(state);
+  state.bridge_prompt_kind = BridgePromptKind::Confirmation;
+  state.bridge_prompt_pending = true;
+  state.bridge_prompt_title = "Confirmation";
+  state.bridge_prompt_detail = detail;
+  std::array<String, 3> options{"Accept", "Reject", ""};
+  set_bridge_options(state, options, 2);
+  state.bridge_status_line = "Bridge confirmation pending";
+  state.status_line = detail.length() > 0 ? detail : "Confirmation pending";
+  append_activity_event(state, String("Bridge confirmation: ") + detail);
+}
+
+void McpBridgeApp::respondToPrompt(bool accepted, DeviceState& state) {
+  if (!state.bridge_prompt_pending) {
+    state.status_line = accepted ? "No bridge prompt pending to accept" : "No bridge prompt pending to reject";
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  const size_t selected_index = state.bridge_prompt_selected_index;
+  const String selected_text = selected_index < state.bridge_prompt_option_count ? state.bridge_prompt_options[selected_index] : "";
+  if (bridge_ != nullptr) {
+    bridge_->sendBridgeResponse(accepted, selected_index, selected_text);
+  }
+  clear_bridge_prompt(state);
+  state.bridge_status_line = accepted ? "Bridge prompt accepted" : "Bridge prompt rejected";
+  state.status_line = accepted ? "Bridge prompt accepted" : "Bridge prompt rejected";
+  append_activity_event(state, state.status_line);
 }
 
 void PushToCodexApp::beginRecording(DeviceState& state) {

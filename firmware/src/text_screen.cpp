@@ -55,6 +55,8 @@ void TextScreen::drawHeader(const DeviceState& state) {
   M5Cardputer.Display.drawString("Cdx:", 172, 34);
   if (state.approval_pending) {
     M5Cardputer.Display.drawString("apr", 188, 34);
+  } else if (state.bridge_prompt_pending) {
+    M5Cardputer.Display.drawString("brg", 188, 34);
   }
   switch (state.codex_state) {
     case CodexState::Offline:

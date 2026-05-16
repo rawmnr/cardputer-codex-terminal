@@ -94,6 +94,35 @@ bool MiddlewareLink::sendApprovalResponse(bool approved) {
   return sendCardputerMessage(buildEnvelope("approval_response", payload));
 }
 
+bool MiddlewareLink::sendBridgeNotification(const String& title, const String& detail) {
+  String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + "\"}";
+  return sendCardputerMessage(buildEnvelope("bridge_notification", payload));
+}
+
+bool MiddlewareLink::sendBridgeQuestion(const String& title, const String& detail, const std::array<String, 3>& options, size_t option_count) {
+  String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + String("\",\"options\":[");
+  for (size_t i = 0; i < option_count && i < options.size(); ++i) {
+    if (i > 0) {
+      payload += ',';
+    }
+    payload += String("\"") + escapeJson(options[i]) + "\"";
+  }
+  payload += "]}";
+  return sendCardputerMessage(buildEnvelope("bridge_question", payload));
+}
+
+bool MiddlewareLink::sendBridgeConfirmation(const String& title, const String& detail) {
+  String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + "\"}";
+  return sendCardputerMessage(buildEnvelope("bridge_confirmation", payload));
+}
+
+bool MiddlewareLink::sendBridgeResponse(bool accepted, size_t selected_index, const String& note) {
+  String payload = String("{\"accepted\":") + (accepted ? "true" : "false") +
+                   String(",\"selected_index\":") + String(selected_index) +
+                   String(",\"note\":\"") + escapeJson(note) + "\"}";
+  return sendCardputerMessage(buildEnvelope("bridge_response", payload));
+}
+
 bool MiddlewareLink::sendStatusRequest() {
   return sendCardputerMessage(buildEnvelope("status_request", "{}"));
 }
@@ -198,6 +227,90 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       return;
     }
 
+    if (kind == "bridge_notification") {
+      state.bridge_prompt_kind = BridgePromptKind::Notification;
+      state.bridge_prompt_pending = false;
+      state.bridge_prompt_title = payload["title"] | "Notification";
+      if (state.bridge_prompt_title.length() == 0 && content.length() > 0) {
+        state.bridge_prompt_title = content;
+      }
+      state.bridge_prompt_detail = payload["detail"] | "";
+      if (state.bridge_prompt_detail.length() == 0 && content.length() > 0) {
+        state.bridge_prompt_detail = content;
+      }
+      state.bridge_prompt_option_count = 0;
+      state.bridge_prompt_selected_index = 0;
+      state.bridge_status_line = state.bridge_prompt_title;
+      state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+      append_activity_event(state, state.status_line);
+      return;
+    }
+
+    if (kind == "bridge_question") {
+      state.bridge_prompt_kind = BridgePromptKind::Question;
+      state.bridge_prompt_pending = true;
+      state.bridge_prompt_title = payload["title"] | "Question";
+      if (state.bridge_prompt_title.length() == 0 && content.length() > 0) {
+        state.bridge_prompt_title = content;
+      }
+      state.bridge_prompt_detail = payload["detail"] | "";
+      state.bridge_prompt_selected_index = 0;
+      state.bridge_prompt_option_count = 0;
+      state.bridge_prompt_options[0] = "";
+      state.bridge_prompt_options[1] = "";
+      state.bridge_prompt_options[2] = "";
+      JsonArrayConst options = payload["options"];
+      if (!options.isNull()) {
+        size_t i = 0;
+        for (JsonVariantConst option : options) {
+          if (i >= state.bridge_prompt_options.size()) {
+            break;
+          }
+          state.bridge_prompt_options[i++] = option.is<const char*>() ? option.as<const char*>() : "";
+        }
+        state.bridge_prompt_option_count = i;
+      }
+      state.bridge_status_line = "Bridge question pending";
+      state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+      append_activity_event(state, state.bridge_prompt_title);
+      return;
+    }
+
+    if (kind == "bridge_confirmation") {
+      state.bridge_prompt_kind = BridgePromptKind::Confirmation;
+      state.bridge_prompt_pending = true;
+      state.bridge_prompt_title = payload["title"] | "Confirmation";
+      if (state.bridge_prompt_title.length() == 0 && content.length() > 0) {
+        state.bridge_prompt_title = content;
+      }
+      state.bridge_prompt_detail = payload["detail"] | "";
+      if (state.bridge_prompt_detail.length() == 0 && content.length() > 0) {
+        state.bridge_prompt_detail = content;
+      }
+      state.bridge_prompt_selected_index = 0;
+      state.bridge_prompt_options[0] = "Accept";
+      state.bridge_prompt_options[1] = "Reject";
+      state.bridge_prompt_options[2] = "";
+      state.bridge_prompt_option_count = 2;
+      state.bridge_status_line = "Bridge confirmation pending";
+      state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+      append_activity_event(state, state.bridge_status_line);
+      return;
+    }
+
+    if (kind == "bridge_response") {
+      state.bridge_prompt_pending = false;
+      state.bridge_prompt_kind = BridgePromptKind::None;
+      state.bridge_prompt_title = "";
+      state.bridge_prompt_detail = "";
+      state.bridge_prompt_option_count = 0;
+      state.bridge_prompt_selected_index = 0;
+      state.bridge_status_line = content.length() > 0 ? content : "Bridge response recorded";
+      state.status_line = state.bridge_status_line;
+      append_activity_event(state, state.bridge_status_line);
+      return;
+    }
+
     if (kind == "voice_prompt_transcribed") {
       state.status_line = content;
       state.codex_stream_line = content;
@@ -266,6 +379,72 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
     state.codex_state = CodexState::WaitingForApproval;
     state.status_line = "Approval pending";
     append_activity_event(state, state.approval_title);
+    return;
+  }
+
+  if (event_type == "bridge_notification") {
+    state.bridge_prompt_kind = BridgePromptKind::Notification;
+    state.bridge_prompt_pending = false;
+    state.bridge_prompt_title = payload["title"] | "Notification";
+    state.bridge_prompt_detail = payload["detail"] | "";
+    state.bridge_prompt_option_count = 0;
+    state.bridge_prompt_selected_index = 0;
+    state.bridge_status_line = state.bridge_prompt_title;
+    state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  if (event_type == "bridge_question") {
+    state.bridge_prompt_kind = BridgePromptKind::Question;
+    state.bridge_prompt_pending = true;
+    state.bridge_prompt_title = payload["title"] | "Question";
+    state.bridge_prompt_detail = payload["detail"] | "";
+    state.bridge_prompt_selected_index = 0;
+    state.bridge_status_line = "Bridge question pending";
+    state.bridge_prompt_option_count = 0;
+    JsonArrayConst options = payload["options"];
+    if (!options.isNull()) {
+      size_t i = 0;
+      for (JsonVariantConst option : options) {
+        if (i >= state.bridge_prompt_options.size()) {
+          break;
+        }
+        state.bridge_prompt_options[i++] = option.is<const char*>() ? option.as<const char*>() : "";
+      }
+      state.bridge_prompt_option_count = i;
+    }
+    state.status_line = state.bridge_prompt_title;
+    append_activity_event(state, state.bridge_prompt_title);
+    return;
+  }
+
+  if (event_type == "bridge_confirmation") {
+    state.bridge_prompt_kind = BridgePromptKind::Confirmation;
+    state.bridge_prompt_pending = true;
+    state.bridge_prompt_title = payload["title"] | "Confirmation";
+    state.bridge_prompt_detail = payload["detail"] | "";
+    state.bridge_prompt_selected_index = 0;
+    state.bridge_prompt_options[0] = "Accept";
+    state.bridge_prompt_options[1] = "Reject";
+    state.bridge_prompt_options[2] = "";
+    state.bridge_prompt_option_count = 2;
+    state.bridge_status_line = "Bridge confirmation pending";
+    state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+    append_activity_event(state, state.bridge_status_line);
+    return;
+  }
+
+  if (event_type == "bridge_response") {
+    state.bridge_prompt_pending = false;
+    state.bridge_prompt_kind = BridgePromptKind::None;
+    state.bridge_prompt_title = "";
+    state.bridge_prompt_detail = "";
+    state.bridge_prompt_option_count = 0;
+    state.bridge_prompt_selected_index = 0;
+    state.bridge_status_line = content.length() > 0 ? content : "Bridge response recorded";
+    state.status_line = state.bridge_status_line;
+    append_activity_event(state, state.bridge_status_line);
     return;
   }
 
