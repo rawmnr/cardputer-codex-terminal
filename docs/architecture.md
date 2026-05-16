@@ -33,7 +33,7 @@ Build a mobile physical interface for OpenAI Codex, based on the M5Stack Cardput
 ### Keyboard Prompt
 
 ```text
-Cardputer keyboard -> middleware -> turn/start -> Codex -> streaming deltas -> Cardputer display
+Cardputer keyboard -> middleware bridge -> turn/start -> Codex -> streaming deltas -> Cardputer display
 ```
 
 ### Voice Prompt

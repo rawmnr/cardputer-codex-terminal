@@ -47,6 +47,8 @@ struct DeviceState {
   String approval_detail_line;
   int approval_timeout_seconds = 0;
   bool approval_pending = false;
+  String codex_stream_line;
+  String bridge_status_line;
   String wifi_ssid;
   String wifi_ip;
   String network_status_line;

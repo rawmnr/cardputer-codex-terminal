@@ -4,6 +4,7 @@
 
 #include "apps.h"
 #include "device_state.h"
+#include "middleware_link.h"
 #include "network_manager.h"
 #include "text_screen.h"
 
@@ -18,12 +19,14 @@ class AppShell {
   bool hasPendingApproval() const;
   void handleApprovalDecision(bool approved);
   bool isPushToCodexActive() const;
+  MiddlewareLink& bridge();
 
  private:
   void switchTo(AppId app_id);
 
   DeviceState state_;
   NetworkManager network_;
+  MiddlewareLink bridge_;
   TextScreen screen_;
   String input_line_;
   BuddyApp buddy_app_;

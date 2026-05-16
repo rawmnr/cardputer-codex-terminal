@@ -27,10 +27,13 @@ void AppShell::begin() {
   state_.approval_detail_line = "";
   state_.approval_timeout_seconds = 0;
   state_.approval_pending = false;
+  state_.codex_stream_line = "";
+  state_.bridge_status_line = "Middleware bridge not configured";
   append_activity_event(state_, "Booted and waiting for middleware");
 
   input_line_ = "";
   network_.begin();
+  bridge_.begin(state_);
   screen_.begin();
   switchTo(AppId::Buddy);
 }
@@ -104,6 +107,7 @@ void AppShell::handleCommand(const String& command) {
     state_.codex_workspace_path = trimmed.substring(11);
     state_.codex_thread_id = "";
     append_activity_event(state_, String("Workspace: ") + state_.codex_workspace_path);
+    bridge_.sendStatusRequest();
     render();
     return;
   }
@@ -111,6 +115,7 @@ void AppShell::handleCommand(const String& command) {
   if (trimmed.startsWith("/branch ")) {
     state_.codex_branch = trimmed.substring(8);
     append_activity_event(state_, String("Branch: ") + state_.codex_branch);
+    bridge_.sendStatusRequest();
     render();
     return;
   }
@@ -118,6 +123,7 @@ void AppShell::handleCommand(const String& command) {
   if (trimmed.startsWith("/thread ")) {
     state_.codex_thread_id = trimmed.substring(8);
     append_activity_event(state_, String("Thread: ") + state_.codex_thread_id);
+    bridge_.sendStatusRequest();
     render();
     return;
   }
@@ -186,6 +192,7 @@ void AppShell::tick() {
   state_.battery_percent = M5Cardputer.Power.getBatteryLevel();
   state_.battery_voltage_mv = M5Cardputer.Power.getBatteryVoltage();
   network_.tick(state_);
+  bridge_.tick(state_);
 
   if (active_app_ != nullptr) {
     active_app_->tick(state_);
@@ -244,12 +251,17 @@ void AppShell::handleApprovalDecision(bool approved) {
   state_.approval_timeout_seconds = 0;
   state_.codex_state = CodexState::Idle;
   state_.status_line = outcome;
+  bridge_.sendApprovalResponse(approved);
   append_activity_event(state_, outcome);
   render();
 }
 
 bool AppShell::isPushToCodexActive() const {
   return state_.active_app == AppId::PushToCodex;
+}
+
+MiddlewareLink& AppShell::bridge() {
+  return bridge_;
 }
 
 void AppShell::switchTo(AppId app_id) {
@@ -277,4 +289,6 @@ void AppShell::switchTo(AppId app_id) {
     active_app_->onEnter(state_);
     append_activity_event(state_, String("Active app: ") + active_app_->title());
   }
+
+  push_to_codex_app_.setBridge(&bridge_);
 }

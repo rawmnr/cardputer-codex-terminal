@@ -5,6 +5,8 @@
 
 #include "device_state.h"
 
+class MiddlewareLink;
+
 class App {
  public:
   virtual ~App() = default;
@@ -36,6 +38,7 @@ class PushToCodexApp final : public App {
   void onCommand(const String& command, DeviceState& state) override;
   void onSubmit(const String& command, DeviceState& state) override;
   void onPushToTalk(bool pressed, DeviceState& state) override;
+  void setBridge(MiddlewareLink* bridge);
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
 
@@ -50,12 +53,14 @@ class PushToCodexApp final : public App {
   void emitVoicePromptEnvelope(const DeviceState& state) const;
 
   String draft_;
-  std::array<int16_t, kChunkSamples> chunk_buffer_{};
+  std::array<int16_t, kChunkSamples> chunk_buffer_{}; 
   std::array<int16_t, kMaxSamples> captured_samples_{};
   size_t captured_sample_count_ = 0;
+  size_t chunk_index_ = 0;
   int peak_amplitude_ = 0;
   bool recording_ = false;
   bool mic_started_ = false;
+  MiddlewareLink* bridge_ = nullptr;
 };
 
 class PagerApp final : public App {

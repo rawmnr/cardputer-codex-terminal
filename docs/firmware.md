@@ -24,7 +24,7 @@ cardputer-codex-terminal.bin
 
 - Wi-Fi management.
 - Overlay VPN integration.
-- WebSocket client.
+- WebSocket client to the Windows middleware.
 - Keyboard capture.
 - I2S/PDM audio capture.
 - Terminal display rendering.
@@ -44,9 +44,16 @@ cardputer-codex-terminal.bin
 ## User Interface
 
 - Status bar: network, battery, Codex state.
-- Main area: agent stream.
+- Main area: agent stream and latest middleware status.
 - Input line: keyboard prompt.
 - Approval screen: requested action, accept/reject.
+
+## Current Firmware Bridge Behavior
+
+- typed prompts can be sent to the middleware bridge;
+- push-to-talk audio chunks are streamed while recording;
+- release sends a voice prompt ready signal to trigger transcription on Windows;
+- streamed Codex deltas, usage, and approval requests are rendered in the app views.
 
 ## Constraints
 

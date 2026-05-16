@@ -2,6 +2,9 @@
 
 #include <array>
 #include <M5Cardputer.h>
+#include <mbedtls/base64.h>
+
+#include "middleware_link.h"
 
 namespace {
 const char* app_label(AppId app_id) {
@@ -89,6 +92,12 @@ void BuddyApp::render(Print& out, const DeviceState& state) {
   out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
   out.print("Thread: ");
   out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
+  out.print("Bridge: ");
+  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
+  if (state.codex_stream_line.length() > 0) {
+    out.print("Last: ");
+    out.println(state.codex_stream_line);
+  }
   out.print("Approval: ");
   out.println(state.approval_pending ? "pending" : "clear");
   if (state.approval_pending) {
@@ -109,6 +118,7 @@ const char* PushToCodexApp::title() const { return "Push to Codex"; }
 void PushToCodexApp::onEnter(DeviceState& state) {
   draft_ = "";
   captured_sample_count_ = 0;
+  chunk_index_ = 0;
   peak_amplitude_ = 0;
   recording_ = false;
   mic_started_ = false;
@@ -152,6 +162,14 @@ void PushToCodexApp::onCommand(const String& command, DeviceState& state) {
 void PushToCodexApp::onSubmit(const String& command, DeviceState& state) {
   draft_ = command;
   state.status_line = "Text prompt staged for middleware bridge";
+  if (bridge_ != nullptr && bridge_->sendTextPrompt(command)) {
+    state.status_line = "Text prompt sent to middleware";
+    append_activity_event(state, "Text prompt sent to middleware");
+  }
+}
+
+void PushToCodexApp::setBridge(MiddlewareLink* bridge) {
+  bridge_ = bridge;
 }
 
 void PushToCodexApp::onPushToTalk(bool pressed, DeviceState& state) {
@@ -267,6 +285,12 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
   out.print("Thread: ");
   out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
+  out.print("Bridge: ");
+  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
+  if (state.codex_stream_line.length() > 0) {
+    out.print("Last: ");
+    out.println(state.codex_stream_line);
+  }
   out.print("Approval: ");
   out.println(state.approval_pending ? "pending" : "clear");
   if (state.approval_pending && state.approval_detail_line.length() > 0) {
@@ -333,6 +357,12 @@ void PagerApp::render(Print& out, const DeviceState& state) {
   out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
   out.print("Approval: ");
   out.println(state.approval_pending ? "pending" : "clear");
+  out.print("Bridge: ");
+  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
+  if (state.codex_stream_line.length() > 0) {
+    out.print("Last stream: ");
+    out.println(state.codex_stream_line);
+  }
   if (state.approval_pending) {
     out.print("Approval request: ");
     out.println(state.approval_title.length() > 0 ? state.approval_title : "(untitled)");
@@ -429,6 +459,9 @@ void PushToCodexApp::finishRecording(DeviceState& state) {
 
   recording_ = false;
   if (captured_sample_count_ > 0) {
+    if (bridge_ != nullptr) {
+      bridge_->sendVoicePromptReady(state.ptt_sample_rate_hz, captured_sample_count_, peak_amplitude_);
+    }
     emitVoicePromptEnvelope(state);
     state.ptt_state = PushToTalkState::Ready;
     state.ptt_detail_line = "Voice prompt ready for middleware";
@@ -462,6 +495,9 @@ void PushToCodexApp::appendChunk(const int16_t* data, size_t length, DeviceState
     }
   }
   captured_sample_count_ += actual;
+  if (bridge_ != nullptr) {
+    bridge_->sendAudioChunk(chunk_index_++, data, actual, state.ptt_sample_rate_hz);
+  }
   state.ptt_samples_captured = captured_sample_count_;
   state.ptt_peak_amplitude = peak_amplitude_;
 
