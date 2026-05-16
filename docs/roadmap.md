@@ -14,6 +14,7 @@
 
 ## Phase 2 - Minimal Firmware
 
+- Establish the firmware build pipeline that outputs a flashable `.bin`.
 - Display network status.
 - Send a keyboard command.
 - Receive and render a streamed response.

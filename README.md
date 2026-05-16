@@ -4,6 +4,8 @@ Remote agent terminal for turning the M5Stack Cardputer ADV into a physical cont
 
 This repository is initialized as an architecture-first project. It does not yet contain firmware or middleware implementation code. The initial goal is to define the components, protocols, risks, and roadmap before implementation.
 
+The firmware deliverable is expected to be a flashable `.bin` artifact compatible with M5 Launcher on the Cardputer.
+
 ## Vision
 
 The project connects a M5Stack Cardputer ADV to a Windows host running `codex app-server`, providing a mobile interface to:

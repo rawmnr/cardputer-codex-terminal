@@ -4,6 +4,22 @@
 
 The firmware turns the Cardputer into a lightweight physical terminal for Codex.
 
+## Deliverable
+
+The primary software artifact must be a flashable `.bin` file that can be launched through M5 Launcher on the Cardputer.
+
+Suggested output name:
+
+```text
+cardputer-codex-terminal.bin
+```
+
+## Packaging Assumptions
+
+- The firmware source tree must be set up so the build pipeline produces a single installable binary.
+- The binary should be suitable for M5 Launcher without extra manual repackaging.
+- Any assets or configuration needed at runtime should be bundled or embedded in the build, not left as separate manual steps unless explicitly required.
+
 ## Planned Modules
 
 - Wi-Fi management.
@@ -38,3 +54,4 @@ The firmware turns the Cardputer into a lightweight physical terminal for Codex.
 - Scrolling must avoid flicker.
 - The firmware should not carry complex Codex logic.
 - Secrets must be stored and displayed carefully.
+- The final firmware output must remain a `.bin`, not a desktop executable or loose script.

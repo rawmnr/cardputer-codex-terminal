@@ -12,6 +12,7 @@ Build a mobile physical interface for OpenAI Codex, based on the M5Stack Cardput
    - Agentic stream rendering.
    - WebSocket transport to the middleware.
    - Secure network connectivity via overlay VPN.
+   - Build output as a flashable `.bin` for M5 Launcher.
 
 2. **Windows middleware**
    - WebSocket server for the Cardputer.
@@ -53,3 +54,4 @@ Codex approval request -> middleware -> Cardputer alert -> user keypress -> midd
 - Keep the Cardputer as a lightweight, robust, responsive terminal.
 - Avoid direct public exposure of the Windows server.
 - Separate transport, transcription, and Codex protocol handling cleanly.
+- Treat the firmware as a binary deliverable first; source layout should always compile to a M5 Launcher-compatible `.bin`.
