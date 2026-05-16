@@ -27,10 +27,12 @@ class MiddlewareLink {
   bool ensureConnection(DeviceState& state);
   void applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload);
   String buildMessage(const String& type, const String& payload_json) const;
+  String buildEnvelope(const String& type, const String& payload_json) const;
   String escapeJson(const String& value) const;
 
   String host_;
   String path_;
+  String auth_token_;
   uint16_t port_ = 0;
   bool configured_ = false;
   bool started_ = false;

@@ -12,6 +12,7 @@ The initial scaffold provides:
 - a buffered voice prompt pipeline with a transcriber hook.
 
 The Cardputer message contract is versioned. Current protocol version: `1`.
+The bridge server can also require a shared `bridge_token` for remote access.
 
 ## Tooling
 
@@ -32,7 +33,7 @@ uv run cardputer-codex-middleware --help
 Run the bridge server:
 
 ```bash
-uv run cardputer-codex-middleware --serve
+uv run cardputer-codex-middleware --serve --bridge-token <shared-secret>
 ```
 
 ## Tests

@@ -13,6 +13,7 @@ uv run python -m unittest discover -s tests -v
 ```
 
 Cardputer-facing messages use a versioned envelope. The current protocol version is `1`.
+When the bridge is exposed beyond loopback, the server can require a shared `bridge_token` and the firmware must embed the same token in its outgoing envelopes.
 
 ## Responsibilities
 
@@ -26,6 +27,7 @@ Cardputer-facing messages use a versioned envelope. The current protocol version
 - Handle approval requests.
 
 The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.
+Use `--bridge-token` to require a shared secret for the Cardputer bridge.
 
 The voice pipeline is intentionally split into three steps:
 

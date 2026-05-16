@@ -21,6 +21,12 @@ class MessageTests(unittest.TestCase):
 
         self.assertEqual(parsed.protocol_version, 1)
 
+    def test_message_round_trip_keeps_auth_token(self) -> None:
+        message = CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": "hello"}, auth_token="secret")
+        parsed = CardputerMessage.from_dict(message.to_dict())
+
+        self.assertEqual(parsed.auth_token, "secret")
+
     def test_router_handles_text_prompt(self) -> None:
         router = CardputerRouter()
         message = CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": "hello"})

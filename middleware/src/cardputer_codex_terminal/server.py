@@ -39,6 +39,21 @@ class CardputerBridgeServer:
             raise ValueError("Cardputer messages must be JSON objects.")
 
         message = CardputerMessage.from_dict(payload)
+        expected_token = self.app.config.bridge_token
+        if expected_token is not None and message.auth_token != expected_token:
+            return [
+                json.dumps(
+                    {
+                        "type": "error",
+                        "payload": {
+                            "kind": "bridge_auth_failed",
+                            "content": "Bridge authentication failed.",
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            ]
+
         events = await self.app.handle_cardputer_message(message)
         return [json.dumps(event.to_dict(), ensure_ascii=False) for event in events]
 

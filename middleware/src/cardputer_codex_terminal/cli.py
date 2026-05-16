@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--real-codex", action="store_true", help="Use the real Codex transport when implemented.")
     parser.add_argument("--prompt", default="Hello Codex, start.")
     parser.add_argument("--serve", action="store_true", help="Run the Cardputer WebSocket bridge instead of a one-shot prompt.")
+    parser.add_argument("--bridge-token", default=None, help="Shared token required by the Cardputer bridge.")
     return parser
 
 
@@ -31,6 +32,7 @@ async def run_async(args: argparse.Namespace) -> int:
             port=args.port,
             codex_ws_url=args.codex_ws_url,
             use_mock_codex=not args.real_codex,
+            bridge_token=args.bridge_token,
             workspace_path=args.workspace,
             branch=args.branch,
             thread_id=args.thread_id,

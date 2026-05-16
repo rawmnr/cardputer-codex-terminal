@@ -25,13 +25,17 @@ class CardputerMessage:
     type: CardputerMessageType
     payload: dict[str, Any] = field(default_factory=dict)
     protocol_version: int = PROTOCOL_VERSION
+    auth_token: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "protocol_version": self.protocol_version,
             "type": self.type.value,
             "payload": self.payload,
         }
+        if self.auth_token is not None:
+            data["auth_token"] = self.auth_token
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CardputerMessage":
@@ -50,7 +54,10 @@ class CardputerMessage:
         payload = data.get("payload", {})
         if not isinstance(payload, dict):
             raise ValueError("Message payload must be an object.")
-        return cls(message_type, payload, protocol_version)
+        auth_token = data.get("auth_token")
+        if auth_token is not None and not isinstance(auth_token, str):
+            raise ValueError("Auth token must be a string when provided.")
+        return cls(message_type, payload, protocol_version, auth_token if auth_token else None)
 
 
 @dataclass(slots=True)

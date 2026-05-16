@@ -14,6 +14,9 @@ void MiddlewareLink::begin(DeviceState& state) {
   if (CARDPUTER_MIDDLEWARE_HOST[0] != '\0') {
     configure(CARDPUTER_MIDDLEWARE_HOST, static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT), CARDPUTER_MIDDLEWARE_PATH);
   }
+  if (CARDPUTER_MIDDLEWARE_TOKEN[0] != '\0') {
+    auth_token_ = CARDPUTER_MIDDLEWARE_TOKEN;
+  }
 }
 
 void MiddlewareLink::configure(const String& host, uint16_t port, const String& path) {
@@ -48,7 +51,7 @@ void MiddlewareLink::tick(DeviceState& state) {
 }
 
 bool MiddlewareLink::sendTextPrompt(const String& text) {
-  return sendCardputerMessage(buildMessage("text_prompt", String("{\"text\":\"") + escapeJson(text) + "\"}"));
+  return sendCardputerMessage(buildEnvelope("text_prompt", String("{\"text\":\"") + escapeJson(text) + "\"}"));
 }
 
 bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz) {
@@ -76,23 +79,23 @@ bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, siz
   String payload = String("{\"chunk_id\":") + String(chunk_id) +
                    String(",\"pcm_b64\":\"") + pcm_b64 +
                    String("\",\"sample_rate_hz\":") + String(sample_rate_hz) + "}";
-  return sendCardputerMessage(buildMessage("audio_chunk", payload));
+  return sendCardputerMessage(buildEnvelope("audio_chunk", payload));
 }
 
 bool MiddlewareLink::sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample_count, int peak_amplitude) {
   String payload = String("{\"sample_rate_hz\":") + String(sample_rate_hz) +
                    String(",\"sample_count\":") + String(sample_count) +
                    String(",\"peak_amplitude\":") + String(peak_amplitude) + "}";
-  return sendCardputerMessage(buildMessage("voice_prompt_ready", payload));
+  return sendCardputerMessage(buildEnvelope("voice_prompt_ready", payload));
 }
 
 bool MiddlewareLink::sendApprovalResponse(bool approved) {
   String payload = String("{\"approved\":") + (approved ? "true" : "false") + "}";
-  return sendCardputerMessage(buildMessage("approval_response", payload));
+  return sendCardputerMessage(buildEnvelope("approval_response", payload));
 }
 
 bool MiddlewareLink::sendStatusRequest() {
-  return sendCardputerMessage(buildMessage("status_request", "{}"));
+  return sendCardputerMessage(buildEnvelope("status_request", "{}"));
 }
 
 void MiddlewareLink::handleWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -275,7 +278,16 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
 }
 
 String MiddlewareLink::buildMessage(const String& type, const String& payload_json) const {
-  return String("{\"protocol_version\":1,\"type\":\"") + escapeJson(type) + String("\",\"payload\":") + payload_json + "}";
+  return buildEnvelope(type, payload_json);
+}
+
+String MiddlewareLink::buildEnvelope(const String& type, const String& payload_json) const {
+  String output = String("{\"protocol_version\":1,\"type\":\"") + escapeJson(type) + String("\",\"payload\":") + payload_json;
+  if (auth_token_.length() > 0) {
+    output += String(",\"auth_token\":\"") + escapeJson(auth_token_) + "\"";
+  }
+  output += "}";
+  return output;
 }
 
 String MiddlewareLink::escapeJson(const String& value) const {
