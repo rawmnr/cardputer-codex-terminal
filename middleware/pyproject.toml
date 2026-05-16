@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cardputer-codex-middleware"
+version = "0.1.0"
+description = "Windows middleware for the Cardputer Codex terminal project"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Romain Meunier" }]
+dependencies = []
+
+[project.scripts]
+cardputer-codex-middleware = "cardputer_codex_terminal.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
