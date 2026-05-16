@@ -88,20 +88,24 @@ void PushToCodexApp::onEnter(DeviceState& state) {
   state.ptt_peak_amplitude = 0;
   state.ptt_detail_line = "Hold SPACE to record a voice prompt";
   state.status_line = "Hold SPACE to record a voice prompt";
+  append_activity_event(state, "Push-to-talk armed");
   if (!M5.Mic.isEnabled()) {
     state.ptt_state = PushToTalkState::Error;
     state.ptt_detail_line = "Microphone not enabled";
     state.status_line = "Microphone unavailable";
+    append_activity_event(state, "Microphone unavailable");
     return;
   }
 
   M5.Mic.setSampleRate(16000);
   if (M5.Mic.begin()) {
     mic_started_ = true;
+    append_activity_event(state, "Microphone ready");
   } else {
     state.ptt_state = PushToTalkState::Error;
     state.ptt_detail_line = "Failed to start microphone";
     state.status_line = "Mic start failed";
+    append_activity_event(state, "Failed to start microphone");
   }
 }
 
@@ -141,6 +145,7 @@ void PushToCodexApp::tick(DeviceState& state) {
     state.ptt_state = PushToTalkState::Error;
     state.ptt_detail_line = "Microphone is not ready";
     state.status_line = "Microphone is not ready";
+    append_activity_event(state, "Microphone is not ready");
     recording_ = false;
     return;
   }
@@ -149,6 +154,7 @@ void PushToCodexApp::tick(DeviceState& state) {
     state.ptt_state = PushToTalkState::Ready;
     state.ptt_detail_line = "Capture buffer full";
     state.status_line = "Capture buffer full";
+    append_activity_event(state, "Capture buffer full");
     recording_ = false;
     return;
   }
@@ -159,6 +165,7 @@ void PushToCodexApp::tick(DeviceState& state) {
     state.ptt_state = PushToTalkState::Ready;
     state.ptt_detail_line = "Capture complete";
     state.status_line = "Capture complete";
+    append_activity_event(state, "Capture complete");
     recording_ = false;
     return;
   }
@@ -247,7 +254,17 @@ void PagerApp::render(Print& out, const DeviceState& state) {
   out.println(app_label(state.active_app));
   out.print("Net: ");
   out.println(state.network_status_line);
-  out.println("Inbox, session detail, interrupts, and approvals will land here.");
+  out.println("Recent activity:");
+  const size_t log_count = state.activity_log_count;
+  if (log_count == 0) {
+    out.println("  (no events yet)");
+  } else {
+    for (size_t i = 0; i < log_count; ++i) {
+      const String entry = activity_log_entry(state, i);
+      out.print("  ");
+      out.println(entry.length() > 0 ? entry : "(empty)");
+    }
+  }
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);
@@ -300,6 +317,7 @@ void PushToCodexApp::beginRecording(DeviceState& state) {
   state.ptt_peak_amplitude = 0;
   state.ptt_detail_line = "Recording voice prompt...";
   state.status_line = "Recording voice prompt...";
+  append_activity_event(state, "Recording voice prompt");
 }
 
 void PushToCodexApp::finishRecording(DeviceState& state) {
@@ -308,6 +326,7 @@ void PushToCodexApp::finishRecording(DeviceState& state) {
       state.ptt_state = PushToTalkState::Ready;
       state.ptt_detail_line = "Voice prompt ready for middleware";
       state.status_line = "Voice prompt ready for middleware";
+      append_activity_event(state, "Voice prompt ready for middleware");
     } else if (state.ptt_state != PushToTalkState::Error) {
       state.ptt_state = PushToTalkState::Armed;
       state.ptt_detail_line = "Hold SPACE to record a voice prompt";
@@ -322,10 +341,12 @@ void PushToCodexApp::finishRecording(DeviceState& state) {
     state.ptt_state = PushToTalkState::Ready;
     state.ptt_detail_line = "Voice prompt ready for middleware";
     state.status_line = "Voice prompt ready for middleware";
+    append_activity_event(state, "Voice prompt ready for middleware");
   } else {
     state.ptt_state = PushToTalkState::Armed;
     state.ptt_detail_line = "No audio captured";
     state.status_line = "No audio captured";
+    append_activity_event(state, "No audio captured");
   }
 }
 
@@ -336,6 +357,7 @@ void PushToCodexApp::appendChunk(const int16_t* data, size_t length, DeviceState
     state.ptt_state = PushToTalkState::Ready;
     state.ptt_detail_line = "Capture buffer full";
     state.status_line = "Capture buffer full";
+    append_activity_event(state, "Capture buffer full");
     recording_ = false;
     return;
   }
@@ -355,6 +377,7 @@ void PushToCodexApp::appendChunk(const int16_t* data, size_t length, DeviceState
     state.ptt_state = PushToTalkState::Ready;
     state.ptt_detail_line = "Capture buffer full";
     state.status_line = "Capture buffer full";
+    append_activity_event(state, "Capture buffer full");
     recording_ = false;
   }
 }

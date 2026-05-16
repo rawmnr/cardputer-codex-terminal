@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <Arduino.h>
 
 enum class AppId {
@@ -25,6 +26,8 @@ enum class PushToTalkState {
 };
 
 struct DeviceState {
+  static constexpr size_t kActivityLogSize = 8;
+
   String firmware_name;
   AppId active_app = AppId::Buddy;
   CodexState codex_state = CodexState::Offline;
@@ -41,4 +44,25 @@ struct DeviceState {
   size_t ptt_sample_limit = 0;
   uint32_t ptt_sample_rate_hz = 16000;
   String ptt_detail_line;
+  std::array<String, kActivityLogSize> activity_log{};
+  size_t activity_log_head = 0;
+  size_t activity_log_count = 0;
 };
+
+inline void append_activity_event(DeviceState& state, const String& message) {
+  state.activity_log[state.activity_log_head] = message;
+  state.activity_log_head = (state.activity_log_head + 1) % DeviceState::kActivityLogSize;
+  if (state.activity_log_count < DeviceState::kActivityLogSize) {
+    state.activity_log_count++;
+  }
+}
+
+inline String activity_log_entry(const DeviceState& state, size_t index) {
+  if (index >= state.activity_log_count) {
+    return "";
+  }
+
+  const size_t start = (state.activity_log_head + DeviceState::kActivityLogSize - state.activity_log_count) % DeviceState::kActivityLogSize;
+  const size_t actual = (start + index) % DeviceState::kActivityLogSize;
+  return state.activity_log[actual];
+}

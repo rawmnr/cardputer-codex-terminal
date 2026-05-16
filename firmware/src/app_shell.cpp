@@ -19,6 +19,7 @@ void AppShell::begin() {
   state_.network_status_line = "Wi-Fi disabled - no credentials configured";
   state_.codex_state = CodexState::Idle;
   state_.status_line = "Waiting for middleware connection";
+  append_activity_event(state_, "Booted and waiting for middleware");
 
   input_line_ = "";
   network_.begin();
@@ -55,7 +56,9 @@ void AppShell::handleCommand(const String& command) {
       switchTo(AppId::McpBridge);
     } else {
       Serial.println("Unknown app.");
+      return;
     }
+    append_activity_event(state_, String("Switched to ") + active_app_->title());
     render();
     return;
   }
@@ -63,6 +66,7 @@ void AppShell::handleCommand(const String& command) {
   if (trimmed.startsWith("/wifi ")) {
     state_.wifi_connected = trimmed.endsWith("on");
     state_.status_line = state_.wifi_connected ? "Wi-Fi connected" : "Wi-Fi offline";
+    append_activity_event(state_, state_.status_line);
     render();
     return;
   }
@@ -78,6 +82,7 @@ void AppShell::handleCommand(const String& command) {
     } else if (value == "offline") {
       state_.codex_state = CodexState::Offline;
     }
+    append_activity_event(state_, String("Codex state: ") + value);
     render();
     return;
   }
@@ -85,12 +90,14 @@ void AppShell::handleCommand(const String& command) {
   if (trimmed.startsWith("/battery ")) {
     const int value = trimmed.substring(9).toInt();
     state_.battery_percent = constrain(value, 0, 100);
+    append_activity_event(state_, String("Battery set to ") + String(state_.battery_percent) + "%");
     render();
     return;
   }
 
   if (trimmed.startsWith("/status ")) {
     state_.status_line = trimmed.substring(8);
+    append_activity_event(state_, String("Status: ") + state_.status_line);
     render();
     return;
   }
@@ -131,6 +138,7 @@ void AppShell::handleKeyboardInput(const String& typed, bool submit, bool backsp
   if (submit) {
     const String submitted = input_line_;
     input_line_ = "";
+    append_activity_event(state_, String("Submitted command: ") + submitted);
     handleCommand(submitted);
     return;
   }
@@ -141,6 +149,7 @@ void AppShell::handleKeyboardInput(const String& typed, bool submit, bool backsp
 void AppShell::handlePushToTalk(bool pressed) {
   if (active_app_ != nullptr) {
     active_app_->onPushToTalk(pressed, state_);
+    append_activity_event(state_, pressed ? "Push-to-talk pressed" : "Push-to-talk released");
     render();
   }
 }
@@ -172,5 +181,6 @@ void AppShell::switchTo(AppId app_id) {
 
   if (active_app_ != nullptr) {
     active_app_->onEnter(state_);
+    append_activity_event(state_, String("Active app: ") + active_app_->title());
   }
 }
