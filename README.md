@@ -4,6 +4,8 @@ Remote agent terminal for turning the M5Stack Cardputer ADV into a physical cont
 
 This repository is initialized as an architecture-first project. It does not yet contain firmware or middleware implementation code. The initial goal is to define the components, protocols, risks, and roadmap before implementation.
 
+This project is inspired by the excellent work on [`dakshaymehta/cardputer-claude-os`](https://github.com/dakshaymehta/cardputer-claude-os), adapted here for OpenAI Codex instead of Claude.
+
 The firmware deliverable is expected to be a flashable `.bin` artifact compatible with M5 Launcher on the Cardputer.
 
 ## Vision
