@@ -1,30 +1,42 @@
 #include <Arduino.h>
+#include <M5Cardputer.h>
 
 #include "app_shell.h"
 
 namespace {
 AppShell g_shell;
-String g_input_buffer;
 
-void poll_serial_input() {
-  while (Serial.available() > 0) {
-    const char ch = static_cast<char>(Serial.read());
-    if (ch == '\r') {
-      continue;
-    }
-    if (ch == '\n') {
-      if (g_input_buffer.length() > 0) {
-        g_shell.handleCommand(g_input_buffer);
-        g_input_buffer = "";
-      }
-      continue;
-    }
-    g_input_buffer += ch;
+void poll_keyboard_input() {
+  M5Cardputer.update();
+
+  if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) {
+    return;
+  }
+
+  const auto status = M5Cardputer.Keyboard.keysState();
+  String typed;
+  for (auto ch : status.word) {
+    typed += ch;
+  }
+
+  if (status.del) {
+    g_shell.handleKeyboardInput("", false, true);
+  }
+
+  if (status.enter) {
+    g_shell.handleKeyboardInput(typed, true, false);
+    return;
+  }
+
+  if (typed.length() > 0) {
+    g_shell.handleKeyboardInput(typed, false, false);
   }
 }
 }  // namespace
 
 void setup() {
+  auto cfg = M5.config();
+  M5Cardputer.begin(cfg, true);
   Serial.begin(115200);
   delay(200);
 
@@ -37,8 +49,7 @@ void setup() {
 }
 
 void loop() {
-  poll_serial_input();
+  poll_keyboard_input();
   g_shell.tick();
   delay(16);
 }
-

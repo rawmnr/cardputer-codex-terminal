@@ -12,7 +12,7 @@ class App {
   virtual void onExit(DeviceState& state) = 0;
   virtual void onCommand(const String& command, DeviceState& state) = 0;
   virtual void tick(DeviceState& state) = 0;
-  virtual void render(Stream& out, const DeviceState& state) = 0;
+  virtual void render(Print& out, const DeviceState& state) = 0;
 };
 
 class BuddyApp final : public App {
@@ -22,7 +22,7 @@ class BuddyApp final : public App {
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
   void tick(DeviceState& state) override;
-  void render(Stream& out, const DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
 };
 
 class PushToCodexApp final : public App {
@@ -32,7 +32,7 @@ class PushToCodexApp final : public App {
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
   void tick(DeviceState& state) override;
-  void render(Stream& out, const DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
 
  private:
   String draft_;
@@ -45,7 +45,7 @@ class PagerApp final : public App {
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
   void tick(DeviceState& state) override;
-  void render(Stream& out, const DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
 };
 
 class McpBridgeApp final : public App {
@@ -55,6 +55,5 @@ class McpBridgeApp final : public App {
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
   void tick(DeviceState& state) override;
-  void render(Stream& out, const DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
 };
-

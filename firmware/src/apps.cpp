@@ -15,7 +15,7 @@ const char* app_label(AppId app_id) {
   return "Unknown";
 }
 
-void print_common_footer(Stream& out) {
+void print_common_footer(Print& out) {
   out.println();
   out.println("Commands: /app buddy|push|pager|mcp | /wifi on|off | /codex idle|busy|approval|offline");
   out.println("          /battery <0-100> | /status <text> | /help");
@@ -41,7 +41,7 @@ void BuddyApp::tick(DeviceState& state) {
   (void)state;
 }
 
-void BuddyApp::render(Stream& out, const DeviceState& state) {
+void BuddyApp::render(Print& out, const DeviceState& state) {
   out.println("=== Codex Buddy ===");
   out.print("Wi-Fi: ");
   out.println(state.wifi_connected ? "connected" : "offline");
@@ -88,7 +88,7 @@ void PushToCodexApp::tick(DeviceState& state) {
   (void)state;
 }
 
-void PushToCodexApp::render(Stream& out, const DeviceState& state) {
+void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.println("=== Push to Codex ===");
   out.print("Draft: ");
   out.println(draft_.length() > 0 ? draft_ : "(empty)");
@@ -132,7 +132,7 @@ void PagerApp::tick(DeviceState& state) {
   (void)state;
 }
 
-void PagerApp::render(Stream& out, const DeviceState& state) {
+void PagerApp::render(Print& out, const DeviceState& state) {
   out.println("=== Codex Pager ===");
   out.print("Active app: ");
   out.println(app_label(state.active_app));
@@ -161,11 +161,10 @@ void McpBridgeApp::tick(DeviceState& state) {
   (void)state;
 }
 
-void McpBridgeApp::render(Stream& out, const DeviceState& state) {
+void McpBridgeApp::render(Print& out, const DeviceState& state) {
   out.println("=== Cardputer MCP Bridge ===");
   out.println("Planned tools: notify, ask, confirm.");
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);
 }
-

@@ -11,11 +11,14 @@ String trimmed_copy(const String& input) {
 void AppShell::begin() {
   state_.firmware_name = "cardputer-codex-terminal";
   state_.active_app = AppId::Buddy;
-  state_.battery_percent = 87;
+  state_.battery_percent = 0;
+  state_.battery_voltage_mv = 0;
   state_.wifi_connected = false;
+  state_.charging = false;
   state_.codex_state = CodexState::Idle;
   state_.status_line = "Waiting for middleware connection";
 
+  input_line_ = "";
   screen_.begin();
   switchTo(AppId::Buddy);
 }
@@ -96,13 +99,36 @@ void AppShell::handleCommand(const String& command) {
 }
 
 void AppShell::tick() {
+  state_.battery_percent = M5Cardputer.Power.getBatteryLevel();
+  state_.battery_voltage_mv = M5Cardputer.Power.getBatteryVoltage();
+  state_.charging = M5Cardputer.Power.isCharging();
+
   if (active_app_ != nullptr) {
     active_app_->tick(state_);
   }
 }
 
 void AppShell::render() {
-  screen_.renderShell(state_, *active_app_);
+  screen_.renderShell(state_, *active_app_, input_line_);
+}
+
+void AppShell::handleKeyboardInput(const String& typed, bool submit, bool backspace) {
+  if (backspace && input_line_.length() > 0) {
+    input_line_.remove(input_line_.length() - 1);
+  }
+
+  if (typed.length() > 0) {
+    input_line_ += typed;
+  }
+
+  if (submit) {
+    const String submitted = input_line_;
+    input_line_ = "";
+    handleCommand(submitted);
+    return;
+  }
+
+  render();
 }
 
 void AppShell::switchTo(AppId app_id) {
@@ -130,4 +156,3 @@ void AppShell::switchTo(AppId app_id) {
     active_app_->onEnter(state_);
   }
 }
-
