@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <mbedtls/base64.h>
+#include <ESPmDNS.h>
 
 #include "device_config.h"
 

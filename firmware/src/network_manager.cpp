@@ -2,6 +2,7 @@
 
 #include <SPI.h>
 #include <SD.h>
+#include <ESPmDNS.h>
 
 #include "device_config.h"
 

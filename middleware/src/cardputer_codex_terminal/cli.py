@@ -3,8 +3,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import socket
 import sys
 from ipaddress import ip_address
+
+from zeroconf import IPVersion, ServiceInfo, Zeroconf
 
 from .config import AppConfig
 from .core import MiddlewareApp
@@ -113,6 +116,38 @@ async def run_async(args: argparse.Namespace) -> int:
                         print(json.dumps(event.to_dict(), ensure_ascii=False))
                 await asyncio.Future()
         finally:
+            if preview is not None:
+                preview.close()
+        return 0
+
+    if args.prompt:
+        events = await app.handle_cardputer_message(
+            CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt}, id="msg-000001")
+        )
+        for event in events:
+            print(json.dumps(event.to_dict(), ensure_ascii=False))
+
+    if preview is not None:
+        try:
+            await asyncio.Future()
+        finally:
+            preview.close()
+        return 0
+
+    return 0
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return asyncio.run(run_async(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+nally:
+            zc.unregister_all_services()
+            zc.close()
             if preview is not None:
                 preview.close()
         return 0

@@ -88,20 +88,29 @@ void AppShell::begin() {
   network_.begin();
   network_.logMessage("App shell booted");
   const RuntimeNetworkConfig& runtime = network_.config();
-  if (runtime.middleware_host.length() > 0) {
-    bridge_.configure(runtime.middleware_host, runtime.middleware_port, runtime.middleware_path, runtime.middleware_token);
-    if (runtime.middleware_token.length() > 0) {
-      state_.bridge_status_line = "Middleware bridge configured from SD";
-    }
-    network_.logMessage(String("Middleware bridge configured from SD host ") + runtime.middleware_host);
-  } else if (String(CARDPUTER_MIDDLEWARE_HOST).length() > 0) {
-    bridge_.configure(
-      CARDPUTER_MIDDLEWARE_HOST,
-      static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT),
-      CARDPUTER_MIDDLEWARE_PATH,
-      CARDPUTER_MIDDLEWARE_TOKEN
-    );
-    network_.logMessage(String("Middleware bridge configured from firmware defaults host ") + CARDPUTER_MIDDLEWARE_HOST);
+  
+  // Use SD config if available, otherwise firmware defaults, otherwise empty (for mDNS discovery)
+  String host = runtime.middleware_host;
+  uint16_t port = runtime.middleware_port;
+  String path = runtime.middleware_path;
+  String token = runtime.middleware_token;
+
+  if (host.length() == 0 && String(CARDPUTER_MIDDLEWARE_HOST).length() > 0) {
+    host = CARDPUTER_MIDDLEWARE_HOST;
+    port = static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT);
+    path = CARDPUTER_MIDDLEWARE_PATH;
+    token = CARDPUTER_MIDDLEWARE_TOKEN;
+    network_.logMessage(String("Using firmware default host ") + host);
+  }
+
+  bridge_.configure(host, port, path, token);
+  
+  if (host.length() > 0) {
+    state_.bridge_status_line = "Middleware bridge configured";
+    network_.logMessage(String("Middleware bridge configured with host ") + host);
+  } else {
+    state_.bridge_status_line = "Auto-discovering bridge...";
+    network_.logMessage("No bridge host configured, will use mDNS discovery");
   }
 
   if (runtime.sd_mounted) {
