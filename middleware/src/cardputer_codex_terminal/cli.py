@@ -7,7 +7,11 @@ import socket
 import sys
 from ipaddress import ip_address
 
-from zeroconf import IPVersion, ServiceInfo, Zeroconf
+try:
+    from zeroconf import IPVersion, ServiceInfo, Zeroconf
+    HAS_ZEROCONF = True
+except ImportError:
+    HAS_ZEROCONF = False
 
 from .config import AppConfig
 from .core import MiddlewareApp
