@@ -89,9 +89,11 @@ class CardputerRouter:
         if message.type == CardputerMessageType.BRIDGE_NOTIFICATION:
             title = str(message.payload.get("title") or "Notification")
             detail = str(message.payload.get("detail") or "")
+            channel = str(message.payload.get("channel") or title)
+            urgency = str(message.payload.get("urgency") or "normal")
             return RouterResult(
                 status_line=f"bridge notification: {title}",
-                outbound_events=[{"kind": "bridge_notification", "title": title, "detail": detail}],
+                outbound_events=[{"kind": "bridge_notification", "title": title, "detail": detail, "channel": channel, "urgency": urgency}],
             )
 
         if message.type == CardputerMessageType.BRIDGE_QUESTION:
@@ -100,15 +102,16 @@ class CardputerRouter:
             options = list(message.payload.get("options") or [])
             return RouterResult(
                 status_line=f"bridge question: {title}",
-                outbound_events=[{"kind": "bridge_question", "title": title, "detail": detail, "options": options}],
+                outbound_events=[{"kind": "bridge_question", "title": title, "detail": detail, "options": options, "channel": "cardputer.ask"}],
             )
 
         if message.type == CardputerMessageType.BRIDGE_CONFIRMATION:
             title = str(message.payload.get("title") or "Confirmation")
             detail = str(message.payload.get("detail") or "")
+            danger = bool(message.payload.get("danger", False))
             return RouterResult(
                 status_line=f"bridge confirmation: {title}",
-                outbound_events=[{"kind": "bridge_confirmation", "title": title, "detail": detail}],
+                outbound_events=[{"kind": "bridge_confirmation", "title": title, "detail": detail, "danger": danger, "channel": "cardputer.confirm"}],
             )
 
         if message.type == CardputerMessageType.BRIDGE_RESPONSE:

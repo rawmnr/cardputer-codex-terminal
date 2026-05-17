@@ -122,16 +122,43 @@ class MessageTests(unittest.TestCase):
         )
 
         self.assertEqual(notification.status_line, "bridge notification: Build finished")
-        self.assertEqual(notification.outbound_events, [{"kind": "bridge_notification", "title": "Build finished", "detail": "Cardputer OS build is ready."}])
+        self.assertEqual(
+            notification.outbound_events,
+            [
+                {
+                    "kind": "bridge_notification",
+                    "title": "Build finished",
+                    "detail": "Cardputer OS build is ready.",
+                    "channel": "Build finished",
+                    "urgency": "normal",
+                }
+            ],
+        )
         self.assertEqual(question.status_line, "bridge question: Choose workspace")
         self.assertEqual(
             question.outbound_events,
-            [{"kind": "bridge_question", "title": "Choose workspace", "detail": "Select a target", "options": ["repo-a", "repo-b"]}],
+            [
+                {
+                    "kind": "bridge_question",
+                    "title": "Choose workspace",
+                    "detail": "Select a target",
+                    "options": ["repo-a", "repo-b"],
+                    "channel": "cardputer.ask",
+                }
+            ],
         )
         self.assertEqual(confirmation.status_line, "bridge confirmation: Restart")
         self.assertEqual(
             confirmation.outbound_events,
-            [{"kind": "bridge_confirmation", "title": "Restart", "detail": "Restart middleware?"}],
+            [
+                {
+                    "kind": "bridge_confirmation",
+                    "title": "Restart",
+                    "detail": "Restart middleware?",
+                    "danger": False,
+                    "channel": "cardputer.confirm",
+                }
+            ],
         )
         self.assertEqual(response.status_line, "bridge response accepted")
         self.assertEqual(

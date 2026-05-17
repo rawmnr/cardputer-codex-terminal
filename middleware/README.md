@@ -16,6 +16,7 @@ The initial scaffold provides:
 The Cardputer message contract is versioned. Current protocol version: `1`.
 The bridge server can also require a shared `bridge_token` for remote access.
 For faster iteration, the middleware can now run a browser preview that mirrors the latest session state into local files under `.cardputer-dev/`.
+It also has an MCP server mode for Codex, exposed over stdio, so Codex can call the Cardputer directly as tools.
 
 ## Tooling
 
@@ -71,6 +72,34 @@ Run the local preview:
 ```bash
 uv run cardputer-codex-middleware --preview
 ```
+
+Run as a Codex MCP server:
+
+```bash
+uv run cardputer-codex-middleware --mcp
+```
+
+That mode serves the MCP tools over stdio and keeps the Cardputer WebSocket bridge available on the normal host/port.
+
+The Codex MCP config can point at the middleware like this:
+
+```toml
+[mcp_servers.cardputer]
+command = "uv"
+args = ["run", "cardputer-codex-middleware", "--mcp"]
+cwd = "C:\\Gitlab\\cardputer-codex-terminal\\middleware"
+tool_timeout_sec = 120
+```
+
+The exposed tools are:
+
+- `cardputer.notify(title, body, urgency)`
+- `cardputer.ask(question, choices, timeout_s)`
+- `cardputer.confirm(title, detail, danger, timeout_s)`
+- `cardputer.show(text, channel)`
+- `cardputer.dictate(prompt, max_seconds)` placeholder for later
+
+Use `cardputer.confirm` for destructive or irreversible actions where software-only confirmation is not enough.
 
 The preview serves a browser UI at `http://127.0.0.1:8787/` by default and mirrors:
 

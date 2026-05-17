@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 from ipaddress import ip_address
 
 from .config import AppConfig
 from .core import MiddlewareApp
+from .mcp import CardputerMcpServer
 from .messages import CardputerMessage, CardputerMessageType
 from .preview import DevPreviewServer
 from .server import CardputerBridgeServer
@@ -29,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--preview-host", default="127.0.0.1")
     parser.add_argument("--preview-port", type=int, default=8787)
     parser.add_argument("--bridge-token", default=None, help="Shared token required by the Cardputer bridge.")
+    parser.add_argument("--mcp", action="store_true", help="Run as a stdio MCP server for Codex and keep the bridge listener alive.")
     return parser
 
 
@@ -44,8 +47,10 @@ def _is_loopback_host(host: str) -> bool:
 async def run_async(args: argparse.Namespace) -> int:
     if args.serve and not _is_loopback_host(args.host) and not args.bridge_token:
         raise SystemExit("Refusing to expose the Cardputer bridge on a non-loopback host without --bridge-token.")
+    if args.mcp and args.real_codex:
+        raise SystemExit("--mcp runs the middleware as a Codex-side MCP server and cannot be combined with --real-codex.")
 
-    codex_transport = "stdio" if args.real_codex else args.codex_transport
+    codex_transport = "mock" if args.mcp else ("stdio" if args.real_codex else args.codex_transport)
     app = MiddlewareApp(
         AppConfig(
             host=args.host,
@@ -62,13 +67,32 @@ async def run_async(args: argparse.Namespace) -> int:
     )
     loop = asyncio.get_running_loop()
     preview: DevPreviewServer | None = None
+    stream = sys.stderr if args.mcp else sys.stdout
     if args.preview:
         preview = DevPreviewServer(app, args.preview_host, args.preview_port, args.workspace)
         preview.bind_loop(loop)
         preview.start()
-        print(f"Preview UI listening on http://{args.preview_host}:{args.preview_port}")
+        print(f"Preview UI listening on http://{args.preview_host}:{args.preview_port}", file=stream)
 
     await app.initialize()
+
+    if args.mcp:
+        import websockets  # type: ignore
+
+        bridge = CardputerBridgeServer(app)
+        mcp_server = CardputerMcpServer(app)
+
+        async def handler(websocket: object, *_: object) -> None:
+            await bridge.handle_connection(websocket)
+
+        try:
+            async with websockets.serve(handler, args.host, args.port):
+                print(f"Cardputer bridge listening on ws://{args.host}:{args.port}", file=stream)
+                await mcp_server.run_stdio()
+        finally:
+            if preview is not None:
+                preview.close()
+        return 0
 
     if args.serve:
         import websockets  # type: ignore

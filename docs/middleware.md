@@ -10,11 +10,14 @@ The Python package in `middleware/` is managed with `uv`:
 uv sync
 uv run cardputer-codex-middleware
 uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
+uv run cardputer-codex-middleware --mcp
 uv run python -m unittest discover -s tests -v
 ```
 
 Cardputer-facing messages use a versioned envelope. The current protocol version is `1`.
 When the bridge is exposed beyond loopback, the server can require a shared `bridge_token` and the firmware must embed the same token in its outgoing envelopes.
+
+The middleware also exposes a Codex-facing MCP server mode over stdio. In that mode, Codex can launch the middleware directly and invoke physical-human tools instead of going through the app-server bridge first.
 
 ## Responsibilities
 
@@ -27,9 +30,38 @@ When the bridge is exposed beyond loopback, the server can require a shared `bri
 - Relay deltas and status updates back to the Cardputer.
 - Handle approval requests.
 - Handle local bridge notifications, questions, confirmations, and responses.
+- Expose MCP tools for notifications, questions, confirmations, and display-only text.
 
 The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.
 It refuses non-loopback `--serve` listeners unless `--bridge-token` is provided.
+
+The MCP mode is separate:
+
+```bash
+uv run cardputer-codex-middleware --mcp
+```
+
+That mode serves the MCP tools over stdio and keeps the Cardputer bridge listener available on the normal host/port.
+
+Codex can point its MCP config at that command:
+
+```toml
+[mcp_servers.cardputer]
+command = "uv"
+args = ["run", "cardputer-codex-middleware", "--mcp"]
+cwd = "C:\\Gitlab\\cardputer-codex-terminal\\middleware"
+tool_timeout_sec = 120
+```
+
+The tool surface is intentionally small:
+
+- `cardputer.notify(title, body, urgency)`
+- `cardputer.ask(question, choices, timeout_s)`
+- `cardputer.confirm(title, detail, danger, timeout_s)`
+- `cardputer.show(text, channel)`
+- `cardputer.dictate(prompt, max_seconds)` reserved for later
+
+Use `cardputer.confirm` for destructive or irreversible actions where software-only confirmation is not enough.
 
 ## Codex App-Server Transport
 

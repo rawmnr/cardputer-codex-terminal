@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 from .config import AppConfig
 from .codex_transport import CodexTransport, LocalWebSocketCodexTransport, MockCodexTransport, StdioCodexAppServerTransport
@@ -21,6 +22,8 @@ class MiddlewareApp:
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
     event_observer: Callable[[list[Event]], None] | None = field(default=None, repr=False, compare=False)
+    _bridge_prompt_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
+    _bridge_prompt_future: asyncio.Future[dict[str, Any]] | None = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         transport_kind = self.config.codex_transport
@@ -67,9 +70,27 @@ class MiddlewareApp:
         return event
 
     def _set_bridge_prompt(self, kind: str, title: str, detail: str, options: tuple[str, ...] = ()) -> Event:
+        return self._set_bridge_prompt_with_metadata(kind, title, detail, options=options)
+
+    def _set_bridge_prompt_with_metadata(
+        self,
+        kind: str,
+        title: str,
+        detail: str,
+        *,
+        options: tuple[str, ...] = (),
+        channel: str | None = None,
+        urgency: str | None = None,
+        danger: bool | None = None,
+    ) -> Event:
+        if self._bridge_prompt_future is not None and not self._bridge_prompt_future.done():
+            raise RuntimeError("A bridge prompt is already pending.")
         self.session.bridge_prompt_kind = kind
         self.session.bridge_prompt_title = title
         self.session.bridge_prompt_detail = detail
+        self.session.bridge_prompt_channel = channel
+        self.session.bridge_prompt_urgency = urgency
+        self.session.bridge_prompt_danger = danger
         self.session.bridge_prompt_options = options
         self.session.bridge_prompt_selected_index = 0
         event = Event(
@@ -80,10 +101,174 @@ class MiddlewareApp:
                 "title": title,
                 "detail": detail,
                 "options": list(options),
+                **({"channel": channel} if channel is not None else {}),
+                **({"urgency": urgency} if urgency is not None else {}),
+                **({"danger": danger} if danger is not None else {}),
             },
         )
         self._notify([event])
         return event
+
+    def _clear_bridge_prompt(self) -> None:
+        self.session.bridge_prompt_kind = None
+        self.session.bridge_prompt_title = None
+        self.session.bridge_prompt_detail = None
+        self.session.bridge_prompt_channel = None
+        self.session.bridge_prompt_urgency = None
+        self.session.bridge_prompt_danger = None
+        self.session.bridge_prompt_options = ()
+        self.session.bridge_prompt_selected_index = 0
+
+    def _start_bridge_prompt_waiter(self) -> asyncio.Future[dict[str, Any]]:
+        loop = asyncio.get_running_loop()
+        if self._bridge_prompt_future is not None and not self._bridge_prompt_future.done():
+            raise RuntimeError("A bridge prompt is already pending.")
+        self._bridge_prompt_future = loop.create_future()
+        return self._bridge_prompt_future
+
+    def _complete_bridge_prompt(self, accepted: bool, selected_index: int, note: str) -> None:
+        future = self._bridge_prompt_future
+        prompt_kind = self.session.bridge_prompt_kind
+        prompt_title = self.session.bridge_prompt_title
+        prompt_detail = self.session.bridge_prompt_detail
+        prompt_options = self.session.bridge_prompt_options
+        prompt_channel = self.session.bridge_prompt_channel
+        prompt_urgency = self.session.bridge_prompt_urgency
+        prompt_danger = self.session.bridge_prompt_danger
+
+        self._clear_bridge_prompt()
+        if future is not None and not future.done():
+            future.set_result(
+                {
+                    "status": "answered",
+                    "accepted": accepted,
+                    "selected_index": selected_index,
+                    "note": note,
+                    "prompt_kind": prompt_kind,
+                    "title": prompt_title,
+                    "detail": prompt_detail,
+                    "options": list(prompt_options),
+                    "channel": prompt_channel,
+                    "urgency": prompt_urgency,
+                    "danger": prompt_danger,
+                }
+            )
+            self._bridge_prompt_future = None
+
+    async def _await_bridge_prompt_response(self, timeout_s: int) -> dict[str, Any]:
+        future = self._bridge_prompt_future
+        if future is None:
+            raise RuntimeError("A bridge prompt is not pending.")
+
+        try:
+            return await asyncio.wait_for(future, timeout=timeout_s)
+        except TimeoutError:
+            if self._bridge_prompt_future is future:
+                self._bridge_prompt_future = None
+            self._clear_bridge_prompt()
+            return {
+                "status": "timeout",
+                "timed_out": True,
+                "accepted": False,
+                "selected_index": None,
+                "note": "",
+            }
+
+    async def notify_cardputer(self, title: str, body: str, urgency: str) -> Event:
+        async with self._bridge_prompt_lock:
+            event = self._set_bridge_prompt_with_metadata(
+                "bridge_notification",
+                title,
+                body,
+                channel=title,
+                urgency=urgency,
+            )
+        return event
+
+    async def show_cardputer(self, text: str, channel: str) -> Event:
+        async with self._bridge_prompt_lock:
+            event = self._set_bridge_prompt_with_metadata(
+                "bridge_notification",
+                channel or "Show",
+                text,
+                channel=channel or None,
+                urgency="normal",
+            )
+        return event
+
+    async def ask_cardputer(self, question: str, choices: list[str], timeout_s: int) -> dict[str, Any]:
+        if not choices or len(choices) > 3:
+            raise ValueError("Ask requires between 1 and 3 choices.")
+        if timeout_s < 1:
+            raise ValueError("Ask timeout must be a positive integer.")
+
+        async with self._bridge_prompt_lock:
+            self._set_bridge_prompt_with_metadata(
+                "bridge_question",
+                question,
+                question,
+                options=tuple(choices),
+                channel="cardputer.ask",
+                urgency="normal",
+            )
+            self._start_bridge_prompt_waiter()
+
+        result = await self._await_bridge_prompt_response(timeout_s)
+        if result.get("status") != "answered":
+            return result
+
+        selected_index = result["selected_index"]
+        selected_choice = choices[selected_index] if 0 <= selected_index < len(choices) else ""
+        result.update(
+            {
+                "question": question,
+                "selected_choice": selected_choice,
+                "choice_count": len(choices),
+                "choices": choices,
+            }
+        )
+        return result
+
+    async def confirm_cardputer(self, title: str, detail: str, danger: bool, timeout_s: int) -> dict[str, Any]:
+        if timeout_s < 1:
+            raise ValueError("Confirmation timeout must be a positive integer.")
+        async with self._bridge_prompt_lock:
+            self._set_bridge_prompt_with_metadata(
+                "bridge_confirmation",
+                title or "Confirmation",
+                detail,
+                options=("Accept", "Reject"),
+                channel="cardputer.confirm",
+                urgency="high" if danger else "normal",
+                danger=danger,
+            )
+            self._start_bridge_prompt_waiter()
+
+        result = await self._await_bridge_prompt_response(timeout_s)
+        if result.get("status") != "answered":
+            return result
+
+        approved = bool(result["accepted"])
+        result.update(
+            {
+                "title": title,
+                "detail": detail,
+                "danger": danger,
+                "approved": approved,
+                "selected_choice": "Accept" if approved else "Reject",
+            }
+        )
+        return result
+
+    async def dictate_cardputer(self, prompt: str, max_seconds: int) -> dict[str, Any]:
+        if max_seconds < 1:
+            raise ValueError("max_seconds must be a positive integer.")
+        return {
+            "status": "unsupported",
+            "prompt": prompt,
+            "max_seconds": max_seconds,
+            "message": "dictate is not implemented yet",
+        }
 
     def append_audio_chunk(self, pcm_b64: str, chunk_id: int | None = None) -> Event:
         sample_count = self.voice_buffer.append_chunk(pcm_b64)
@@ -243,18 +428,31 @@ class MiddlewareApp:
         if message.type == CardputerMessageType.BRIDGE_NOTIFICATION:
             title = str(message.payload.get("title") or "Notification")
             detail = str(message.payload.get("detail") or "")
-            return [self._set_bridge_prompt("bridge_notification", title, detail)]
+            channel = str(message.payload.get("channel") or title)
+            urgency = str(message.payload.get("urgency") or "normal")
+            return [self._set_bridge_prompt_with_metadata("bridge_notification", title, detail, channel=channel, urgency=urgency)]
 
         if message.type == CardputerMessageType.BRIDGE_QUESTION:
             title = str(message.payload.get("title") or "Question")
             detail = str(message.payload.get("detail") or "")
             options = tuple(str(option) for option in (message.payload.get("options") or [])[:3])
-            return [self._set_bridge_prompt("bridge_question", title, detail, options)]
+            return [self._set_bridge_prompt_with_metadata("bridge_question", title, detail, options=options, channel="cardputer.ask")]
 
         if message.type == CardputerMessageType.BRIDGE_CONFIRMATION:
             title = str(message.payload.get("title") or "Confirmation")
             detail = str(message.payload.get("detail") or "")
-            return [self._set_bridge_prompt("bridge_confirmation", title, detail, ("Accept", "Reject"))]
+            danger = bool(message.payload.get("danger", False))
+            return [
+                self._set_bridge_prompt_with_metadata(
+                    "bridge_confirmation",
+                    title,
+                    detail,
+                    options=("Accept", "Reject"),
+                    channel="cardputer.confirm",
+                    urgency="high" if danger else "normal",
+                    danger=danger,
+                )
+            ]
 
         if message.type == CardputerMessageType.BRIDGE_RESPONSE:
             accepted = bool(message.payload.get("accepted", False))
@@ -265,11 +463,7 @@ class MiddlewareApp:
                 self._notify([event])
                 return [event]
             pending_kind = self.session.bridge_prompt_kind
-            self.session.bridge_prompt_kind = None
-            self.session.bridge_prompt_title = None
-            self.session.bridge_prompt_detail = None
-            self.session.bridge_prompt_options = ()
-            self.session.bridge_prompt_selected_index = 0
+            self._complete_bridge_prompt(accepted, selected_index, note)
             event = Event(
                 EventType.CODEX_STATUS,
                 {
@@ -298,6 +492,9 @@ class MiddlewareApp:
                     "bridge_prompt_kind": self.session.bridge_prompt_kind,
                     "bridge_prompt_title": self.session.bridge_prompt_title,
                     "bridge_prompt_detail": self.session.bridge_prompt_detail,
+                    "bridge_prompt_channel": self.session.bridge_prompt_channel,
+                    "bridge_prompt_urgency": self.session.bridge_prompt_urgency,
+                    "bridge_prompt_danger": self.session.bridge_prompt_danger,
                     "bridge_prompt_options": list(self.session.bridge_prompt_options),
                     "bridge_prompt_selected_index": self.session.bridge_prompt_selected_index,
                 },

@@ -19,6 +19,7 @@ Build a mobile physical interface for OpenAI Codex, based on the M5Stack Cardput
    - PCM audio reception.
    - Speech-to-text transcription.
    - JSON-RPC client for `codex app-server`.
+   - stdio MCP server for Codex human-in-the-loop tools.
    - Routing of Codex events back to the Cardputer display.
    - Local browser preview and mirrored dev files for fast iteration.
 
@@ -52,7 +53,7 @@ Codex approval request -> middleware -> Cardputer alert -> user keypress -> midd
 ### Local Bridge Prompt
 
 ```text
-Local bridge notification or question -> Cardputer MCP Bridge -> physical selection or confirmation -> middleware echo or downstream integration
+Codex MCP tool call -> Windows middleware -> Cardputer prompt or notification -> physical selection or confirmation -> middleware tool result
 ```
 
 ## Principles

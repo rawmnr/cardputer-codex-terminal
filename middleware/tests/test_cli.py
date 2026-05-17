@@ -25,6 +25,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.preview_port, 8787)
         self.assertIsNone(args.bridge_token)
         self.assertEqual(args.prompt, "Hello Codex, start.")
+        self.assertFalse(args.mcp)
 
     def test_loopback_detection_for_bridge_safety(self) -> None:
         self.assertTrue(_is_loopback_host("127.0.0.1"))
@@ -32,3 +33,9 @@ class CliTests(unittest.TestCase):
         self.assertTrue(_is_loopback_host("localhost"))
         self.assertFalse(_is_loopback_host("0.0.0.0"))
         self.assertFalse(_is_loopback_host("192.168.1.20"))
+
+    def test_parser_accepts_mcp_mode(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["--mcp"])
+
+        self.assertTrue(args.mcp)

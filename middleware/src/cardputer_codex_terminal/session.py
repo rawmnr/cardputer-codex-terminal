@@ -15,5 +15,8 @@ class CodexSession:
     bridge_prompt_kind: str | None = None
     bridge_prompt_title: str | None = None
     bridge_prompt_detail: str | None = None
+    bridge_prompt_channel: str | None = None
+    bridge_prompt_urgency: str | None = None
+    bridge_prompt_danger: bool | None = None
     bridge_prompt_options: tuple[str, ...] = ()
     bridge_prompt_selected_index: int = 0
