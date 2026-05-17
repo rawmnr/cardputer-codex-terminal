@@ -36,6 +36,10 @@ void poll_keyboard_input() {
     typed += ch;
   }
 
+  if (push_mode && status.space) {
+    typed = "";
+  }
+
   if (status.space != g_last_space_state) {
     g_last_space_state = status.space;
     if (push_mode) {
