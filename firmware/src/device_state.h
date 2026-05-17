@@ -8,6 +8,16 @@ enum class AppId {
   PushToCodex,
   Pager,
   McpBridge,
+  Settings,
+};
+
+enum class UiMode {
+  Home,
+  Menu,
+  Input,
+  Modal,
+  Approval,
+  BridgePrompt,
 };
 
 enum class CodexState {
@@ -36,6 +46,13 @@ enum class PagerScreen {
   Compose,
   Inbox,
   Detail,
+};
+
+struct MenuState {
+  size_t active_tab = 0;
+  size_t selected_index = 0;
+  size_t scroll_offset = 0;
+  bool command_palette_open = false;
 };
 
 struct PagerSessionEvent {
@@ -73,6 +90,8 @@ struct DeviceState {
 
   String firmware_name;
   AppId active_app = AppId::Buddy;
+  UiMode ui_mode = UiMode::Home;
+  MenuState menu;
   CodexState codex_state = CodexState::Offline;
   PushToTalkState ptt_state = PushToTalkState::Idle;
   bool wifi_connected = false;
@@ -106,6 +125,7 @@ struct DeviceState {
   String codex_usage_label;
   String codex_usage_detail_line;
   PagerViewState pager;
+  PagerScreen pager_screen = PagerScreen::Inbox;
   size_t ptt_samples_captured = 0;
   size_t ptt_sample_limit = 0;
   uint32_t ptt_sample_rate_hz = 16000;

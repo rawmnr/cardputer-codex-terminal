@@ -43,28 +43,42 @@ cardputer-codex-terminal.bin
 
 ## User Interface
 
-- Status bar: network, battery, Codex state.
-- Main area: agent stream and latest middleware status.
-- Input line: keyboard prompt.
+- Top tab bar: Buddy, Push, Pager, MCP, Settings.
+- Global navigation: `A/D` or `,/.` or `;/'` switch tabs, `W/S` move selection, `Enter` select/approve, `Del` back/reject.
+- Contextual footer hints replace the old shell-first help as the primary on-device guide.
+- Command palette remains available through `/`, but it is now the debug layer rather than the default flow.
 - Approval screen: requested action, accept/reject.
 - Pager screen: compose prompts, browse active/recent Codex sessions, and inspect recent events.
 
 ## Current Firmware Bridge Behavior
 
-- typed prompts can be sent to the middleware bridge;
+- typed prompts can be sent to the middleware bridge from Push to Codex or Pager compose mode;
 - push-to-talk audio chunks are streamed while recording;
 - release sends a voice prompt ready signal to trigger transcription on Windows;
-- streamed Codex deltas, usage, and approval requests are rendered in the app views.
-- the Pager app consumes the middleware session index and renders COMPOSE, INBOX, and DETAIL views from that Python-owned model.
-- reply selection stays on the Cardputer, but the session history and event stream stay in middleware.
-- the MCP bridge app can show notifications, questions, confirmations, and selection state.
-- the Cardputer can accept or reject pending prompts with physical keys.
-- Cardputer bridge envelopes now include a request `id`, and middleware sends back an `ack` before the semantic response.
-- the Pager currently treats `R` as reply, `Y/N` as approve/deny, and `I` as an unavailable interrupt placeholder until app-server cancel support lands.
-- Wi-Fi and middleware settings can be loaded from `/cardputer-codex/config.ini` on the SD card.
-- the middleware host in that SD config must point at the Windows machine, LAN IP, hostname, or VPN address, not `127.0.0.1`.
-- the firmware can create `/cardputer-codex/` and seed a template config file without overwriting an existing one.
+- streamed Codex deltas, usage, and approval requests are rendered in the app views;
+- the Pager app consumes the middleware session index and renders COMPOSE, INBOX, and DETAIL views from that Python-owned model;
+- reply selection stays on the Cardputer, but the session history and event stream stay in middleware;
+- the MCP bridge app can show notifications, questions, confirmations, and selection state;
+- the Cardputer can accept or reject pending prompts with physical keys;
+- the top-level menu bar is menu-first, while slash commands remain available as the debug path;
+- `UiAction` sits between physical keyboard input and app behavior so apps receive navigation, select, back, and push-to-talk events instead of raw keycodes;
+- Cardputer bridge envelopes now include a request `id`, and middleware sends back an `ack` before the semantic response;
+- Wi-Fi and middleware settings can be loaded from `/cardputer-codex/config.ini` on the SD card;
+- the middleware host in that SD config must point at the Windows machine, LAN IP, hostname, or VPN address, not `127.0.0.1`;
+- the firmware can create `/cardputer-codex/` and seed a template config file without overwriting an existing one;
 - the firmware can append a persistent log to `/cardputer-codex/log.txt` for offline debugging from the SD card.
+
+## Keymap
+
+- `A` / `D`: previous / next tab.
+- `,` / `.`: previous / next tab.
+- `;` / `'`: previous / next tab.
+- `W` / `S`: move up / down in lists and prompts.
+- `Enter`: select, confirm, or submit typed input.
+- `Del`: back, reject, or clear text one character at a time while editing.
+- `Space` tap: contextual action or literal space while editing text.
+- `Space` hold: push-to-talk recording in Push to Codex.
+- `/`: open the command palette / debug shell.
 
 ## Constraints
 

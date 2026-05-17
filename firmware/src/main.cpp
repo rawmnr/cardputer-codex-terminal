@@ -10,51 +10,81 @@ bool g_space_hold_started = false;
 unsigned long g_space_pressed_at_ms = 0;
 constexpr unsigned long kPushToTalkHoldMs = 350;
 
+bool mapNavigationChar(char ch, UiAction& action) {
+  switch (ch) {
+    case 'a':
+    case 'A':
+    case ',':
+    case ';':
+      action = UiAction::Left;
+      return true;
+    case 'd':
+    case 'D':
+    case '.':
+    case '\'':
+      action = UiAction::Right;
+      return true;
+    case 'w':
+    case 'W':
+      action = UiAction::Up;
+      return true;
+    case 's':
+    case 'S':
+      action = UiAction::Down;
+      return true;
+    default:
+      return false;
+  }
+}
+
+void sendTypedChar(char ch) {
+  String typed;
+  typed += ch;
+  g_shell.handleTextInput(typed, false, false);
+}
+
 void poll_keyboard_input() {
   M5Cardputer.update();
 
+  const auto status = M5Cardputer.Keyboard.keysState();
+  const bool push_mode = g_shell.isPushToCodexActive();
+  const bool input_mode = g_shell.uiMode() == UiMode::Input;
+
   if (!M5Cardputer.Keyboard.isChange()) {
-    const auto status = M5Cardputer.Keyboard.keysState();
-    const bool push_mode = g_shell.isPushToCodexActive();
     if (push_mode && status.space && !g_space_hold_started && g_space_pressed_at_ms > 0) {
       const unsigned long held_ms = millis() - g_space_pressed_at_ms;
       if (held_ms >= kPushToTalkHoldMs) {
-        g_shell.handlePushToTalk(true);
+        g_shell.handleAction(UiAction::PushToTalkStart);
         g_space_hold_started = true;
       }
     }
     return;
   }
 
-  const auto status = M5Cardputer.Keyboard.keysState();
-  const bool push_mode = g_shell.isPushToCodexActive();
   String typed;
-  for (auto ch : status.word) {
-    if (ch == ' ' && push_mode) {
+  for (size_t i = 0; i < status.word.size(); ++i) {
+    const char ch = status.word[i];
+    if (push_mode && status.space && ch == ' ') {
       continue;
     }
     typed += ch;
   }
 
-  if (push_mode && status.space) {
-    typed = "";
-  }
-
   if (status.space != g_last_space_state) {
     g_last_space_state = status.space;
-    if (push_mode) {
-      if (status.space) {
-        g_space_pressed_at_ms = millis();
-        g_space_hold_started = false;
+    if (status.space) {
+      g_space_pressed_at_ms = millis();
+      g_space_hold_started = false;
+    } else {
+      if (push_mode && g_space_hold_started) {
+        g_shell.handleAction(UiAction::PushToTalkStop);
+      } else if (input_mode || push_mode) {
+        g_shell.handleTextInput(" ", false, false);
       } else {
-        if (g_space_hold_started) {
-          g_shell.handlePushToTalk(false);
-        } else {
-          g_shell.handleKeyboardInput(" ", false, false);
-        }
-        g_space_pressed_at_ms = 0;
-        g_space_hold_started = false;
+        g_shell.handleAction(UiAction::Select);
       }
+      g_space_pressed_at_ms = 0;
+      g_space_hold_started = false;
     }
   }
 
@@ -63,32 +93,38 @@ void poll_keyboard_input() {
   }
 
   if (status.del) {
-    if (typed.length() == 0 && g_shell.hasPendingApproval()) {
-      g_shell.handleApprovalDecision(false);
-      return;
+    if (input_mode || push_mode) {
+      g_shell.handleTextInput("", false, true);
+    } else {
+      g_shell.handleAction(UiAction::Back);
     }
-    if (typed.length() == 0 && g_shell.hasPendingBridgePrompt()) {
-      g_shell.handleBridgePromptDecision(false);
-      return;
-    }
-    g_shell.handleKeyboardInput("", false, true);
+    return;
   }
 
   if (status.enter) {
-    if (typed.length() == 0 && g_shell.hasPendingApproval()) {
-      g_shell.handleApprovalDecision(true);
-      return;
+    if (input_mode || push_mode) {
+      g_shell.handleTextInput("", true, false);
+    } else {
+      g_shell.handleAction(UiAction::Select);
     }
-    if (typed.length() == 0 && g_shell.hasPendingBridgePrompt()) {
-      g_shell.handleBridgePromptDecision(true);
-      return;
-    }
-    g_shell.handleKeyboardInput(typed, true, false);
     return;
   }
 
   if (typed.length() > 0) {
-    g_shell.handleKeyboardInput(typed, false, false);
+    if (input_mode || push_mode) {
+      g_shell.handleTextInput(typed, false, false);
+      return;
+    }
+
+    for (size_t i = 0; i < typed.length(); ++i) {
+      const char ch = typed[i];
+      UiAction action = UiAction::None;
+      if (mapNavigationChar(ch, action)) {
+        g_shell.handleAction(action);
+      } else {
+        sendTypedChar(ch);
+      }
+    }
   }
 }
 }  // namespace

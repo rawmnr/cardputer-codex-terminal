@@ -14,17 +14,23 @@ class AppShell {
   void handleCommand(const String& command);
   void tick();
   void render();
-  void handleKeyboardInput(const String& typed, bool submit, bool backspace);
+  void handleTextInput(const String& typed, bool submit, bool backspace);
+  void handleAction(UiAction action);
   void handlePushToTalk(bool pressed);
   bool hasPendingApproval() const;
   bool hasPendingBridgePrompt() const;
   void handleApprovalDecision(bool approved);
   void handleBridgePromptDecision(bool accepted);
   bool isPushToCodexActive() const;
+  UiMode uiMode() const;
   MiddlewareLink& bridge();
 
  private:
   void switchTo(AppId app_id);
+  void setActiveTab(size_t tab_index);
+  size_t tabIndexForApp(AppId app_id) const;
+  AppId appForTab(size_t tab_index) const;
+  String footerHint() const;
   void traceDisplay();
   void emitDisplaySnapshot();
 
@@ -38,5 +44,6 @@ class AppShell {
   PushToCodexApp push_to_codex_app_;
   PagerApp pager_app_;
   McpBridgeApp mcp_bridge_app_;
+  SettingsApp settings_app_;
   App* active_app_ = nullptr;
 };

@@ -4,6 +4,7 @@
 #include <Arduino.h>
 
 #include "device_state.h"
+#include "ui_actions.h"
 
 class MiddlewareLink;
 
@@ -14,7 +15,16 @@ class App {
   virtual void onEnter(DeviceState& state) = 0;
   virtual void onExit(DeviceState& state) = 0;
   virtual void onCommand(const String& command, DeviceState& state) = 0;
+  virtual void onTextInput(const String& text, bool backspace, DeviceState& state) {
+    (void)text;
+    (void)backspace;
+    (void)state;
+  }
   virtual void onSubmit(const String& command, DeviceState& state) { onCommand(command, state); }
+  virtual void onAction(UiAction action, DeviceState& state) {
+    (void)action;
+    (void)state;
+  }
   virtual void onPushToTalk(bool pressed, DeviceState& state) { (void)pressed; (void)state; }
   virtual void tick(DeviceState& state) = 0;
   virtual void render(Print& out, const DeviceState& state) = 0;
@@ -26,6 +36,7 @@ class BuddyApp final : public App {
   void onEnter(DeviceState& state) override;
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
 };
@@ -36,7 +47,9 @@ class PushToCodexApp final : public App {
   void onEnter(DeviceState& state) override;
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
+  void onTextInput(const String& text, bool backspace, DeviceState& state) override;
   void onSubmit(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
   void onPushToTalk(bool pressed, DeviceState& state) override;
   void setBridge(MiddlewareLink* bridge);
   void tick(DeviceState& state) override;
@@ -69,7 +82,9 @@ class PagerApp final : public App {
   void onEnter(DeviceState& state) override;
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
+  void onTextInput(const String& text, bool backspace, DeviceState& state) override;
   void onSubmit(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
 
@@ -82,11 +97,8 @@ class PagerApp final : public App {
   bool canInterrupt(const DeviceState& state) const;
   size_t selectedSessionIndex(const DeviceState& state) const;
   const PagerSessionSummary* selectedSession(const DeviceState& state) const;
-  void syncSelectionFromState(const DeviceState& state);
+  void syncSelectionFromState(DeviceState& state);
 
-  PagerScreen screen_ = PagerScreen::Compose;
-  size_t selected_session_index_ = 0;
-  String selected_session_id_;
   String compose_draft_;
   String detail_note_;
   bool detail_reply_mode_ = false;
@@ -99,6 +111,7 @@ class McpBridgeApp final : public App {
   void onEnter(DeviceState& state) override;
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
   void onSubmit(const String& command, DeviceState& state) override;
   void setBridge(MiddlewareLink* bridge);
   void tick(DeviceState& state) override;
@@ -111,4 +124,19 @@ class McpBridgeApp final : public App {
   void respondToPrompt(bool accepted, DeviceState& state);
 
   MiddlewareLink* bridge_ = nullptr;
+};
+
+class SettingsApp final : public App {
+ public:
+  const char* title() const override;
+  void onEnter(DeviceState& state) override;
+  void onExit(DeviceState& state) override;
+  void onCommand(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
+  void tick(DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
+
+ private:
+  static constexpr size_t kItemCount = 4;
+  size_t selected_index_ = 0;
 };

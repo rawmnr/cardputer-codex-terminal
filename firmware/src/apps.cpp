@@ -17,6 +17,8 @@ const char* app_label(AppId app_id) {
       return "Codex Pager";
     case AppId::McpBridge:
       return "Cardputer MCP Bridge";
+    case AppId::Settings:
+      return "Settings";
   }
   return "Unknown";
 }
@@ -71,11 +73,16 @@ String pager_screen_label(PagerScreen screen) {
   }
   return "PAGER";
 }
+
+bool pager_list_is_scrollable(const DeviceState& state) {
+  return state.pager.session_count > 4;
+}
 }  // namespace
 
 const char* BuddyApp::title() const { return "Codex Buddy"; }
 
 void BuddyApp::onEnter(DeviceState& state) {
+  state.ui_mode = UiMode::Home;
   state.status_line = "Buddy mode active";
 }
 
@@ -86,6 +93,13 @@ void BuddyApp::onExit(DeviceState& state) {
 void BuddyApp::onCommand(const String& command, DeviceState& state) {
   (void)command;
   state.status_line = "Buddy view ready for live status";
+}
+
+void BuddyApp::onAction(UiAction action, DeviceState& state) {
+  if (action == UiAction::Select) {
+    state.status_line = "Open Pager to browse sessions";
+    append_activity_event(state, state.status_line);
+  }
 }
 
 void BuddyApp::tick(DeviceState& state) {
@@ -166,6 +180,7 @@ void PushToCodexApp::onEnter(DeviceState& state) {
   peak_amplitude_ = 0;
   recording_ = false;
   mic_started_ = false;
+  state.ui_mode = UiMode::Input;
   state.ptt_state = PushToTalkState::Armed;
   state.ptt_samples_captured = 0;
   state.ptt_sample_limit = kMaxSamples;
@@ -199,16 +214,42 @@ void PushToCodexApp::onExit(DeviceState& state) {
 }
 
 void PushToCodexApp::onCommand(const String& command, DeviceState& state) {
-  draft_ = command;
-  state.status_line = "Prompt staged for delivery";
+  onTextInput(command, false, state);
+}
+
+void PushToCodexApp::onTextInput(const String& text, bool backspace, DeviceState& state) {
+  if (backspace) {
+    if (draft_.length() > 0) {
+      draft_.remove(draft_.length() - 1);
+    }
+  }
+  if (text.length() > 0) {
+    draft_ += text;
+  }
+  state.status_line = draft_.length() > 0 ? "Prompt staged for delivery" : "Type a prompt";
 }
 
 void PushToCodexApp::onSubmit(const String& command, DeviceState& state) {
-  draft_ = command;
+  const String prompt = draft_.length() > 0 ? draft_ : command;
+  if (prompt.length() == 0) {
+    state.status_line = "Prompt is empty";
+    append_activity_event(state, state.status_line);
+    return;
+  }
+  draft_ = prompt;
   state.status_line = "Text prompt staged for middleware bridge";
-  if (bridge_ != nullptr && bridge_->sendTextPrompt(command)) {
+  if (bridge_ != nullptr && bridge_->sendTextPrompt(prompt)) {
     state.status_line = "Text prompt sent to middleware";
     append_activity_event(state, "Text prompt sent to middleware");
+    draft_ = "";
+  }
+}
+
+void PushToCodexApp::onAction(UiAction action, DeviceState& state) {
+  if (action == UiAction::Select && draft_.length() > 0) {
+    onSubmit(draft_, state);
+  } else if (action == UiAction::Back && draft_.length() == 0) {
+    state.status_line = "Push prompt cleared";
   }
 }
 
@@ -350,12 +391,13 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
 const char* PagerApp::title() const { return "Codex Pager"; }
 
 void PagerApp::onEnter(DeviceState& state) {
-  screen_ = PagerScreen::Compose;
+  state.ui_mode = UiMode::Menu;
+  state.pager_screen = PagerScreen::Inbox;
   compose_draft_ = "";
   detail_note_ = "";
   detail_reply_mode_ = false;
   syncSelectionFromState(state);
-  state.status_line = "Compose prompt and press Enter";
+  state.status_line = "Browse sessions or compose a prompt";
 }
 
 void PagerApp::onExit(DeviceState& state) {
@@ -405,8 +447,8 @@ void PagerApp::onCommand(const String& command, DeviceState& state) {
       append_activity_event(state, state.status_line);
       return;
     }
-    selected_session_index_ = (selected_session_index_ + 1) % state.pager.session_count;
-    selectSession(state, selected_session_index_);
+    state.menu.selected_index = (state.menu.selected_index + 1) % state.pager.session_count;
+    selectSession(state, state.menu.selected_index);
     return;
   }
 
@@ -416,12 +458,12 @@ void PagerApp::onCommand(const String& command, DeviceState& state) {
       append_activity_event(state, state.status_line);
       return;
     }
-    selected_session_index_ = (selected_session_index_ + state.pager.session_count - 1) % state.pager.session_count;
-    selectSession(state, selected_session_index_);
+    state.menu.selected_index = (state.menu.selected_index + state.pager.session_count - 1) % state.pager.session_count;
+    selectSession(state, state.menu.selected_index);
     return;
   }
 
-  if (screen_ == PagerScreen::Inbox && (trimmed.startsWith("select ") || trimmed.startsWith("open "))) {
+  if (state.pager_screen == PagerScreen::Inbox && (trimmed.startsWith("select ") || trimmed.startsWith("open "))) {
     const int index = trimmed.substring(trimmed.indexOf(' ') + 1).toInt();
     if (index > 0) {
       selectSession(state, static_cast<size_t>(index - 1));
@@ -429,7 +471,7 @@ void PagerApp::onCommand(const String& command, DeviceState& state) {
     }
   }
 
-  if (screen_ == PagerScreen::Inbox) {
+  if (state.pager_screen == PagerScreen::Inbox) {
     const int index = trimmed.toInt();
     if (index > 0) {
       selectSession(state, static_cast<size_t>(index - 1));
@@ -437,12 +479,12 @@ void PagerApp::onCommand(const String& command, DeviceState& state) {
     }
   }
 
-  if (screen_ == PagerScreen::Compose || detail_reply_mode_) {
+  if (state.pager_screen == PagerScreen::Compose || detail_reply_mode_) {
     sendReply(state, trimmed);
     return;
   }
 
-  if (screen_ == PagerScreen::Detail) {
+  if (state.pager_screen == PagerScreen::Detail) {
     sendReply(state, trimmed);
     return;
   }
@@ -455,21 +497,110 @@ void PagerApp::onSubmit(const String& command, DeviceState& state) {
   onCommand(command, state);
 }
 
+void PagerApp::onTextInput(const String& text, bool backspace, DeviceState& state) {
+  String& target = (state.pager_screen == PagerScreen::Compose || detail_reply_mode_) ? compose_draft_ : compose_draft_;
+  if (backspace) {
+    if (target.length() > 0) {
+      target.remove(target.length() - 1);
+    }
+  }
+  if (text.length() > 0) {
+    target += text;
+  }
+  state.status_line = target.length() > 0 ? "Prompt staged" : "Compose prompt and press Enter";
+}
+
+void PagerApp::onAction(UiAction action, DeviceState& state) {
+  if (action == UiAction::Up) {
+    if (state.pager.session_count == 0) {
+      return;
+    }
+    if (state.menu.selected_index == 0) {
+      state.menu.selected_index = state.pager.session_count - 1;
+    } else {
+      state.menu.selected_index--;
+    }
+    if (state.menu.scroll_offset > state.menu.selected_index) {
+      state.menu.scroll_offset = state.menu.selected_index;
+    }
+    if (state.pager_screen == PagerScreen::Detail) {
+      selectSession(state, state.menu.selected_index);
+    } else {
+      state.pager_screen = PagerScreen::Inbox;
+      state.status_line = "Browse sessions";
+      append_activity_event(state, state.status_line);
+    }
+    return;
+  }
+
+  if (action == UiAction::Down) {
+    if (state.pager.session_count == 0) {
+      return;
+    }
+    state.menu.selected_index = (state.menu.selected_index + 1) % state.pager.session_count;
+    if (state.menu.scroll_offset + 4 <= state.menu.selected_index) {
+      state.menu.scroll_offset = state.menu.selected_index - 3;
+    }
+    if (state.pager_screen == PagerScreen::Detail) {
+      selectSession(state, state.menu.selected_index);
+    } else {
+      state.pager_screen = PagerScreen::Inbox;
+      state.status_line = "Browse sessions";
+      append_activity_event(state, state.status_line);
+    }
+    return;
+  }
+
+  if (action == UiAction::Select) {
+    if (state.pager_screen == PagerScreen::Inbox) {
+      if (state.pager.session_count > 0) {
+        selectSession(state, state.menu.selected_index);
+      }
+      return;
+    }
+    if (state.pager_screen == PagerScreen::Detail) {
+      detail_reply_mode_ = true;
+      showCompose(state, "Reply in the selected thread");
+      return;
+    }
+    if (state.pager_screen == PagerScreen::Compose) {
+      sendReply(state, compose_draft_);
+      return;
+    }
+  }
+
+  if (action == UiAction::Back) {
+    if (state.pager_screen == PagerScreen::Detail) {
+      showInbox(state, "Browse recent sessions");
+      return;
+    }
+    if (state.pager_screen == PagerScreen::Compose) {
+      showInbox(state, "Browse recent sessions");
+      detail_reply_mode_ = false;
+      return;
+    }
+  }
+
+  if (action == UiAction::Menu) {
+    showCompose(state, "Compose prompt and press Enter");
+  }
+}
+
 void PagerApp::tick(DeviceState& state) {
   (void)state;
 }
 
 void PagerApp::render(Print& out, const DeviceState& state) {
-  syncSelectionFromState(state);
+  const_cast<PagerApp*>(this)->syncSelectionFromState(const_cast<DeviceState&>(state));
   out.print("=== Codex Pager ");
-  out.print(pager_screen_label(screen_));
+  out.print(pager_screen_label(state.pager_screen));
   out.println(" ===");
   out.print("Active: ");
   out.println(state.pager.active_session_id.length() > 0 ? state.pager.active_session_id : "(none)");
   out.print("Mode: ");
-  out.println(screen_ == PagerScreen::Compose ? "type prompt and press Enter" : screen_ == PagerScreen::Inbox ? "browse sessions" : "session detail");
+  out.println(state.pager_screen == PagerScreen::Compose ? "type prompt and press Enter" : state.pager_screen == PagerScreen::Inbox ? "browse sessions" : "session detail");
 
-  if (screen_ == PagerScreen::Compose) {
+  if (state.pager_screen == PagerScreen::Compose) {
     const PagerSessionSummary* session = selectedSession(state);
     out.print("Reply target: ");
     out.println(session != nullptr && session->thread_id.length() > 0 ? session->thread_id : "(new thread)");
@@ -482,12 +613,14 @@ void PagerApp::render(Print& out, const DeviceState& state) {
     out.print("Draft: ");
     out.println(compose_draft_.length() > 0 ? compose_draft_ : "(empty)");
     out.println("Keys: Enter=send, inbox/detail for browsing");
-  } else if (screen_ == PagerScreen::Inbox) {
+  } else if (state.pager_screen == PagerScreen::Inbox) {
     out.println("Sessions:");
     if (state.pager.session_count == 0) {
       out.println("  (no sessions yet)");
     } else {
-      for (size_t i = 0; i < state.pager.session_count; ++i) {
+      const size_t start = state.menu.scroll_offset < state.pager.session_count ? state.menu.scroll_offset : 0;
+      const size_t end = min(state.pager.session_count, start + 4);
+      for (size_t i = start; i < end; ++i) {
         const PagerSessionSummary& session = state.pager.sessions[i];
         out.print(i == selectedSessionIndex(state) ? "> " : "  ");
         out.print(i + 1);
@@ -548,13 +681,15 @@ void PagerApp::render(Print& out, const DeviceState& state) {
 }
 
 void PagerApp::showCompose(DeviceState& state, const String& message) {
-  screen_ = PagerScreen::Compose;
+  state.pager_screen = PagerScreen::Compose;
+  state.ui_mode = UiMode::Input;
   state.status_line = message;
   append_activity_event(state, message);
 }
 
 void PagerApp::showInbox(DeviceState& state, const String& message) {
-  screen_ = PagerScreen::Inbox;
+  state.pager_screen = PagerScreen::Inbox;
+  state.ui_mode = UiMode::Menu;
   detail_reply_mode_ = false;
   syncSelectionFromState(state);
   state.status_line = message;
@@ -562,7 +697,8 @@ void PagerApp::showInbox(DeviceState& state, const String& message) {
 }
 
 void PagerApp::showDetail(DeviceState& state, const String& message) {
-  screen_ = PagerScreen::Detail;
+  state.pager_screen = PagerScreen::Detail;
+  state.ui_mode = UiMode::Menu;
   detail_reply_mode_ = false;
   syncSelectionFromState(state);
   state.status_line = message;
@@ -581,13 +717,12 @@ void PagerApp::selectSession(DeviceState& state, size_t index) {
     index = state.pager.session_count - 1;
   }
 
-  selected_session_index_ = index;
-  const PagerSessionSummary& session = state.pager.sessions[selected_session_index_];
-  selected_session_id_ = session.session_id;
-  state.pager.selected_session_id = selected_session_id_;
+  state.menu.selected_index = index;
+  const PagerSessionSummary& session = state.pager.sessions[state.menu.selected_index];
+  state.pager.selected_session_id = session.session_id;
   detail_reply_mode_ = false;
-  screen_ = PagerScreen::Detail;
-  state.status_line = String("Selected session ") + String(selected_session_index_ + 1);
+  state.pager_screen = PagerScreen::Detail;
+  state.status_line = String("Selected session ") + String(state.menu.selected_index + 1);
   append_activity_event(state, state.status_line);
 
   if (bridge_ != nullptr) {
@@ -616,7 +751,6 @@ bool PagerApp::sendReply(DeviceState& state, const String& prompt) {
   const PagerSessionSummary* session = selectedSession(state);
   if (session != nullptr && session->session_id.length() > 0) {
     state.pager.selected_session_id = session->session_id;
-    selected_session_id_ = session->session_id;
   }
 
   if (bridge_ == nullptr || !bridge_->sendTextPrompt(trimmed)) {
@@ -629,7 +763,8 @@ bool PagerApp::sendReply(DeviceState& state, const String& prompt) {
   append_activity_event(state, state.status_line);
   detail_reply_mode_ = false;
   compose_draft_ = "";
-  screen_ = PagerScreen::Detail;
+  state.pager_screen = PagerScreen::Detail;
+  state.ui_mode = UiMode::Menu;
   return true;
 }
 
@@ -642,12 +777,8 @@ size_t PagerApp::selectedSessionIndex(const DeviceState& state) const {
     return 0;
   }
 
-  if (selected_session_id_.length() > 0) {
-    for (size_t i = 0; i < state.pager.session_count; ++i) {
-      if (state.pager.sessions[i].session_id == selected_session_id_) {
-        return i;
-      }
-    }
+  if (state.menu.selected_index < state.pager.session_count) {
+    return state.menu.selected_index;
   }
 
   if (state.pager.selected_session_id.length() > 0) {
@@ -681,27 +812,20 @@ const PagerSessionSummary* PagerApp::selectedSession(const DeviceState& state) c
   return &state.pager.sessions[index];
 }
 
-void PagerApp::syncSelectionFromState(const DeviceState& state) {
+void PagerApp::syncSelectionFromState(DeviceState& state) {
   if (state.pager.session_count == 0) {
-    selected_session_index_ = 0;
-    selected_session_id_ = "";
+    state.menu.selected_index = 0;
     return;
   }
 
-  if (selected_session_id_.length() > 0) {
-    for (size_t i = 0; i < state.pager.session_count; ++i) {
-      if (state.pager.sessions[i].session_id == selected_session_id_) {
-        selected_session_index_ = i;
-        return;
-      }
-    }
+  if (state.menu.selected_index < state.pager.session_count) {
+    return;
   }
 
   if (state.pager.selected_session_id.length() > 0) {
     for (size_t i = 0; i < state.pager.session_count; ++i) {
       if (state.pager.sessions[i].session_id == state.pager.selected_session_id) {
-        selected_session_index_ = i;
-        selected_session_id_ = state.pager.selected_session_id;
+        state.menu.selected_index = i;
         return;
       }
     }
@@ -710,20 +834,19 @@ void PagerApp::syncSelectionFromState(const DeviceState& state) {
   if (state.pager.active_session_id.length() > 0) {
     for (size_t i = 0; i < state.pager.session_count; ++i) {
       if (state.pager.sessions[i].session_id == state.pager.active_session_id) {
-        selected_session_index_ = i;
-        selected_session_id_ = state.pager.active_session_id;
+        state.menu.selected_index = i;
         return;
       }
     }
   }
 
-  selected_session_index_ = 0;
-  selected_session_id_ = state.pager.sessions[0].session_id;
+  state.menu.selected_index = 0;
 }
 
 const char* McpBridgeApp::title() const { return "Cardputer MCP Bridge"; }
 
 void McpBridgeApp::onEnter(DeviceState& state) {
+  state.ui_mode = UiMode::Menu;
   state.status_line = "Local bridge mode active";
 }
 
@@ -822,6 +945,43 @@ void McpBridgeApp::onCommand(const String& command, DeviceState& state) {
   state.status_line = "Notification, ask, and confirm flows are ready";
 }
 
+void McpBridgeApp::onAction(UiAction action, DeviceState& state) {
+  if (!state.bridge_prompt_pending) {
+    if (action == UiAction::Select) {
+      state.status_line = "Waiting for bridge prompt";
+    }
+    return;
+  }
+
+  if (action == UiAction::Up && state.bridge_prompt_option_count > 0) {
+    state.bridge_prompt_selected_index =
+      state.bridge_prompt_selected_index == 0 ? state.bridge_prompt_option_count - 1 : state.bridge_prompt_selected_index - 1;
+    state.menu.selected_index = state.bridge_prompt_selected_index;
+    state.status_line = String("Bridge option selected: ") +
+                        state.bridge_prompt_options[state.bridge_prompt_selected_index];
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  if (action == UiAction::Down && state.bridge_prompt_option_count > 0) {
+    state.bridge_prompt_selected_index = (state.bridge_prompt_selected_index + 1) % state.bridge_prompt_option_count;
+    state.menu.selected_index = state.bridge_prompt_selected_index;
+    state.status_line = String("Bridge option selected: ") +
+                        state.bridge_prompt_options[state.bridge_prompt_selected_index];
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  if (action == UiAction::Select) {
+    respondToPrompt(true, state);
+    return;
+  }
+
+  if (action == UiAction::Back) {
+    respondToPrompt(false, state);
+  }
+}
+
 void McpBridgeApp::onSubmit(const String& command, DeviceState& state) {
   onCommand(command, state);
 }
@@ -869,7 +1029,7 @@ void McpBridgeApp::render(Print& out, const DeviceState& state) {
       out.print(". ");
       out.println(state.bridge_prompt_options[i]);
     }
-    out.println("Keys: Enter=accept, Del=reject, /bridge select <n>");
+    out.println("Keys: W/S select, Enter=accept, Del=reject");
   }
   out.print("Pending: ");
   out.println(state.bridge_prompt_pending ? "yes" : "no");
@@ -885,6 +1045,7 @@ void McpBridgeApp::presentNotification(const String& title, const String& detail
   state.bridge_prompt_detail = detail;
   state.bridge_status_line = title;
   state.status_line = detail.length() > 0 ? detail : title;
+  state.ui_mode = UiMode::Modal;
   append_activity_event(state, String("Bridge notification: ") + title);
 }
 
@@ -899,6 +1060,7 @@ void McpBridgeApp::presentQuestion(const String& title, const String& detail, co
   set_bridge_options(state, options, count);
   state.bridge_status_line = "Bridge question pending";
   state.status_line = detail.length() > 0 ? detail : title;
+  state.ui_mode = UiMode::BridgePrompt;
   append_activity_event(state, String("Bridge question: ") + title);
 }
 
@@ -912,6 +1074,7 @@ void McpBridgeApp::presentConfirmation(const String& detail, DeviceState& state)
   set_bridge_options(state, options, 2);
   state.bridge_status_line = "Bridge confirmation pending";
   state.status_line = detail.length() > 0 ? detail : "Confirmation pending";
+  state.ui_mode = UiMode::BridgePrompt;
   append_activity_event(state, String("Bridge confirmation: ") + detail);
 }
 
@@ -930,7 +1093,94 @@ void McpBridgeApp::respondToPrompt(bool accepted, DeviceState& state) {
   clear_bridge_prompt(state);
   state.bridge_status_line = accepted ? "Bridge prompt accepted" : "Bridge prompt rejected";
   state.status_line = accepted ? "Bridge prompt accepted" : "Bridge prompt rejected";
+  state.ui_mode = UiMode::Menu;
   append_activity_event(state, state.status_line);
+}
+
+const char* SettingsApp::title() const { return "Settings"; }
+
+void SettingsApp::onEnter(DeviceState& state) {
+  state.ui_mode = UiMode::Menu;
+  selected_index_ = state.menu.selected_index < kItemCount ? state.menu.selected_index : 0;
+  state.menu.selected_index = selected_index_;
+  state.status_line = "Settings ready";
+}
+
+void SettingsApp::onExit(DeviceState& state) {
+  (void)state;
+}
+
+void SettingsApp::onCommand(const String& command, DeviceState& state) {
+  const String trimmed = trim_copy(command);
+  if (trimmed == "/help") {
+    state.status_line = "Use W/S, Enter, Del, and A/D tabs";
+    append_activity_event(state, state.status_line);
+  }
+}
+
+void SettingsApp::onAction(UiAction action, DeviceState& state) {
+  if (action == UiAction::Up) {
+    selected_index_ = selected_index_ == 0 ? kItemCount - 1 : selected_index_ - 1;
+    state.menu.selected_index = selected_index_;
+    return;
+  }
+
+  if (action == UiAction::Down) {
+    selected_index_ = (selected_index_ + 1) % kItemCount;
+    state.menu.selected_index = selected_index_;
+    return;
+  }
+
+  if (action == UiAction::Select) {
+    switch (selected_index_) {
+      case 0:
+        state.status_line = state.wifi_connected ? "Wi-Fi connected" : "Wi-Fi offline";
+        break;
+      case 1:
+        state.status_line = state.bridge_status_line.length() > 0 ? state.bridge_status_line : "Bridge not configured";
+        break;
+      case 2:
+        state.status_line = "A/D tabs, W/S move, Enter select, Del back";
+        break;
+      case 3:
+        state.status_line = state.firmware_name;
+        break;
+    }
+    append_activity_event(state, state.status_line);
+  }
+}
+
+void SettingsApp::tick(DeviceState& state) {
+  (void)state;
+}
+
+void SettingsApp::render(Print& out, const DeviceState& state) {
+  out.println("=== Settings ===");
+  const char* items[] = {"Wi-Fi", "Bridge", "Keymap", "About"};
+  for (size_t i = 0; i < kItemCount; ++i) {
+    out.print(i == selected_index_ ? "> " : "  ");
+    out.println(items[i]);
+  }
+  out.print("Detail: ");
+  switch (selected_index_) {
+    case 0:
+      out.println(state.wifi_connected ? "Wi-Fi connected" : "Wi-Fi offline");
+      break;
+    case 1:
+      out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(bridge idle)");
+      break;
+    case 2:
+      out.println("A/D tabs, W/S move, Enter select, Del back");
+      break;
+    case 3:
+      out.println(state.firmware_name);
+      break;
+  }
+  out.print("Mode: ");
+  out.println(state.ui_mode == UiMode::Menu ? "menu" : "input");
+  out.print("Status: ");
+  out.println(state.status_line);
+  print_common_footer(out);
 }
 
 void PushToCodexApp::beginRecording(DeviceState& state) {
