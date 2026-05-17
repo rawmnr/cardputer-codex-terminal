@@ -260,6 +260,7 @@ void AppShell::tick() {
 }
 
 void AppShell::render() {
+  traceDisplay();
   screen_.renderShell(state_, *active_app_, input_line_);
 }
 
@@ -379,4 +380,43 @@ void AppShell::switchTo(AppId app_id) {
 
   push_to_codex_app_.setBridge(&bridge_);
   mcp_bridge_app_.setBridge(&bridge_);
+}
+
+void AppShell::traceDisplay() {
+  String trace;
+  trace.reserve(240);
+  trace += "display app=";
+  trace += active_app_ != nullptr ? active_app_->title() : "none";
+  trace += " wifi=";
+  trace += state_.wifi_connected ? "connected" : "offline";
+  trace += " net=\"";
+  trace += state_.network_status_line;
+  trace += "\" status=\"";
+  trace += state_.status_line;
+  trace += "\" input=\"";
+  trace += input_line_;
+  trace += "\" codex=";
+  switch (state_.codex_state) {
+    case CodexState::Offline:
+      trace += "offline";
+      break;
+    case CodexState::Idle:
+      trace += "idle";
+      break;
+    case CodexState::Busy:
+      trace += "busy";
+      break;
+    case CodexState::WaitingForApproval:
+      trace += "approval";
+      break;
+  }
+  trace += " approval=";
+  trace += state_.approval_pending ? "pending" : "clear";
+  trace += " bridge=";
+  trace += state_.bridge_prompt_pending ? "pending" : "clear";
+
+  if (trace != last_display_trace_) {
+    network_.logMessage(trace);
+    last_display_trace_ = trace;
+  }
 }

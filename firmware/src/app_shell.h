@@ -25,12 +25,14 @@ class AppShell {
 
  private:
   void switchTo(AppId app_id);
+  void traceDisplay();
 
   DeviceState state_;
   NetworkManager network_;
   MiddlewareLink bridge_;
   TextScreen screen_;
   String input_line_;
+  String last_display_trace_;
   BuddyApp buddy_app_;
   PushToCodexApp push_to_codex_app_;
   PagerApp pager_app_;
