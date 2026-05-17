@@ -57,6 +57,7 @@ cardputer-codex-terminal.bin
 - the MCP bridge app can show notifications, questions, confirmations, and selection state.
 - the Cardputer can accept or reject pending prompts with physical keys.
 - Wi-Fi and middleware settings can be loaded from `/cardputer-codex/config.ini` on the SD card.
+- the firmware can create `/cardputer-codex/` and seed a template config file without overwriting an existing one.
 
 ## Constraints
 

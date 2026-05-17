@@ -11,7 +11,6 @@ constexpr int kSdSpiSckPin = 40;
 constexpr int kSdSpiMisoPin = 39;
 constexpr int kSdSpiMosiPin = 14;
 constexpr int kSdSpiCsPin = 12;
-constexpr char kConfigPath[] = "/cardputer-codex/config.ini";
 }
 
 String NetworkManager::trimCopy(String value) {
@@ -39,6 +38,9 @@ void NetworkManager::loadConfigFromSdCard() {
   }
 
   config_.sd_mounted = true;
+  ensureConfigDirectory();
+  seedConfigTemplateIfMissing();
+
   if (!SD.exists(kConfigPath)) {
     return;
   }
@@ -80,6 +82,33 @@ void NetworkManager::loadConfigFromSdCard() {
 
   file.close();
   config_.sd_config_loaded = config_.wifi_ssid.length() > 0 || config_.middleware_host.length() > 0;
+}
+
+void NetworkManager::ensureConfigDirectory() {
+  if (!SD.exists(kConfigDirectory)) {
+    SD.mkdir(kConfigDirectory);
+  }
+}
+
+void NetworkManager::seedConfigTemplateIfMissing() {
+  if (SD.exists(kConfigPath)) {
+    return;
+  }
+
+  File file = SD.open(kConfigPath, FILE_WRITE);
+  if (!file) {
+    return;
+  }
+
+  file.println("# Cardputer Codex terminal config");
+  file.println("# Edit this file to match your Wi-Fi and middleware settings.");
+  file.println("wifi_ssid=");
+  file.println("wifi_password=");
+  file.println("middleware_host=");
+  file.println("middleware_port=8765");
+  file.println("middleware_path=/");
+  file.println("middleware_token=");
+  file.close();
 }
 
 void NetworkManager::tick(DeviceState& state) {

@@ -23,6 +23,7 @@ cardputer-codex-terminal.bin
 - Runtime assets should be embedded or packaged in a way that still results in a single firmware binary.
 - The first code path focuses on the shell, state model, and app switching so we can wire the real Cardputer backends next.
 - Wi-Fi and middleware connection settings can be loaded from `/cardputer-codex/config.ini` on the Cardputer SD card.
+- On first boot, the firmware creates `/cardputer-codex/` and seeds a template `config.ini` if one does not already exist.
 
 ## SD Card Configuration
 

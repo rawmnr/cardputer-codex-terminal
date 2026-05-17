@@ -24,7 +24,12 @@ class NetworkManager {
   const RuntimeNetworkConfig& config() const;
 
  private:
+  static constexpr const char* kConfigDirectory = "/cardputer-codex";
+  static constexpr const char* kConfigPath = "/cardputer-codex/config.ini";
+
   void loadConfigFromSdCard();
+  void ensureConfigDirectory();
+  void seedConfigTemplateIfMissing();
   void connect(DeviceState& state);
   static String trimCopy(String value);
 
