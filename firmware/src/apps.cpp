@@ -859,10 +859,15 @@ void UsageApp::render(Print& out, const DeviceState& state) {
   out.println("Codex Rate Limits");
   out.println();
 
-  // Primary Limit
-  out.print("Primary Window (");
-  out.print(state.codex_usage_window_minutes);
-  out.println("m)");
+  // Primary Limit (5h)
+  out.print("Primary (");
+  if (state.codex_usage_window_minutes == 300) {
+    out.print("5h limit");
+  } else {
+    out.print(state.codex_usage_window_minutes);
+    out.print("m");
+  }
+  out.println(")");
   
   if (state.codex_usage_percent >= 0) {
     out.print("[");
@@ -879,15 +884,19 @@ void UsageApp::render(Print& out, const DeviceState& state) {
   }
   out.println();
 
-  // Secondary Limit
-  out.print("Secondary Window (");
-  const int days = state.codex_usage_secondary_window_minutes / 1440;
-  if (days > 0) {
-    out.print(days);
-    out.print("d");
+  // Secondary Limit (Weekly)
+  out.print("Secondary (");
+  if (state.codex_usage_secondary_window_minutes == 10080) {
+    out.print("Weekly limit");
   } else {
-    out.print(state.codex_usage_secondary_window_minutes);
-    out.print("m");
+    const int days = state.codex_usage_secondary_window_minutes / 1440;
+    if (days > 0) {
+      out.print(days);
+      out.print("d");
+    } else {
+      out.print(state.codex_usage_secondary_window_minutes);
+      out.print("m");
+    }
   }
   out.println(")");
 
