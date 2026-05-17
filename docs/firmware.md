@@ -58,6 +58,7 @@ cardputer-codex-terminal.bin
 - the Cardputer can accept or reject pending prompts with physical keys.
 - Wi-Fi and middleware settings can be loaded from `/cardputer-codex/config.ini` on the SD card.
 - the firmware can create `/cardputer-codex/` and seed a template config file without overwriting an existing one.
+- the firmware can append a persistent log to `/cardputer-codex/log.txt` for offline debugging from the SD card.
 
 ## Constraints
 

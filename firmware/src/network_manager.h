@@ -22,10 +22,12 @@ class NetworkManager {
   void begin();
   void tick(DeviceState& state);
   const RuntimeNetworkConfig& config() const;
+  void logMessage(const String& message);
 
  private:
   static constexpr const char* kConfigDirectory = "/cardputer-codex";
   static constexpr const char* kConfigPath = "/cardputer-codex/config.ini";
+  static constexpr const char* kLogPath = "/cardputer-codex/log.txt";
 
   void loadConfigFromSdCard();
   void ensureConfigDirectory();
@@ -36,5 +38,6 @@ class NetworkManager {
   unsigned long last_attempt_ms_ = 0;
   unsigned long connect_started_ms_ = 0;
   bool connect_in_progress_ = false;
+  String last_logged_network_status_;
   RuntimeNetworkConfig config_;
 };

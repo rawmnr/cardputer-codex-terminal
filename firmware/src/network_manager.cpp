@@ -46,10 +46,34 @@ void NetworkManager::begin() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(true);
   loadConfigFromSdCard();
+  logMessage("Network manager initialized");
 }
 
 const RuntimeNetworkConfig& NetworkManager::config() const {
   return config_;
+}
+
+void NetworkManager::logMessage(const String& message) {
+  if (!config_.sd_mounted) {
+    return;
+  }
+
+  ensureConfigDirectory();
+
+  File file = SD.open(kLogPath, FILE_APPEND);
+  if (!file) {
+    file = SD.open(kLogPath, FILE_WRITE);
+  }
+
+  if (!file) {
+    return;
+  }
+
+  file.print('[');
+  file.print(millis());
+  file.print("] ");
+  file.println(message);
+  file.close();
 }
 
 void NetworkManager::loadConfigFromSdCard() {
@@ -64,8 +88,10 @@ void NetworkManager::loadConfigFromSdCard() {
   config_.sd_mounted = true;
   ensureConfigDirectory();
   seedConfigTemplateIfMissing();
+  logMessage("SD card mounted");
 
   if (!SD.exists(kConfigPath)) {
+    logMessage("Config file not found, template seeded");
     return;
   }
 
@@ -106,6 +132,11 @@ void NetworkManager::loadConfigFromSdCard() {
 
   file.close();
   config_.sd_config_loaded = config_.wifi_ssid.length() > 0 || config_.middleware_host.length() > 0;
+  if (config_.sd_config_loaded) {
+    logMessage(String("Loaded SD config for SSID ") + config_.wifi_ssid);
+  } else {
+    logMessage("Loaded empty SD config");
+  }
 }
 
 void NetworkManager::ensureConfigDirectory() {
@@ -143,6 +174,10 @@ void NetworkManager::tick(DeviceState& state) {
     state.wifi_ssid = WiFi.SSID();
     state.wifi_ip = WiFi.localIP().toString();
     state.network_status_line = "Wi-Fi connected to " + state.wifi_ssid;
+    if (last_logged_network_status_ != state.network_status_line) {
+      logMessage(String("Wi-Fi connected: ") + state.wifi_ssid + " @ " + state.wifi_ip);
+      last_logged_network_status_ = state.network_status_line;
+    }
     connect_in_progress_ = false;
     return;
   }
@@ -155,6 +190,10 @@ void NetworkManager::tick(DeviceState& state) {
 
   if (ssid.length() == 0) {
     state.network_status_line = "Wi-Fi disabled - no credentials configured";
+    if (last_logged_network_status_ != state.network_status_line) {
+      logMessage(state.network_status_line);
+      last_logged_network_status_ = state.network_status_line;
+    }
     return;
   }
 
@@ -163,10 +202,16 @@ void NetworkManager::tick(DeviceState& state) {
       connect_in_progress_ = false;
       last_attempt_ms_ = millis();
       state.network_status_line = String("Wi-Fi ") + wifiStatusName(wifi_status) + ", retrying...";
+      logMessage(state.network_status_line);
+      last_logged_network_status_ = state.network_status_line;
       return;
     }
 
     state.network_status_line = String("Wi-Fi connecting (") + wifiStatusName(wifi_status) + ")";
+    if (last_logged_network_status_ != state.network_status_line) {
+      logMessage(state.network_status_line);
+      last_logged_network_status_ = state.network_status_line;
+    }
     return;
   }
 
@@ -175,6 +220,10 @@ void NetworkManager::tick(DeviceState& state) {
     connect(state);
   } else {
     state.network_status_line = "Wi-Fi retry pending";
+    if (last_logged_network_status_ != state.network_status_line) {
+      logMessage(state.network_status_line);
+      last_logged_network_status_ = state.network_status_line;
+    }
   }
 }
 
@@ -182,13 +231,15 @@ void NetworkManager::connect(DeviceState& state) {
   connect_in_progress_ = true;
   connect_started_ms_ = millis();
   last_attempt_ms_ = millis();
+  const String ssid = config_.wifi_ssid.length() > 0 ? config_.wifi_ssid : String(CARDPUTER_WIFI_SSID);
+  const String password = config_.wifi_password.length() > 0 ? config_.wifi_password : String(CARDPUTER_WIFI_PASSWORD);
   state.network_status_line = config_.sd_config_loaded
                                ? "Connecting Wi-Fi from SD config..."
                                : "Connecting Wi-Fi...";
+  logMessage(String("Wi-Fi connect attempt for SSID ") + ssid);
+  last_logged_network_status_ = state.network_status_line;
 
   WiFi.disconnect(true, true);
   WiFi.setAutoReconnect(true);
-  const String ssid = config_.wifi_ssid.length() > 0 ? config_.wifi_ssid : String(CARDPUTER_WIFI_SSID);
-  const String password = config_.wifi_password.length() > 0 ? config_.wifi_password : String(CARDPUTER_WIFI_PASSWORD);
   WiFi.begin(ssid.c_str(), password.c_str());
 }

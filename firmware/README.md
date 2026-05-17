@@ -45,3 +45,13 @@ middleware_token=
 ```
 
 An example file lives in [`config.example.ini`](config.example.ini).
+
+## SD Card Log
+
+The firmware also appends a plain text log to:
+
+```text
+/cardputer-codex/log.txt
+```
+
+It is intended to survive firmware updates and help debug Wi-Fi, SD config loading, and bridge startup from the card itself.
