@@ -41,6 +41,13 @@ class SessionState:
     bridge_prompt_options: tuple[str, ...] = ()
     bridge_prompt_selected_index: int = 0
     state_epoch: int = 0
+    codex_usage_percent: int = -1
+    codex_usage_secondary_percent: int = -1
+    codex_usage_window_minutes: int = 0
+    codex_usage_secondary_window_minutes: int = 0
+    codex_usage_resets_at: int = 0
+    codex_usage_secondary_resets_at: int = 0
+    codex_usage_reset_line: str = ""
     events: list[dict[str, Any]] = field(default_factory=list)
 
     _max_events = 24
@@ -202,6 +209,14 @@ class SessionIndex:
         sessions = {sid: s.to_dict() for sid, s in self.sessions.items()}
         return {
             "active_session_id": self.active_session_id,
+            "sessions": sessions,
+        }
+
+    def _new_session_id(self) -> str:
+        session_id = f"session-{self._next_session_number:06d}"
+        self._next_session_number += 1
+        return session_id
+on_id": self.active_session_id,
             "sessions": sessions,
         }
 

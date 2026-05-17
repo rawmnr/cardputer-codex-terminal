@@ -504,9 +504,14 @@ void PagerApp::onAction(UiAction action, DeviceState& state) {
     } else {
       state.menu.selected_index--;
     }
-    if (state.menu.scroll_offset > state.menu.selected_index) {
+    
+    // Smooth scrolling window adjustment
+    if (state.menu.selected_index < state.menu.scroll_offset) {
       state.menu.scroll_offset = state.menu.selected_index;
+    } else if (state.menu.selected_index >= state.menu.scroll_offset + 4) {
+      state.menu.scroll_offset = state.menu.selected_index - 3;
     }
+
     if (state.pager_screen == PagerScreen::Detail) {
       selectSession(state, state.menu.selected_index);
     } else {
@@ -522,9 +527,14 @@ void PagerApp::onAction(UiAction action, DeviceState& state) {
       return;
     }
     state.menu.selected_index = (state.menu.selected_index + 1) % state.pager.session_count;
-    if (state.menu.scroll_offset + 4 <= state.menu.selected_index) {
+    
+    // Smooth scrolling window adjustment
+    if (state.menu.selected_index < state.menu.scroll_offset) {
+      state.menu.scroll_offset = state.menu.selected_index;
+    } else if (state.menu.selected_index >= state.menu.scroll_offset + 4) {
       state.menu.scroll_offset = state.menu.selected_index - 3;
     }
+
     if (state.pager_screen == PagerScreen::Detail) {
       selectSession(state, state.menu.selected_index);
     } else {
@@ -811,6 +821,96 @@ void PagerApp::syncSelectionFromState(DeviceState& state) {
   }
 
   state.menu.selected_index = 0;
+}
+
+const char* UsageApp::title() const { return "Codex Usage"; }
+
+void UsageApp::onEnter(DeviceState& state) {
+  state.ui_mode = UiMode::Home;
+  state.status_line = "Detailed usage metrics";
+}
+
+void UsageApp::onExit(DeviceState& state) {
+  (void)state;
+}
+
+void UsageApp::onCommand(const String& command, DeviceState& state) {
+  (void)command;
+  (void)state;
+}
+
+void UsageApp::onTextInput(const String& text, bool backspace, DeviceState& state) {
+  (void)text; (void)backspace; (void)state;
+}
+
+void UsageApp::onSubmit(const String& command, DeviceState& state) {
+  (void)command; (void)state;
+}
+
+void UsageApp::onAction(UiAction action, DeviceState& state) {
+  (void)action; (void)state;
+}
+
+void UsageApp::tick(DeviceState& state) {
+  (void)state;
+}
+
+void UsageApp::render(Print& out, const DeviceState& state) {
+  out.println("Codex Rate Limits");
+  out.println();
+
+  // Primary Limit
+  out.print("Primary Window (");
+  out.print(state.codex_usage_window_minutes);
+  out.println("m)");
+  
+  if (state.codex_usage_percent >= 0) {
+    out.print("[");
+    const int segments = 20;
+    const int filled = (segments * state.codex_usage_percent) / 100;
+    for (int i = 0; i < segments; ++i) {
+      out.print(i < filled ? "=" : "-");
+    }
+    out.print("] ");
+    out.print(state.codex_usage_percent);
+    out.println("%");
+  } else {
+    out.println("[--------------------] --%");
+  }
+  out.println();
+
+  // Secondary Limit
+  out.print("Secondary Window (");
+  const int days = state.codex_usage_secondary_window_minutes / 1440;
+  if (days > 0) {
+    out.print(days);
+    out.print("d");
+  } else {
+    out.print(state.codex_usage_secondary_window_minutes);
+    out.print("m");
+  }
+  out.println(")");
+
+  if (state.codex_usage_secondary_percent >= 0) {
+    out.print("[");
+    const int segments = 20;
+    const int filled = (segments * state.codex_usage_secondary_percent) / 100;
+    for (int i = 0; i < segments; ++i) {
+      out.print(i < filled ? "=" : "-");
+    }
+    out.print("] ");
+    out.print(state.codex_usage_secondary_percent);
+    out.println("%");
+  } else {
+    out.println("[--------------------] --%");
+  }
+
+  out.println();
+  if (state.codex_usage_reset_line.length() > 0) {
+    out.println(state.codex_usage_reset_line);
+  } else {
+    out.println("Reset data pending...");
+  }
 }
 
 const char* McpBridgeApp::title() const { return "Cardputer MCP Bridge"; }

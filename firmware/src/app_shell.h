@@ -43,6 +43,7 @@ class AppShell {
   BuddyApp buddy_app_;
   PushToCodexApp push_to_codex_app_;
   PagerApp pager_app_;
+  UsageApp usage_app_;
   McpBridgeApp mcp_bridge_app_;
   SettingsApp settings_app_;
   App* active_app_ = nullptr;

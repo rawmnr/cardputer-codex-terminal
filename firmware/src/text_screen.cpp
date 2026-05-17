@@ -38,6 +38,7 @@ constexpr TabInfo kTabs[] = {
   {AppId::Buddy, "Buddy"},
   {AppId::PushToCodex, "Push"},
   {AppId::Pager, "Pager"},
+  {AppId::Usage, "Usage"},
   {AppId::McpBridge, "MCP"},
   {AppId::Settings, "Set"},
 };
@@ -52,6 +53,8 @@ const char* appLongTitle(AppId id) {
       return "Push to Codex";
     case AppId::Pager:
       return "Codex Pager";
+    case AppId::Usage:
+      return "Codex Usage";
     case AppId::McpBridge:
       return "MCP Bridge";
     case AppId::Settings:
@@ -68,6 +71,8 @@ const char* menuLabel(AppId id) {
       return "Push";
     case AppId::Pager:
       return "Pager";
+    case AppId::Usage:
+      return "Usage";
     case AppId::McpBridge:
       return "MCP";
     case AppId::Settings:
@@ -173,6 +178,7 @@ void TextScreen::drawHeader(const DeviceState& state) {
 
   int x = kScreenWidth - 4;
 
+  // Battery
   char batBuf[8];
   snprintf(batBuf, sizeof(batBuf), "%d%%", state.battery_percent);
   const int batW = static_cast<int>(strlen(batBuf)) * 6;
@@ -184,6 +190,7 @@ void TextScreen::drawHeader(const DeviceState& state) {
   d.setCursor(x, 3);
   d.print(batBuf);
 
+  // Codex Status Pill
   x -= 6;
   const int pillW = 20;
   x -= pillW;
@@ -193,11 +200,27 @@ void TextScreen::drawHeader(const DeviceState& state) {
   d.setCursor(x + 2, 3);
   d.print(codexCode(state.codex_state));
 
+  // Activity Spinner (if busy)
+  if (state.codex_state == CodexState::Busy) {
+    drawActivityIndicator(state, x - 10, 3);
+  }
+
+  // Connection Lights
   x -= 9;
   d.fillCircle(x + 2, 6, 2, bridgeLooksConnected(state.bridge_status_line) ? COL_OK : COL_DIM);
 
   x -= 9;
   d.fillCircle(x + 2, 6, 2, state.wifi_connected ? COL_OK : COL_ERR);
+
+  // Usage Bar
+  if (state.codex_usage_percent >= 0) {
+    const int barW = 30;
+    const int barX = x - barW - 6;
+    const int filledW = (barW * state.codex_usage_percent) / 100;
+    d.drawRect(barX, 4, barW, 6, COL_DIM);
+    uint16_t usageCol = state.codex_usage_percent < 50 ? COL_OK : (state.codex_usage_percent < 80 ? COL_WARN : COL_ERR);
+    d.fillRect(barX + 1, 5, filledW, 4, usageCol);
+  }
 }
 
 void TextScreen::drawAppMenu(const DeviceState& state) {
@@ -228,6 +251,14 @@ void TextScreen::drawAppMenu(const DeviceState& state) {
   canvas_.setCursor(8, kCanvasH - 12);
   canvas_.print("Fn+;/. move  Enter open  Del close");
   canvas_.pushSprite(kCanvasX, kCanvasY);
+}
+
+void TextScreen::drawActivityIndicator(const DeviceState& state, int x, int y) {
+  static const char spinner[] = {'|', '/', '-', '\\'};
+  const int index = (millis() / 250) % 4;
+  M5Cardputer.Display.setTextColor(COL_ACCENT, COL_HEADER);
+  M5Cardputer.Display.setCursor(x, y);
+  M5Cardputer.Display.print(spinner[index]);
 }
 
 void TextScreen::drawFooter(const DeviceState& state, const String& input_line, const String& footer_hint) {

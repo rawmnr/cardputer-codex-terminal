@@ -106,6 +106,19 @@ class PagerApp final : public App {
   MiddlewareLink* bridge_ = nullptr;
 };
 
+class UsageApp final : public App {
+ public:
+  const char* title() const override;
+  void onEnter(DeviceState& state) override;
+  void onExit(DeviceState& state) override;
+  void onCommand(const String& command, DeviceState& state) override;
+  void onTextInput(const String& text, bool backspace, DeviceState& state) override;
+  void onSubmit(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
+  void tick(DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
+};
+
 class McpBridgeApp final : public App {
  public:
   const char* title() const override;

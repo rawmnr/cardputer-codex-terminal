@@ -7,6 +7,7 @@ enum class AppId {
   Buddy,
   PushToCodex,
   Pager,
+  Usage,
   McpBridge,
   Settings,
 };
@@ -101,9 +102,13 @@ struct DeviceState {
   int battery_voltage_mv = 0;
   int ptt_peak_amplitude = 0;
   int codex_usage_percent = -1;
+  int codex_usage_secondary_percent = -1;
   uint32_t state_epoch = 0;
   int codex_usage_window_minutes = 0;
+  int codex_usage_secondary_window_minutes = 0;
   uint32_t codex_usage_resets_at = 0;
+  uint32_t codex_usage_secondary_resets_at = 0;
+  String codex_usage_reset_line;
   String codex_workspace_path = ".";
   String codex_branch;
   String codex_thread_id;
@@ -133,6 +138,7 @@ struct DeviceState {
   size_t ptt_sample_limit = 0;
   uint32_t ptt_sample_rate_hz = 16000;
   String ptt_detail_line;
+  unsigned long last_interaction_ms = 0;
   std::array<String, kActivityLogSize> activity_log{};
   size_t activity_log_head = 0;
   size_t activity_log_count = 0;

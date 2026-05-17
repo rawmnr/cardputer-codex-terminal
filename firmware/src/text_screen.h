@@ -13,6 +13,7 @@ class TextScreen {
 
  private:
   void drawHeader(const DeviceState& state);
+  void drawActivityIndicator(const DeviceState& state, int x, int y);
   void drawAppMenu(const DeviceState& state);
   void drawFooter(const DeviceState& state, const String& input_line, const String& footer_hint);
 

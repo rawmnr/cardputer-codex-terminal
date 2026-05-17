@@ -55,19 +55,27 @@ void MiddlewareLink::tick(DeviceState& state) {
 }
 
 bool MiddlewareLink::sendTextPrompt(const String& text) {
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "text_prompt", String("{\"text\":\"") + escapeJson(text) + "\"}"));
+  JsonDocument payload;
+  payload["text"] = text;
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "text_prompt", payload));
 }
 
 bool MiddlewareLink::sendProjectSelect(const String& workspace_path) {
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "project_select", String("{\"workspace_path\":\"") + escapeJson(workspace_path) + "\"}"));
+  JsonDocument payload;
+  payload["workspace_path"] = workspace_path;
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "project_select", payload));
 }
 
 bool MiddlewareLink::sendBranchSelect(const String& branch) {
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "branch_select", String("{\"branch\":\"") + escapeJson(branch) + "\"}"));
+  JsonDocument payload;
+  payload["branch"] = branch;
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "branch_select", payload));
 }
 
 bool MiddlewareLink::sendThreadSelect(const String& thread_id) {
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "thread_select", String("{\"thread_id\":\"") + escapeJson(thread_id) + "\"}"));
+  JsonDocument payload;
+  payload["thread_id"] = thread_id;
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "thread_select", payload));
 }
 
 bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz) {
@@ -92,50 +100,58 @@ bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, siz
 
   encoded[encoded_length] = '\0';
   String pcm_b64(reinterpret_cast<const char*>(encoded.get()));
-  String payload = String("{\"chunk_id\":") + String(chunk_id) +
-                   String(",\"pcm_b64\":\"") + pcm_b64 +
-                   String("\",\"sample_rate_hz\":") + String(sample_rate_hz) + "}";
+  
+  JsonDocument payload;
+  payload["chunk_id"] = chunk_id;
+  payload["pcm_b64"] = pcm_b64;
+  payload["sample_rate_hz"] = sample_rate_hz;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "audio_chunk", payload));
 }
 
 bool MiddlewareLink::sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample_count, int peak_amplitude) {
-  String payload = String("{\"sample_rate_hz\":") + String(sample_rate_hz) +
-                   String(",\"sample_count\":") + String(sample_count) +
-                   String(",\"peak_amplitude\":") + String(peak_amplitude) + "}";
+  JsonDocument payload;
+  payload["sample_rate_hz"] = sample_rate_hz;
+  payload["sample_count"] = sample_count;
+  payload["peak_amplitude"] = peak_amplitude;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "voice_prompt_ready", payload));
 }
 
 bool MiddlewareLink::sendApprovalResponse(bool approved) {
-  String payload = String("{\"approved\":") + (approved ? "true" : "false") + "}";
+  JsonDocument payload;
+  payload["approved"] = approved;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "approval_response", payload));
 }
 
 bool MiddlewareLink::sendBridgeNotification(const String& title, const String& detail) {
-  String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + "\"}";
+  JsonDocument payload;
+  payload["title"] = title;
+  payload["detail"] = detail;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_notification", payload));
 }
 
 bool MiddlewareLink::sendBridgeQuestion(const String& title, const String& detail, const std::array<String, 3>& options, size_t option_count) {
-  String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + String("\",\"options\":[");
+  JsonDocument payload;
+  payload["title"] = title;
+  payload["detail"] = detail;
+  JsonArray options_arr = payload["options"].to<JsonArray>();
   for (size_t i = 0; i < option_count && i < options.size(); ++i) {
-    if (i > 0) {
-      payload += ',';
-    }
-    payload += String("\"") + escapeJson(options[i]) + "\"";
+    options_arr.add(options[i]);
   }
-  payload += "]}";
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_question", payload));
 }
 
 bool MiddlewareLink::sendBridgeConfirmation(const String& title, const String& detail) {
-  String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + "\"}";
+  JsonDocument payload;
+  payload["title"] = title;
+  payload["detail"] = detail;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_confirmation", payload));
 }
 
 bool MiddlewareLink::sendBridgeResponse(bool accepted, size_t selected_index, const String& note) {
-  String payload = String("{\"accepted\":") + (accepted ? "true" : "false") +
-                   String(",\"selected_index\":") + String(selected_index) +
-                   String(",\"note\":\"") + escapeJson(note) + "\"}";
+  JsonDocument payload;
+  payload["accepted"] = accepted;
+  payload["selected_index"] = selected_index;
+  payload["note"] = note;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_response", payload));
 }
 
@@ -147,22 +163,25 @@ bool MiddlewareLink::sendDisplaySnapshot(
   const String& firmware_name,
   const String& network_status_line
 ) {
-  String payload = String("{\"screen_text\":\"") + escapeJson(screen_text) +
-                   String("\",\"status_line\":\"") + escapeJson(status_line) +
-                   String("\",\"active_app\":\"") + escapeJson(active_app) +
-                   String("\",\"input_line\":\"") + escapeJson(input_line) +
-                   String("\",\"firmware_name\":\"") + escapeJson(firmware_name) +
-                   String("\",\"network_status_line\":\"") + escapeJson(network_status_line) + "\"}";
+  JsonDocument payload;
+  payload["screen_text"] = screen_text;
+  payload["status_line"] = status_line;
+  payload["active_app"] = active_app;
+  payload["input_line"] = input_line;
+  payload["firmware_name"] = firmware_name;
+  payload["network_status_line"] = network_status_line;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "display_snapshot", payload));
 }
 
 bool MiddlewareLink::sendInterrupt(const String& thread_id) {
-  String payload = String("{\"thread_id\":\"") + escapeJson(thread_id) + "\"}";
+  JsonDocument payload;
+  payload["thread_id"] = thread_id;
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "interrupt", payload));
 }
 
 bool MiddlewareLink::sendStatusRequest() {
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "status_request", "{}"));
+  JsonDocument payload;
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "status_request", payload));
 }
 
 void MiddlewareLink::handleWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -279,6 +298,27 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       }
       if (payload["last_event"].is<const char*>()) {
         state.codex_stream_line = payload["last_event"].as<const char*>();
+      }
+      if (payload["codex_usage_percent"].is<int>()) {
+        state.codex_usage_percent = payload["codex_usage_percent"].as<int>();
+      }
+      if (payload["codex_usage_secondary_percent"].is<int>()) {
+        state.codex_usage_secondary_percent = payload["codex_usage_secondary_percent"].as<int>();
+      }
+      if (payload["codex_usage_window_minutes"].is<int>()) {
+        state.codex_usage_window_minutes = payload["codex_usage_window_minutes"].as<int>();
+      }
+      if (payload["codex_usage_secondary_window_minutes"].is<int>()) {
+        state.codex_usage_secondary_window_minutes = payload["codex_usage_secondary_window_minutes"].as<int>();
+      }
+      if (payload["codex_usage_resets_at"].is<uint32_t>()) {
+        state.codex_usage_resets_at = payload["codex_usage_resets_at"].as<uint32_t>();
+      }
+      if (payload["codex_usage_secondary_resets_at"].is<uint32_t>()) {
+        state.codex_usage_secondary_resets_at = payload["codex_usage_secondary_resets_at"].as<uint32_t>();
+      }
+      if (payload["codex_usage_reset_line"].is<const char*>()) {
+        state.codex_usage_reset_line = payload["codex_usage_reset_line"].as<const char*>();
       }
       if (payload["approval_id"].is<const char*>()) {
         const String approval_id = payload["approval_id"].as<const char*>();
@@ -580,17 +620,18 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
   }
 }
 
-String MiddlewareLink::buildMessage(const String& id, const String& type, const String& payload_json) const {
-  return buildEnvelope(id, type, payload_json);
-}
-
-String MiddlewareLink::buildEnvelope(const String& id, const String& type, const String& payload_json) const {
-  String output = String("{\"protocol_version\":1,\"id\":\"") + escapeJson(id) +
-                  String("\",\"type\":\"") + escapeJson(type) + String("\",\"payload\":") + payload_json;
+String MiddlewareLink::buildEnvelope(const String& id, const String& type, const JsonDocument& payload) const {
+  JsonDocument doc;
+  doc["protocol_version"] = 1;
+  doc["id"] = id;
+  doc["type"] = type;
+  doc["payload"] = payload;
   if (auth_token_.length() > 0) {
-    output += String(",\"auth_token\":\"") + escapeJson(auth_token_) + "\"";
+    doc["auth_token"] = auth_token_;
   }
-  output += "}";
+
+  String output;
+  serializeJson(doc, output);
   return output;
 }
 
@@ -600,36 +641,3 @@ String MiddlewareLink::nextMessageId() {
   return String(buffer);
 }
 
-String MiddlewareLink::escapeJson(const String& value) const {
-  String output;
-  output.reserve(value.length() + 8);
-  for (size_t i = 0; i < value.length(); ++i) {
-    const char c = value[i];
-    switch (c) {
-      case '\\':
-      case '"':
-        output += '\\';
-        output += c;
-        break;
-      case '\b':
-        output += "\\b";
-        break;
-      case '\f':
-        output += "\\f";
-        break;
-      case '\n':
-        output += "\\n";
-        break;
-      case '\r':
-        output += "\\r";
-        break;
-      case '\t':
-        output += "\\t";
-        break;
-      default:
-        output += c;
-        break;
-    }
-  }
-  return output;
-}

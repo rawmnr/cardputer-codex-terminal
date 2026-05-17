@@ -18,6 +18,8 @@ String tab_label(AppId app_id) {
       return "Push";
     case AppId::Pager:
       return "Pager";
+    case AppId::Usage:
+      return "Usage";
     case AppId::McpBridge:
       return "MCP";
     case AppId::Settings:
@@ -34,6 +36,8 @@ const char* menu_label(AppId app_id) {
       return "Push to Codex";
     case AppId::Pager:
       return "Codex Pager";
+    case AppId::Usage:
+      return "Codex Usage";
     case AppId::McpBridge:
       return "MCP Bridge";
     case AppId::Settings:
@@ -148,7 +152,7 @@ void AppShell::handleCommand(const String& command) {
     Serial.println("  Hold Space         push-to-talk");
     Serial.println("  /                  command palette");
     Serial.println("Advanced commands:");
-    Serial.println("  /app buddy|push|pager|mcp|settings");
+    Serial.println("  /app buddy|push|pager|usage|mcp|settings");
     Serial.println("  /wifi on|off|reload");
     Serial.println("  /codex idle|busy|approval|offline");
     Serial.println("  /workspace <path>");
@@ -173,6 +177,8 @@ void AppShell::handleCommand(const String& command) {
       switchTo(AppId::PushToCodex);
     } else if (value == "pager") {
       switchTo(AppId::Pager);
+    } else if (value == "usage") {
+      switchTo(AppId::Usage);
     } else if (value == "mcp") {
       switchTo(AppId::McpBridge);
     } else if (value == "settings") {
@@ -308,10 +314,14 @@ void AppShell::handleCommand(const String& command) {
   if (trimmed.startsWith("/usage ")) {
     const int value = trimmed.substring(7).toInt();
     state_.codex_usage_percent = constrain(value, 0, 100);
+    state_.codex_usage_secondary_percent = constrain(value / 2, 0, 100);
     state_.codex_usage_label = "codex";
     state_.codex_usage_window_minutes = 15;
-    state_.codex_usage_resets_at = 0;
-    state_.codex_usage_detail_line = String("Usage ") + String(state_.codex_usage_percent) + "%";
+    state_.codex_usage_secondary_window_minutes = 10080;
+    state_.codex_usage_resets_at = millis() / 1000 + 300;
+    state_.codex_usage_secondary_resets_at = millis() / 1000 + 3600;
+    state_.codex_usage_reset_line = "Resets in 5m / 60m";
+    state_.codex_usage_detail_line = String("Primary ") + String(state_.codex_usage_percent) + "%";
     append_activity_event(state_, String("Usage set to ") + String(state_.codex_usage_percent) + "%");
     render();
     return;
@@ -335,6 +345,20 @@ void AppShell::tick() {
 
   if (active_app_ != nullptr) {
     active_app_->tick(state_);
+  }
+
+  // Power management
+  const unsigned long now = millis();
+  const unsigned long idle_time = now - state_.last_interaction_ms;
+  
+  if (idle_time > 120000) { // 2 minutes: Light sleep
+    M5Cardputer.Display.setBrightness(0);
+    // Note: Light sleep on ESP32-S3 can interfere with WiFi/WebSockets if not handled carefully.
+    // For now, we just dim to 0 to save significant power without dropping the link.
+  } else if (idle_time > 30000) { // 30 seconds: Dim
+    M5Cardputer.Display.setBrightness(32);
+  } else {
+    M5Cardputer.Display.setBrightness(128);
   }
 }
 
@@ -477,13 +501,13 @@ void AppShell::handleAction(UiAction action) {
 
   if (state_.menu.app_menu_open) {
     if (action == UiAction::Up) {
-      state_.menu.app_menu_selected = state_.menu.app_menu_selected == 0 ? 4 : state_.menu.app_menu_selected - 1;
+      state_.menu.app_menu_selected = state_.menu.app_menu_selected == 0 ? 5 : state_.menu.app_menu_selected - 1;
       render();
       return;
     }
 
     if (action == UiAction::Down) {
-      state_.menu.app_menu_selected = (state_.menu.app_menu_selected + 1) % 5;
+      state_.menu.app_menu_selected = (state_.menu.app_menu_selected + 1) % 6;
       render();
       return;
     }
@@ -635,6 +659,9 @@ void AppShell::switchTo(AppId app_id) {
     case AppId::Pager:
       active_app_ = &pager_app_;
       break;
+    case AppId::Usage:
+      active_app_ = &usage_app_;
+      break;
     case AppId::McpBridge:
       active_app_ = &mcp_bridge_app_;
       break;
@@ -662,16 +689,18 @@ size_t AppShell::tabIndexForApp(AppId app_id) const {
       return 1;
     case AppId::Pager:
       return 2;
-    case AppId::McpBridge:
+    case AppId::Usage:
       return 3;
-    case AppId::Settings:
+    case AppId::McpBridge:
       return 4;
+    case AppId::Settings:
+      return 5;
   }
   return 0;
 }
 
 AppId AppShell::appForTab(size_t tab_index) const {
-  switch (tab_index % 5) {
+  switch (tab_index % 6) {
     case 0:
       return AppId::Buddy;
     case 1:
@@ -679,8 +708,10 @@ AppId AppShell::appForTab(size_t tab_index) const {
     case 2:
       return AppId::Pager;
     case 3:
-      return AppId::McpBridge;
+      return AppId::Usage;
     case 4:
+      return AppId::McpBridge;
+    case 5:
       return AppId::Settings;
   }
   return AppId::Buddy;
@@ -718,6 +749,8 @@ String AppShell::footerHint() const {
           return "Fn+;/. Browse  Enter Reply  Del Back";
       }
       break;
+    case AppId::Usage:
+      return "Fn+;/. Refresh  Enter Buddy  Del Back";
     case AppId::McpBridge:
       return "Fn+;/. Select  Enter OK  Del Back";
     case AppId::Settings:
