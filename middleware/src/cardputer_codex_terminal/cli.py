@@ -48,7 +48,7 @@ def _is_loopback_host(host: str) -> bool:
 
 
 async def run_async(args: argparse.Namespace) -> int:
-    if args.serve and not _is_loopback_host(args.host) and not args.bridge_token:
+    if (args.serve or args.mcp) and not _is_loopback_host(args.host) and not args.bridge_token:
         raise SystemExit("Refusing to expose the Cardputer bridge on a non-loopback host without --bridge-token.")
     if args.mcp and args.real_codex:
         raise SystemExit("--mcp runs the middleware as a Codex-side MCP server and cannot be combined with --real-codex.")
@@ -79,28 +79,11 @@ async def run_async(args: argparse.Namespace) -> int:
 
     await app.initialize()
 
-    if args.mcp:
+    if args.mcp or args.serve:
         import websockets  # type: ignore
 
         bridge = CardputerBridgeServer(app)
-        mcp_server = CardputerMcpServer(app)
-
-        async def handler(websocket: object, *_: object) -> None:
-            await bridge.handle_connection(websocket)
-
-        try:
-            async with websockets.serve(handler, args.host, args.port):
-                print(f"Cardputer bridge listening on ws://{args.host}:{args.port}", file=stream)
-                await mcp_server.run_stdio()
-        finally:
-            if preview is not None:
-                preview.close()
-        return 0
-
-    if args.serve:
-        import websockets  # type: ignore
-
-        bridge = CardputerBridgeServer(app)
+        mcp_server = CardputerMcpServer(app) if args.mcp else None
 
         # Register mDNS service for local discovery
         zc: Zeroconf | None = None
@@ -129,16 +112,20 @@ async def run_async(args: argparse.Namespace) -> int:
 
         try:
             async with websockets.serve(handler, args.host, args.port):
-                print(f"Cardputer bridge listening on ws://{args.host}:{args.port}")
-                if HAS_ZEROCONF and local_ip:
-                    print(f"mDNS service registered: {local_ip}:{args.port} (_cardputer-codex._tcp.local.)")
-                if args.prompt:
-                    events = await app.handle_cardputer_message(
-                        CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt}, id="msg-000001")
-                    )
-                    for event in events:
-                        print(json.dumps(event.to_dict(), ensure_ascii=False))
-                await asyncio.Future()
+                print(f"Cardputer bridge listening on ws://{args.host}:{args.port}", file=stream)
+                if HAS_ZEROCONF:
+                    print(f"mDNS service registered: {local_ip}:{args.port} (_cardputer-codex._tcp.local.)", file=stream)
+                
+                if args.mcp and mcp_server:
+                    await mcp_server.run_stdio()
+                else:
+                    if args.prompt:
+                        events = await app.handle_cardputer_message(
+                            CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt}, id="msg-000001")
+                        )
+                        for event in events:
+                            print(json.dumps(event.to_dict(), ensure_ascii=False))
+                    await asyncio.Future()
         finally:
             if zc is not None:
                 zc.unregister_all_services()
