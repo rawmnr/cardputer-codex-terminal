@@ -1,0 +1,5 @@
+interface:
+  display_name: "Cardputer Codex Onboard"
+  short_description: "Build and launch the Cardputer Codex stack"
+  default_prompt: "Use $cardputer-codex-onboard to build the firmware, prepare SD config.ini, start the middleware with uv, and diagnose Cardputer bridge issues."
+
