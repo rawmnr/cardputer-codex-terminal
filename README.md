@@ -1,64 +1,99 @@
 # cardputer-codex-terminal
 
-Remote agent terminal for turning the M5Stack Cardputer ADV into a physical control surface for an OpenAI Codex instance running on Windows.
+`cardputer-codex-terminal` turns the M5Stack Cardputer ADV into a physical terminal for OpenAI Codex running on a Windows host.
 
-This repository is initialized as an architecture-first project. It does not yet contain firmware or middleware implementation code. The initial goal is to define the components, protocols, risks, and roadmap before implementation.
+The project is split into two working parts:
 
-This project is inspired by the excellent work on [`dakshaymehta/cardputer-claude-os`](https://github.com/dakshaymehta/cardputer-claude-os), adapted here for OpenAI Codex instead of Claude.
+- a Cardputer firmware that builds into a flashable `.bin` for M5 Launcher;
+- a Windows middleware service that bridges Cardputer input to Codex app-server and back.
 
-The firmware deliverable is expected to be a flashable `.bin` artifact compatible with M5 Launcher on the Cardputer.
+The design is inspired by the excellent [`dakshaymehta/cardputer-claude-os`](https://github.com/dakshaymehta/cardputer-claude-os), adapted here for OpenAI Codex.
 
-## Vision
+## What it does
 
-The project connects a M5Stack Cardputer ADV to a Windows host running `codex app-server`, providing a mobile interface to:
+- send typed prompts from the Cardputer keyboard;
+- capture push-to-talk audio and forward it to the Windows middleware;
+- display Codex status, streaming output, usage, and approvals;
+- surface a local MCP-style bridge for notifications, questions, and confirmations;
+- keep session context on the middleware side instead of the microcontroller;
+- produce a single firmware `.bin` that can be launched from M5 Launcher.
 
-- send text instructions from the Cardputer keyboard;
-- dictate voice prompts via push-to-talk;
-- follow Codex responses in streaming form;
-- approve or reject requests;
-- monitor long-running tasks remotely over a private overlay network.
+## Current status
 
-## Target Architecture
+The repository already contains working scaffolding and early implementations for:
+
+- a Cardputer firmware shell with app switching;
+- `Codex Buddy`, `Push to Codex`, `Codex Pager`, and `Cardputer MCP Bridge` views;
+- push-to-talk microphone capture;
+- a WebSocket bridge from the firmware to the middleware;
+- a Python middleware package managed with `uv`;
+- a versioned Cardputer message contract;
+- token-based bridge authentication;
+- Codex usage and approval tracking;
+- a firmware build that emits `firmware/cardputer-codex-terminal.bin`.
+
+## Architecture
 
 ```text
 M5Stack Cardputer ADV
-  | Wi-Fi + overlay VPN
+  | Wi-Fi or overlay VPN
   v
-Python middleware on Windows
+Windows middleware
   | WebSocket / JSON-RPC
   v
-OpenAI Codex app-server
-  | local tools / MCP / shell
+Codex app-server
+  | local tools / MCP / approvals
   v
 Windows workspace
 ```
 
-## Repository Structure
+## Repository layout
 
 ```text
-docs/
-  architecture.md          System overview
-  product-scope.md         Feature parity with cardputer-claude-os, adapted for Codex
-  hardware.md              Cardputer ADV hardware notes
-  networking.md            Remote access, Tailscale, MicroLink
-  middleware.md            Python bridge role and STT pipeline
-  firmware.md              Embedded firmware design
-  codex-app-server.md      JSON-RPC integration with Codex
-  security.md              Threats, approvals, secrets
-  roadmap.md               Delivery phases
-  references.md            Sources and related projects
-firmware/                  Future ESP32-S3 firmware
-  platformio.ini           Firmware build configuration
-  src/                     Firmware app shell and build scaffold
-  tools/                   Build helpers such as binary renaming
-middleware/                Future Windows Python server
-hardware/                  Notes, diagrams, pinout, technical assets
+docs/          Architecture, roadmap, hardware, networking, security
+firmware/      Cardputer firmware source tree and PlatformIO build
+middleware/    Windows Python bridge managed with uv
+hardware/      Hardware notes and board-level references
 ```
 
-The middleware package in `middleware/` is managed with `uv`.
+## Build and run
 
-## Status
+### Middleware
 
-Phase 1: firmware source tree scaffold and product parity scope.
+```bash
+cd middleware
+uv sync
+uv run cardputer-codex-middleware --help
+uv run cardputer-codex-middleware --serve
+uv run python -m unittest discover -s tests -v
+```
 
-Code is now landing in the firmware tree, starting with the build scaffold and app shell.
+### Firmware
+
+```bash
+cd firmware
+python -m platformio run
+```
+
+The build produces a flashable binary named:
+
+```text
+firmware/cardputer-codex-terminal.bin
+```
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Product scope](docs/product-scope.md)
+- [Firmware](docs/firmware.md)
+- [Middleware](docs/middleware.md)
+- [Networking](docs/networking.md)
+- [Security](docs/security.md)
+- [Roadmap](docs/roadmap.md)
+- [References](docs/references.md)
+
+## Notes
+
+- The middleware message contract is versioned.
+- Remote bridge access can require a shared `bridge_token`.
+- The project aims for feature parity with `cardputer-claude-os` at the product level, not a line-by-line port.
