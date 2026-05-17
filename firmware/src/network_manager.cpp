@@ -7,10 +7,34 @@
 
 namespace {
 constexpr unsigned long kRetryIntervalMs = 15000;
+constexpr unsigned long kConnectTimeoutMs = 12000;
 constexpr int kSdSpiSckPin = 40;
 constexpr int kSdSpiMisoPin = 39;
 constexpr int kSdSpiMosiPin = 14;
 constexpr int kSdSpiCsPin = 12;
+
+const char* wifiStatusName(wl_status_t status) {
+  switch (status) {
+    case WL_NO_SHIELD:
+      return "no shield";
+    case WL_IDLE_STATUS:
+      return "idle";
+    case WL_NO_SSID_AVAIL:
+      return "ssid unavailable";
+    case WL_SCAN_COMPLETED:
+      return "scan completed";
+    case WL_CONNECTED:
+      return "connected";
+    case WL_CONNECT_FAILED:
+      return "connect failed";
+    case WL_CONNECTION_LOST:
+      return "connection lost";
+    case WL_DISCONNECTED:
+      return "disconnected";
+    default:
+      return "unknown";
+  }
+}
 }
 
 String NetworkManager::trimCopy(String value) {
@@ -135,7 +159,14 @@ void NetworkManager::tick(DeviceState& state) {
   }
 
   if (connect_in_progress_) {
-    state.network_status_line = "Wi-Fi connecting...";
+    if (millis() - connect_started_ms_ >= kConnectTimeoutMs) {
+      connect_in_progress_ = false;
+      last_attempt_ms_ = millis();
+      state.network_status_line = String("Wi-Fi ") + wifiStatusName(wifi_status) + ", retrying...";
+      return;
+    }
+
+    state.network_status_line = String("Wi-Fi connecting (") + wifiStatusName(wifi_status) + ")";
     return;
   }
 
@@ -149,12 +180,14 @@ void NetworkManager::tick(DeviceState& state) {
 
 void NetworkManager::connect(DeviceState& state) {
   connect_in_progress_ = true;
+  connect_started_ms_ = millis();
   last_attempt_ms_ = millis();
   state.network_status_line = config_.sd_config_loaded
                                ? "Connecting Wi-Fi from SD config..."
                                : "Connecting Wi-Fi...";
 
   WiFi.disconnect(true, true);
+  WiFi.setAutoReconnect(true);
   const String ssid = config_.wifi_ssid.length() > 0 ? config_.wifi_ssid : String(CARDPUTER_WIFI_SSID);
   const String password = config_.wifi_password.length() > 0 ? config_.wifi_password : String(CARDPUTER_WIFI_PASSWORD);
   WiFi.begin(ssid.c_str(), password.c_str());

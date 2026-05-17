@@ -34,6 +34,7 @@ class NetworkManager {
   static String trimCopy(String value);
 
   unsigned long last_attempt_ms_ = 0;
+  unsigned long connect_started_ms_ = 0;
   bool connect_in_progress_ = false;
   RuntimeNetworkConfig config_;
 };
