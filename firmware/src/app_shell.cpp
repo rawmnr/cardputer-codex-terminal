@@ -44,13 +44,18 @@ void AppShell::begin() {
   network_.logMessage("App shell booted");
   const RuntimeNetworkConfig& runtime = network_.config();
   if (runtime.middleware_host.length() > 0) {
-    bridge_.configure(runtime.middleware_host, runtime.middleware_port, runtime.middleware_path);
+    bridge_.configure(runtime.middleware_host, runtime.middleware_port, runtime.middleware_path, runtime.middleware_token);
     if (runtime.middleware_token.length() > 0) {
       state_.bridge_status_line = "Middleware bridge configured from SD";
     }
     network_.logMessage(String("Middleware bridge configured from SD host ") + runtime.middleware_host);
   } else if (String(CARDPUTER_MIDDLEWARE_HOST).length() > 0) {
-    bridge_.configure(CARDPUTER_MIDDLEWARE_HOST, static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT), CARDPUTER_MIDDLEWARE_PATH);
+    bridge_.configure(
+      CARDPUTER_MIDDLEWARE_HOST,
+      static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT),
+      CARDPUTER_MIDDLEWARE_PATH,
+      CARDPUTER_MIDDLEWARE_TOKEN
+    );
     network_.logMessage(String("Middleware bridge configured from firmware defaults host ") + CARDPUTER_MIDDLEWARE_HOST);
   }
 
@@ -122,7 +127,14 @@ void AppShell::handleCommand(const String& command) {
       network_.logMessage("Wi-Fi configuration reloaded from SD");
       const RuntimeNetworkConfig& runtime = network_.config();
       if (runtime.middleware_host.length() > 0) {
-        bridge_.configure(runtime.middleware_host, runtime.middleware_port, runtime.middleware_path);
+        bridge_.configure(runtime.middleware_host, runtime.middleware_port, runtime.middleware_path, runtime.middleware_token);
+      } else if (String(CARDPUTER_MIDDLEWARE_HOST).length() > 0) {
+        bridge_.configure(
+          CARDPUTER_MIDDLEWARE_HOST,
+          static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT),
+          CARDPUTER_MIDDLEWARE_PATH,
+          CARDPUTER_MIDDLEWARE_TOKEN
+        );
       }
       state_.status_line = "Wi-Fi and SD config reloaded";
       append_activity_event(state_, state_.status_line);

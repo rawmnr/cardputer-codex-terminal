@@ -10,7 +10,7 @@ class MiddlewareLink {
  public:
   void begin(DeviceState& state);
   void tick(DeviceState& state);
-  void configure(const String& host, uint16_t port, const String& path);
+  void configure(const String& host, uint16_t port, const String& path, const String& auth_token);
   bool isConfigured() const;
   bool isConnected();
 

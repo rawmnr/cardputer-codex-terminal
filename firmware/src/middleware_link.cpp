@@ -12,18 +12,26 @@ void MiddlewareLink::begin(DeviceState& state) {
   instance_ = this;
   client_.onEvent(handleWebSocketEvent);
   if (CARDPUTER_MIDDLEWARE_HOST[0] != '\0') {
-    configure(CARDPUTER_MIDDLEWARE_HOST, static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT), CARDPUTER_MIDDLEWARE_PATH);
+    configure(
+      CARDPUTER_MIDDLEWARE_HOST,
+      static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT),
+      CARDPUTER_MIDDLEWARE_PATH,
+      CARDPUTER_MIDDLEWARE_TOKEN
+    );
   }
-  if (CARDPUTER_MIDDLEWARE_TOKEN[0] != '\0') {
+  if (CARDPUTER_MIDDLEWARE_TOKEN[0] != '\0' && auth_token_.length() == 0) {
     auth_token_ = CARDPUTER_MIDDLEWARE_TOKEN;
   }
 }
 
-void MiddlewareLink::configure(const String& host, uint16_t port, const String& path) {
+void MiddlewareLink::configure(const String& host, uint16_t port, const String& path, const String& auth_token) {
   host_ = host;
   port_ = port;
   path_ = path;
   configured_ = host_.length() > 0 && port_ > 0;
+  if (auth_token.length() > 0) {
+    auth_token_ = auth_token;
+  }
   started_ = false;
 }
 
