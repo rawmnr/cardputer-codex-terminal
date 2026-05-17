@@ -105,6 +105,34 @@ class SessionState:
             if content:
                 self.last_event = content
         elif event_type == "codex_usage":
+            data = payload.get("data", {})
+            rate_limits = data.get("rateLimits", {})
+            
+            primary = rate_limits.get("primary", {})
+            self.codex_usage_percent = int(primary.get("usedPercent", -1))
+            self.codex_usage_window_minutes = int(primary.get("windowDurationMins", 0))
+            self.codex_usage_resets_at = int(primary.get("resetsAt", 0))
+            
+            secondary = rate_limits.get("secondary", {})
+            self.codex_usage_secondary_percent = int(secondary.get("usedPercent", -1))
+            self.codex_usage_secondary_window_minutes = int(secondary.get("windowDurationMins", 0))
+            self.codex_usage_secondary_resets_at = int(secondary.get("resetsAt", 0))
+            
+            import time
+            now = time.time()
+            resets = []
+            if self.codex_usage_resets_at > now:
+                m = int((self.codex_usage_resets_at - now) // 60)
+                resets.append(f"{m}m")
+            if self.codex_usage_secondary_resets_at > now:
+                h = int((self.codex_usage_secondary_resets_at - now) // 3600)
+                resets.append(f"{h}h")
+            
+            if resets:
+                self.codex_usage_reset_line = f"Resets in {' / '.join(resets)}"
+            else:
+                self.codex_usage_reset_line = "Reset data pending"
+
             if content:
                 self.last_event = content
         elif event_type == "codex_status":
@@ -144,6 +172,13 @@ class SessionState:
             "status": self.status,
             "last_event": self.last_event,
             "state_epoch": self.state_epoch,
+            "codex_usage_percent": self.codex_usage_percent,
+            "codex_usage_secondary_percent": self.codex_usage_secondary_percent,
+            "codex_usage_window_minutes": self.codex_usage_window_minutes,
+            "codex_usage_secondary_window_minutes": self.codex_usage_secondary_window_minutes,
+            "codex_usage_resets_at": self.codex_usage_resets_at,
+            "codex_usage_secondary_resets_at": self.codex_usage_secondary_resets_at,
+            "codex_usage_reset_line": self.codex_usage_reset_line,
             "pending_approval_id": self.pending_approval_id,
             "pending_approval_title": self.pending_approval_title,
             "pending_approval_detail": self.pending_approval_detail,
@@ -209,14 +244,6 @@ class SessionIndex:
         sessions = {sid: s.to_dict() for sid, s in self.sessions.items()}
         return {
             "active_session_id": self.active_session_id,
-            "sessions": sessions,
-        }
-
-    def _new_session_id(self) -> str:
-        session_id = f"session-{self._next_session_number:06d}"
-        self._next_session_number += 1
-        return session_id
-on_id": self.active_session_id,
             "sessions": sessions,
         }
 
