@@ -1,5 +1,17 @@
 #include "text_screen.h"
 
+namespace {
+String trimToWidth(String value, size_t max_chars) {
+  if (value.length() <= max_chars) {
+    return value;
+  }
+  if (max_chars <= 3) {
+    return value.substring(0, max_chars);
+  }
+  return value.substring(0, max_chars - 3) + "...";
+}
+}
+
 void TextScreen::begin() {
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.fillScreen(BLACK);
@@ -26,8 +38,8 @@ void TextScreen::drawHeader(const DeviceState& state) {
   M5Cardputer.Display.setTextColor(WHITE, DARKGREY);
   M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.drawString(state.firmware_name.c_str(), 4, 4);
-  const String network_label = state.wifi_connected ? String("Wi-Fi") : String("Off");
-  M5Cardputer.Display.drawString(network_label.c_str(), M5Cardputer.Display.width() - 48, 4);
+  const String network_label = trimToWidth(state.network_status_line.length() > 0 ? state.network_status_line : String("Wi-Fi offline"), 24);
+  M5Cardputer.Display.drawString(network_label.c_str(), 78, 4);
   M5Cardputer.Display.setTextColor(WHITE, BLACK);
   M5Cardputer.Display.fillRect(0, 20, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 20, BLACK);
   M5Cardputer.Display.drawRect(0, 42, M5Cardputer.Display.width(), M5Cardputer.Display.height() - 62, DARKGREY);

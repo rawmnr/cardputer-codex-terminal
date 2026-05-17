@@ -47,10 +47,7 @@ void set_bridge_options(DeviceState& state, const std::array<String, 3>& options
 }
 
 void print_common_footer(Print& out) {
-  out.println();
-  out.println("Commands: /app buddy|push|pager|mcp | /wifi on|off | /codex idle|busy|approval|offline");
-  out.println("          /workspace <path> | /branch <name> | /thread <id>");
-  out.println("          /battery <0-100> | /usage <0-100> | /status <text> | /help");
+  (void)out;
 }
 }  // namespace
 

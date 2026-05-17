@@ -61,6 +61,7 @@ void AppShell::begin() {
   }
 
   bridge_.begin(state_);
+  network_.tick(state_);
   screen_.begin();
   switchTo(AppId::Buddy);
 }
