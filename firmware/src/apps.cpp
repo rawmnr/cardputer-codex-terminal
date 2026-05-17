@@ -149,8 +149,8 @@ void PushToCodexApp::onEnter(DeviceState& state) {
   state.ptt_sample_limit = kMaxSamples;
   state.ptt_sample_rate_hz = 16000;
   state.ptt_peak_amplitude = 0;
-  state.ptt_detail_line = "Hold SPACE to record a voice prompt";
-  state.status_line = "Hold SPACE to record a voice prompt";
+  state.ptt_detail_line = "Tap SPACE for a space, hold SPACE to record";
+  state.status_line = "Tap SPACE for a space, hold SPACE to record";
   append_activity_event(state, "Push-to-talk armed");
   if (!M5.Mic.isEnabled()) {
     state.ptt_state = PushToTalkState::Error;
@@ -654,8 +654,8 @@ void PushToCodexApp::finishRecording(DeviceState& state) {
       append_activity_event(state, "Voice prompt ready for middleware");
     } else if (state.ptt_state != PushToTalkState::Error) {
       state.ptt_state = PushToTalkState::Armed;
-      state.ptt_detail_line = "Hold SPACE to record a voice prompt";
-      state.status_line = "Hold SPACE to record a voice prompt";
+      state.ptt_detail_line = "Tap SPACE for a space, hold SPACE to record";
+      state.status_line = "Tap SPACE for a space, hold SPACE to record";
     }
     return;
   }
@@ -726,7 +726,7 @@ void PushToCodexApp::updatePttState(DeviceState& state) {
     state.ptt_peak_amplitude = peak_amplitude_;
   } else if (state.ptt_state != PushToTalkState::Error) {
     state.ptt_state = PushToTalkState::Armed;
-    state.ptt_detail_line = "Hold SPACE to record a voice prompt";
+    state.ptt_detail_line = "Tap SPACE for a space, hold SPACE to record";
   }
 }
 

@@ -6,11 +6,23 @@
 namespace {
 AppShell g_shell;
 bool g_last_space_state = false;
+bool g_space_hold_started = false;
+unsigned long g_space_pressed_at_ms = 0;
+constexpr unsigned long kPushToTalkHoldMs = 350;
 
 void poll_keyboard_input() {
   M5Cardputer.update();
 
   if (!M5Cardputer.Keyboard.isChange()) {
+    const auto status = M5Cardputer.Keyboard.keysState();
+    const bool push_mode = g_shell.isPushToCodexActive();
+    if (push_mode && status.space && !g_space_hold_started && g_space_pressed_at_ms > 0) {
+      const unsigned long held_ms = millis() - g_space_pressed_at_ms;
+      if (held_ms >= kPushToTalkHoldMs) {
+        g_shell.handlePushToTalk(true);
+        g_space_hold_started = true;
+      }
+    }
     return;
   }
 
@@ -27,7 +39,18 @@ void poll_keyboard_input() {
   if (status.space != g_last_space_state) {
     g_last_space_state = status.space;
     if (push_mode) {
-      g_shell.handlePushToTalk(status.space);
+      if (status.space) {
+        g_space_pressed_at_ms = millis();
+        g_space_hold_started = false;
+      } else {
+        if (g_space_hold_started) {
+          g_shell.handlePushToTalk(false);
+        } else {
+          g_shell.handleKeyboardInput(" ", false, false);
+        }
+        g_space_pressed_at_ms = 0;
+        g_space_hold_started = false;
+      }
     }
   }
 
