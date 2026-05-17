@@ -9,7 +9,7 @@ description: Codex onboarding for the Cardputer stack. Use when building the fir
 
 Use the bundled scripts and references to bring up the Cardputer/Codex stack end to end.
 
-Do not use the Claude OS `install_apps.py` or any UIFlow/MicroPython installer flow. This repository is Codex-native and uses PlatformIO firmware plus Python middleware.
+Do not use the legacy `install_apps.py` or any UIFlow/MicroPython installer flow. This repository is Codex-native and uses PlatformIO firmware plus Python middleware.
 
 ## Workflow
 
@@ -41,4 +41,3 @@ Use the helper scripts in `scripts/` when you want deterministic, repeatable ste
 - Keep `bridge_token` and `middleware_token` aligned when the bridge is reachable off-loopback.
 - Use physical approval paths for destructive actions.
 - Prefer `uv run python -m unittest discover -s tests -v` in `middleware/` and `python -m platformio run` in `firmware/`.
-
