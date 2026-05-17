@@ -33,6 +33,7 @@ class MiddlewareLink {
     const String& firmware_name,
     const String& network_status_line
   );
+  bool sendInterrupt(const String& thread_id);
   bool sendStatusRequest();
 
  private:

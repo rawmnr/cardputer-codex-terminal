@@ -156,6 +156,11 @@ bool MiddlewareLink::sendDisplaySnapshot(
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "display_snapshot", payload));
 }
 
+bool MiddlewareLink::sendInterrupt(const String& thread_id) {
+  String payload = String("{\"thread_id\":\"") + escapeJson(thread_id) + "\"}";
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "interrupt", payload));
+}
+
 bool MiddlewareLink::sendStatusRequest() {
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "status_request", "{}"));
 }

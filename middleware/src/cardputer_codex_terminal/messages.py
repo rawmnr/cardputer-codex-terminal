@@ -23,6 +23,7 @@ class CardputerMessageType(StrEnum):
     BRIDGE_QUESTION = "bridge_question"
     BRIDGE_CONFIRMATION = "bridge_confirmation"
     BRIDGE_RESPONSE = "bridge_response"
+    INTERRUPT = "interrupt"
     PING = "ping"
 
 

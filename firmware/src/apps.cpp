@@ -404,7 +404,14 @@ void PagerApp::onCommand(const String& command, DeviceState& state) {
 
   if (trimmed == "i" || trimmed == "interrupt" || trimmed == "/interrupt") {
     if (canInterrupt(state)) {
-      state.status_line = "Interrupt is not wired yet";
+      const PagerSessionSummary* session = selectedSession(state);
+      const String thread_id = session != nullptr ? session->thread_id : state.codex_thread_id;
+      if (bridge_ != nullptr && thread_id.length() > 0) {
+        bridge_->sendInterrupt(thread_id);
+        state.status_line = "Interrupt sent";
+      } else {
+        state.status_line = "Nothing to interrupt";
+      }
     } else {
       state.status_line = "Interrupt unavailable";
     }

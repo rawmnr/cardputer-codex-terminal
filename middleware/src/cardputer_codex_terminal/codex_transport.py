@@ -164,6 +164,11 @@ class JsonRpcCodexAppServerTransport(CodexTransport):
             if reply.kind == "completed":
                 return
 
+    async def interrupt_turn(self, thread_id: str) -> None:
+        if not self._initialized:
+            return
+        await self._notify("turn/interrupt", {"threadId": thread_id})
+
     async def _request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         request_id = self._new_id(method)
         payload: dict[str, Any] = {"id": request_id, "method": method}

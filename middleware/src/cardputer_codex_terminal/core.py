@@ -552,7 +552,7 @@ class MiddlewareApp:
                     "approval_title": self.session.pending_approval_title,
                     "approval_detail": self.session.pending_approval_detail,
                     "sessions": sessions,
-                    "interrupt_supported": False,
+                    "interrupt_supported": True,
                     "bridge_prompt_kind": self.session.bridge_prompt_kind,
                     "bridge_prompt_title": self.session.bridge_prompt_title,
                     "bridge_prompt_detail": self.session.bridge_prompt_detail,
@@ -565,6 +565,15 @@ class MiddlewareApp:
             )
             self._notify([event])
             return [event]
+
+        if message.type == CardputerMessageType.INTERRUPT:
+            thread_id = message.payload.get("thread_id") or self.session.thread_id
+            if thread_id:
+                await self.transport.interrupt_turn(thread_id)
+                event = Event(EventType.CODEX_STATUS, {"kind": "status", "content": "interrupt sent", "threadId": thread_id})
+                self._notify([event])
+                return [event]
+            return []
 
         event = Event(EventType.CODEX_STATUS, {"content": routed.status_line, "kind": "router"})
         self._notify([event])
