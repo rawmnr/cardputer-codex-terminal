@@ -141,6 +141,7 @@ class SessionState:
             "title": self.title,
             "status": self.status,
             "last_event": self.last_event,
+            "state_epoch": self.state_epoch,
             "pending_approval_id": self.pending_approval_id,
             "pending_approval_title": self.pending_approval_title,
             "pending_approval_detail": self.pending_approval_detail,
@@ -254,4 +255,6 @@ class SessionIndex:
     def _new_session_id(self) -> str:
         session_id = f"session-{self._next_session_number:06d}"
         self._next_session_number += 1
+        return session_id
+n_number += 1
         return session_id

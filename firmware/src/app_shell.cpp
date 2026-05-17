@@ -118,6 +118,7 @@ void AppShell::begin() {
   network_.tick(state_);
   screen_.begin();
   push_to_codex_app_.setBridge(&bridge_);
+  pager_app_.setBridge(&bridge_);
   mcp_bridge_app_.setBridge(&bridge_);
   switchTo(AppId::Buddy);
 }
@@ -131,7 +132,7 @@ void AppShell::handleCommand(const String& command) {
   if (trimmed == "/help") {
     Serial.println("Menu-first UI:");
     Serial.println("  Ctrl-M             open app menu");
-    Serial.println("  W/S                move selection");
+    Serial.println("  Fn+; / Fn+.        move selection");
     Serial.println("  Enter              select / approve");
     Serial.println("  Del                back / reject");
     Serial.println("  Space              contextual action");
@@ -678,7 +679,7 @@ AppId AppShell::appForTab(size_t tab_index) const {
 
 String AppShell::footerHint() const {
   if (state_.menu.app_menu_open) {
-    return "W/S Move  Enter Open  Del Close";
+    return "Fn+;/. Move  Enter Open  Del Close";
   }
 
   if (state_.approval_pending) {
@@ -686,7 +687,7 @@ String AppShell::footerHint() const {
   }
 
   if (state_.bridge_prompt_pending) {
-    return "W/S Select  Enter OK  Del Reject";
+    return "Fn+;/. Select  Enter OK  Del Reject";
   }
 
   if (state_.menu.command_palette_open) {
@@ -703,15 +704,15 @@ String AppShell::footerHint() const {
         case PagerScreen::Compose:
           return "Enter Send  Del Back  Ctrl-M Menu";
         case PagerScreen::Inbox:
-          return "W/S Move  Enter Detail  Del Back";
+          return "Fn+;/. Move  Enter Detail  Del Back";
         case PagerScreen::Detail:
-          return "W/S Browse  Enter Reply  Del Back";
+          return "Fn+;/. Browse  Enter Reply  Del Back";
       }
       break;
     case AppId::McpBridge:
-      return "W/S Select  Enter OK  Del Back";
+      return "Fn+;/. Select  Enter OK  Del Back";
     case AppId::Settings:
-      return "W/S Move  Enter Inspect  Del Back";
+      return "Fn+;/. Move  Enter Inspect  Del Back";
   }
 
   return "Ctrl-M Menu  Enter Select  Del Back";

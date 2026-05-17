@@ -388,6 +388,23 @@ class MiddlewareApp:
                     {"content": reply.content, "kind": reply.kind, "data": reply.data},
                 )
             )
+        if (
+            not isinstance(self.transport, MockCodexTransport)
+            and events
+            and events[-1].type == EventType.CODEX_STATUS
+            and events[-1].payload.get("kind") == "completed"
+        ):
+            events.append(
+                Event(
+                    EventType.CODEX_STATUS,
+                    {
+                        "kind": "session_status",
+                        "content": "idle",
+                        "threadId": self.session.thread_id,
+                        "status": "done",
+                    },
+                )
+            )
         return events
 
     async def handle_cardputer_message(self, message: CardputerMessage) -> list[Event]:
@@ -497,8 +514,28 @@ class MiddlewareApp:
             return [event]
 
         if message.type == CardputerMessageType.STATUS_REQUEST:
-            active_session = self.session_index.current() or self.session
-            session_index_payload = self.session_index.to_dict()
+            sessions = []
+            for s in self.session_index.ordered_sessions()[:10]:
+                sd = s.to_dict()
+                # Prune and limit events to the most recent 5
+                if "events" in sd and isinstance(sd["events"], list):
+                    pruned_events = []
+                    for ev in sd["events"][-5:]:
+                        ev_type = ev.get("type", "")
+                        ev_payload = ev.get("payload", {})
+                        # Only keep what the firmware uses: content/text/message/kind
+                        # Note: we collapse it into a simpler structure for the firmware's convenience if possible,
+                        # but keeping the existing structure is safer to avoid firmware changes.
+                        # The firmware uses: doc["payload"]["content"] | doc["payload"]["text"] | doc["payload"]["message"] | ""
+                        # and event_payload["kind"]
+                        p = {}
+                        for k in ("content", "text", "message", "kind"):
+                            if k in ev_payload:
+                                p[k] = ev_payload[k]
+                        pruned_events.append({"type": ev_type, "payload": p})
+                    sd["events"] = pruned_events
+                sessions.append(sd)
+
             event = Event(
                 EventType.CODEX_STATUS,
                 {
@@ -510,12 +547,11 @@ class MiddlewareApp:
                     "title": self.session.title,
                     "status": self.session.status,
                     "last_event": self.session.last_event,
+                    "state_epoch": self.session.state_epoch,
                     "approval_id": self.session.pending_approval_id,
                     "approval_title": self.session.pending_approval_title,
                     "approval_detail": self.session.pending_approval_detail,
-                    "session_index": session_index_payload,
-                    "sessions": list(session_index_payload["sessions"].values()),
-                    "selected_session": active_session.to_dict() if active_session is not None else None,
+                    "sessions": sessions,
                     "interrupt_supported": False,
                     "bridge_prompt_kind": self.session.bridge_prompt_kind,
                     "bridge_prompt_title": self.session.bridge_prompt_title,

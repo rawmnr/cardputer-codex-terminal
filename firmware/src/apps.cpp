@@ -465,6 +465,12 @@ void PagerApp::onCommand(const String& command, DeviceState& state) {
 }
 
 void PagerApp::onSubmit(const String& command, DeviceState& state) {
+  const String prompt = compose_draft_.length() > 0 ? compose_draft_ : trim_copy(command);
+  if (state.pager_screen == PagerScreen::Compose || detail_reply_mode_ || state.pager_screen == PagerScreen::Detail) {
+    sendReply(state, prompt);
+    return;
+  }
+
   onCommand(command, state);
 }
 
@@ -562,7 +568,6 @@ void PagerApp::tick(DeviceState& state) {
 }
 
 void PagerApp::render(Print& out, const DeviceState& state) {
-  const_cast<PagerApp*>(this)->syncSelectionFromState(const_cast<DeviceState&>(state));
   out.print("[ ");
   out.print(pager_screen_label(state.pager_screen));
   out.print(" ]");
@@ -714,9 +719,16 @@ bool PagerApp::sendReply(DeviceState& state, const String& prompt) {
   append_activity_event(state, state.status_line);
   detail_reply_mode_ = false;
   compose_draft_ = "";
-  state.pager_screen = PagerScreen::Detail;
+  // If the user composed without picking a session first, bounce back to the Inbox
+  // instead of showing an empty Detail card.
+  state.pager_screen = (selectedSession(state) != nullptr) ? PagerScreen::Detail
+                                                           : PagerScreen::Inbox;
   state.ui_mode = UiMode::Menu;
   return true;
+}
+
+void PagerApp::setBridge(MiddlewareLink* bridge) {
+  bridge_ = bridge;
 }
 
 bool PagerApp::canInterrupt(const DeviceState& state) const {
@@ -1061,7 +1073,7 @@ void SettingsApp::onExit(DeviceState& state) {
 void SettingsApp::onCommand(const String& command, DeviceState& state) {
   const String trimmed = trim_copy(command);
   if (trimmed == "/help") {
-    state.status_line = "Use W/S, Enter, Del, and Ctrl-M menu";
+    state.status_line = "Use Fn+;/. Enter Del and Ctrl-M menu";
     append_activity_event(state, state.status_line);
   }
 }
@@ -1088,7 +1100,7 @@ void SettingsApp::onAction(UiAction action, DeviceState& state) {
         state.status_line = state.bridge_status_line.length() > 0 ? state.bridge_status_line : "Bridge not configured";
         break;
       case 2:
-        state.status_line = "Ctrl-M menu, W/S move, Enter select, Del back";
+        state.status_line = "Ctrl-M menu, Fn+;/. move, Enter select, Del back";
         break;
       case 3:
         state.status_line = state.firmware_name;
@@ -1128,7 +1140,7 @@ void SettingsApp::render(Print& out, const DeviceState& state) {
       break;
     case 2:
       out.println(" Ctrl-M menu");
-      out.println(" W/S  move selection");
+      out.println(" Fn+;/. move selection");
       out.println(" Ent  select / accept");
       out.println(" Del  back / reject");
       out.println(" SPC  push-to-talk");

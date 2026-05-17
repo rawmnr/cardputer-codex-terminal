@@ -85,6 +85,7 @@ class PagerApp final : public App {
   void onTextInput(const String& text, bool backspace, DeviceState& state) override;
   void onSubmit(const String& command, DeviceState& state) override;
   void onAction(UiAction action, DeviceState& state) override;
+  void setBridge(MiddlewareLink* bridge);
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
 

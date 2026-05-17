@@ -129,6 +129,42 @@ class TransportTests(unittest.TestCase):
         self.assertIn('"permissions": {"network": {"enabled": true}}', sent[-1])
         self.assertIn('"scope": "turn"', sent[-1])
 
+    def test_transport_synthesizes_missing_approval_id(self) -> None:
+        async def connect_factory(_: str) -> FakeWebSocket:
+            return FakeWebSocket(
+                [
+                    {"id": "initialize-1", "result": {}},
+                    {"id": "turn-start-2", "result": {"turn": {"id": "turn_123", "items": [], "status": "inProgress"}}},
+                    {
+                        "method": "item/commandExecution/requestApproval",
+                        "params": {
+                            "command": "Remove-Item build",
+                            "itemId": "item_123",
+                            "reason": "Approval required",
+                            "threadId": "thr_456",
+                            "turnId": "turn_456",
+                        },
+                    },
+                ]
+            )
+
+        async def scenario() -> tuple[str, list[str]]:
+            transport = LocalWebSocketCodexTransport("ws://127.0.0.1:9000", connect_factory=connect_factory)
+            await transport.initialize()
+            async for reply in transport.start_turn("Needs approval", thread_id="thr_456"):
+                if reply.kind == "approval_request":
+                    approval_id = str(reply.data.get("approval_id") or "")
+                    self.assertTrue(approval_id)
+                    await transport.submit_approval(approval_id, True)
+                    websocket = transport._ws
+                    assert websocket is not None
+                    return approval_id, websocket.sent
+            raise AssertionError("approval request was not produced")
+
+        approval_id, sent = asyncio.run(scenario())
+        self.assertTrue(approval_id.startswith("item/commandExecution/requestApproval-approval-"))
+        self.assertTrue(any(f'"id": "{approval_id}"' in item and '"decision": "accept"' in item for item in sent))
+
     def test_stdio_transport_rejects_empty_command(self) -> None:
         from cardputer_codex_terminal.codex_transport import StdioCodexAppServerTransport
 

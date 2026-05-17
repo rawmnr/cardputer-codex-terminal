@@ -46,7 +46,7 @@ cardputer-codex-terminal.bin
 - App selection is menu-driven, opened with `Ctrl-M`, not a persistent tab bar.
 - The shell chrome uses a slim dark header with status dots, a color-coded Codex pill, and a footer that switches between hints and the command palette input line.
 - The app menu is an overlay list, while app views stay compact and avoid repeating global status that already lives in the chrome.
-- Global navigation: `Ctrl-M` opens the app menu, `W/S` move selection, `Enter` select/approve, `Del` back/reject.
+- Global navigation: `Ctrl-M` opens the app menu, `Fn+; / Fn+.` move selection, `Enter` select/approve, `Del` back/reject.
 - Contextual footer hints replace the old shell-first help as the primary on-device guide.
 - Command palette remains available through `/`, but it is now the debug layer rather than the default flow.
 - Approval screen: requested action, accept/reject.

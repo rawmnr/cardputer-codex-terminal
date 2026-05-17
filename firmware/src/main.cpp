@@ -10,7 +10,16 @@ bool g_space_hold_started = false;
 unsigned long g_space_pressed_at_ms = 0;
 constexpr unsigned long kPushToTalkHoldMs = 350;
 
-bool mapNavigationChar(char ch, UiAction& action) {
+bool mapNavigationChar(char ch, bool fn, UiAction& action) {
+  if (fn && ch == ';') {
+    action = UiAction::Up;
+    return true;
+  }
+  if (fn && ch == '.') {
+    action = UiAction::Down;
+    return true;
+  }
+
   switch (ch) {
     case 'a':
     case 'A':
@@ -23,14 +32,6 @@ bool mapNavigationChar(char ch, UiAction& action) {
     case '.':
     case '\'':
       action = UiAction::Right;
-      return true;
-    case 'w':
-    case 'W':
-      action = UiAction::Up;
-      return true;
-    case 's':
-    case 'S':
-      action = UiAction::Down;
       return true;
     default:
       return false;
@@ -124,7 +125,7 @@ void poll_keyboard_input() {
     for (size_t i = 0; i < typed.length(); ++i) {
       const char ch = typed[i];
       UiAction action = UiAction::None;
-      if (mapNavigationChar(ch, action)) {
+      if (mapNavigationChar(ch, status.fn, action)) {
         g_shell.handleAction(action);
       } else {
         sendTypedChar(ch);

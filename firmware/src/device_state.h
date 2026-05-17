@@ -101,6 +101,7 @@ struct DeviceState {
   int battery_voltage_mv = 0;
   int ptt_peak_amplitude = 0;
   int codex_usage_percent = -1;
+  uint32_t state_epoch = 0;
   int codex_usage_window_minutes = 0;
   uint32_t codex_usage_resets_at = 0;
   String codex_workspace_path = ".";

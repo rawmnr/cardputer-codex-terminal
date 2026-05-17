@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+import asyncio
 from typing import Any, AsyncIterator
 
 from .core import MiddlewareApp
-from .events import Event
+from .events import Event, EventType
 from .messages import CardputerMessage
 
 
@@ -26,12 +27,35 @@ class CardputerBridgeServer:
         )
 
     async def handle_connection(self, websocket: Any) -> None:
+        queue: asyncio.Queue[str] = asyncio.Queue()
+
+        def observer(events: list[Event]) -> None:
+            for event in events:
+                # We specifically want to push status and deltas to keep the firmware in sync
+                if event.type in {EventType.CODEX_STATUS, EventType.CODEX_DELTA, EventType.CODEX_USAGE, EventType.APPROVAL_REQUEST, EventType.ERROR}:
+                    # If it's a generic status, ensure we include the epoch
+                    payload = dict(event.payload)
+                    if event.type == EventType.CODEX_STATUS:
+                        payload["state_epoch"] = self.app.session.state_epoch
+                    
+                    msg = json.dumps({
+                        "type": event.type.value,
+                        "payload": payload
+                    }, ensure_ascii=False)
+                    queue.put_nowait(msg)
+
+        # Register the observer
+        prev_observer = self.app.event_observer
+        self.app.event_observer = observer
+
+        # Push initial status
         await websocket.send(
             json.dumps(
                 {
                     "type": "codex_status",
                     "payload": {
                         "kind": "bridge_connected",
+                        "state_epoch": self.app.session.state_epoch,
                         "workspace_path": self.app.session.workspace_path,
                         "branch": self.app.session.branch,
                         "thread_id": self.app.session.thread_id,
@@ -40,10 +64,25 @@ class CardputerBridgeServer:
             )
         )
 
-        async for raw_message in websocket:
-            responses = await self.handle_raw_message(raw_message)
-            for response in responses:
-                await websocket.send(response)
+        async def push_loop():
+            try:
+                while True:
+                    msg = await queue.get()
+                    await websocket.send(msg)
+                    queue.task_done()
+            except Exception:
+                pass
+
+        push_task = asyncio.create_task(push_loop())
+
+        try:
+            async for raw_message in websocket:
+                responses = await self.handle_raw_message(raw_message)
+                for response in responses:
+                    await websocket.send(response)
+        finally:
+            push_task.cancel()
+            self.app.event_observer = prev_observer
 
     async def handle_raw_message(self, raw_message: str) -> list[str]:
         payload = json.loads(raw_message)

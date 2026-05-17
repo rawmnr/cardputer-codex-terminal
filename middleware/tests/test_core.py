@@ -221,6 +221,15 @@ class MiddlewareAppTests(unittest.TestCase):
                         "data": {"threadId": "thr_123", "turn": {"id": "turn_123", "items": [], "status": "completed"}},
                     },
                 },
+                {
+                    "type": EventType.CODEX_STATUS.value,
+                    "payload": {
+                        "kind": "session_status",
+                        "content": "idle",
+                        "threadId": "thr_123",
+                        "status": "done",
+                    },
+                },
             ],
         )
 

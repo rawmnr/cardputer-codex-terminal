@@ -226,7 +226,7 @@ void TextScreen::drawAppMenu(const DeviceState& state) {
 
   canvas_.setTextColor(COL_MUTED, COL_HEADER);
   canvas_.setCursor(8, kCanvasH - 12);
-  canvas_.print("W/S move  Enter open  Del close");
+  canvas_.print("Fn+;/. move  Enter open  Del close");
   canvas_.pushSprite(kCanvasX, kCanvasY);
 }
 

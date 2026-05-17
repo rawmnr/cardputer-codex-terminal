@@ -236,6 +236,14 @@ bool MiddlewareLink::ensureConnection(DeviceState& state) {
 }
 
 void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload) {
+  if (payload.containsKey("state_epoch")) {
+    uint32_t incoming_epoch = payload["state_epoch"];
+    if (incoming_epoch <= state.state_epoch && incoming_epoch != 0) {
+      return;
+    }
+    state.state_epoch = incoming_epoch;
+  }
+
   const String kind = payload["kind"] | "";
   const String content = payload["content"] | "";
 

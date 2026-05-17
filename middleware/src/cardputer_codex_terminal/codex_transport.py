@@ -76,6 +76,7 @@ class JsonRpcCodexAppServerTransport(CodexTransport):
     def __init__(self) -> None:
         self._initialized = False
         self._next_id = 1
+        self._next_approval_id = 1
         self._approval_requests: dict[str, tuple[str, dict[str, Any]]] = {}
 
     async def initialize(self) -> None:
@@ -197,6 +198,11 @@ class JsonRpcCodexAppServerTransport(CodexTransport):
         self._next_id += 1
         return request_id
 
+    def _new_approval_id(self, prefix: str) -> str:
+        approval_id = f"{prefix}-approval-{self._next_approval_id}"
+        self._next_approval_id += 1
+        return approval_id
+
     @abstractmethod
     async def _ensure_connection(self) -> None:
         raise NotImplementedError
@@ -260,10 +266,12 @@ class JsonRpcCodexAppServerTransport(CodexTransport):
             "applyPatchApproval",
         }:
             data = dict(params)
-            data["approval_id"] = str(message.get("id") or params.get("approvalId") or "")
+            approval_id = str(message.get("id") or params.get("approvalId") or "")
+            if not approval_id:
+                approval_id = self._new_approval_id(method)
+            data["approval_id"] = approval_id
             data["server_request_method"] = method
-            if data["approval_id"]:
-                self._approval_requests[data["approval_id"]] = (method, dict(params))
+            self._approval_requests[data["approval_id"]] = (method, dict(params))
             return CodexReply("approval_request", "approval requested", data)
         if method == "turn/completed":
             turn = params.get("turn")
@@ -352,6 +360,11 @@ class JsonRpcCodexAppServerTransport(CodexTransport):
 
 
 class StdioCodexAppServerTransport(JsonRpcCodexAppServerTransport):
+    # Codex app-server can emit large JSON payloads, especially for streamed
+    # deltas and initial session snapshots. The asyncio default line limit is
+    # too small for that output, so we raise it for the subprocess pipes.
+    _stream_limit = 1024 * 1024
+
     def __init__(self, command: list[str] | None = None, cwd: str | None = None) -> None:
         super().__init__()
         self.command = command or ["codex", "app-server"]
@@ -393,6 +406,7 @@ class StdioCodexAppServerTransport(JsonRpcCodexAppServerTransport):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=self.cwd,
+            limit=self._stream_limit,
         )
         self._stderr_task = asyncio.create_task(self._drain_stderr())
 
