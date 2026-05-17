@@ -65,7 +65,7 @@ class MiddlewareAppTests(unittest.TestCase):
             ],
         )
 
-    def test_status_request_includes_session_index_snapshot(self) -> None:
+    def test_status_request_includes_session_snapshot(self) -> None:
         async def scenario() -> dict[str, object]:
             app = MiddlewareApp(
                 AppConfig(
@@ -79,21 +79,17 @@ class MiddlewareAppTests(unittest.TestCase):
             await app.handle_text_prompt("Hello Codex")
             events = await app.handle_cardputer_message(CardputerMessage(CardputerMessageType.STATUS_REQUEST, {}))
             payload = events[0].to_dict()["payload"]
-            return {
-                "session_index": payload["session_index"],
-                "sessions": payload["sessions"],
-                "selected_session": payload["selected_session"],
-            }
+            return payload
 
         payload = asyncio.run(scenario())
 
-        self.assertEqual(payload["session_index"]["active_session_id"], "session-000001")
-        self.assertEqual(len(payload["session_index"]["sessions"]), 1)
-        active_session = next(iter(payload["session_index"]["sessions"].values()))
+        self.assertEqual(payload["active_session_id"], "session-000001")
+        self.assertEqual(len(payload["sessions"]), 1)
+        active_session = payload["sessions"][0]
         self.assertEqual(active_session["title"], "Hello Codex")
         self.assertEqual(active_session["status"], "done")
-        self.assertGreaterEqual(len(active_session["events"]), 2)
-        self.assertEqual(payload["selected_session"]["session_id"], "session-000001")
+        self.assertGreaterEqual(len(active_session["events"]), 1)
+        self.assertEqual(active_session["session_id"], "session-000001")
 
     def test_voice_prompt_buffer_transcribes_to_prompt_flow(self) -> None:
         async def scenario() -> tuple[list[dict], dict[str, object]]:

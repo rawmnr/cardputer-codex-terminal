@@ -8,23 +8,15 @@ def _trim_text(value: str, limit: int = 64) -> str:
     text = value.strip()
     if len(text) <= limit:
         return text
-    if limit <= 3:
-        return text[:limit]
     return text[: limit - 3] + "..."
 
 
 def _event_payload(event: Any) -> tuple[str, dict[str, Any]]:
-    if hasattr(event, "to_dict"):
-        event_dict = event.to_dict()
-    elif isinstance(event, dict):
-        event_dict = event
-    else:
-        event_dict = {}
-    event_type = str(event_dict.get("type") or "")
-    payload = event_dict.get("payload")
-    if not isinstance(payload, dict):
-        payload = {}
-    return event_type, payload
+    if hasattr(event, "type") and hasattr(event, "payload"):
+        return str(event.type), dict(event.payload)
+    if isinstance(event, dict):
+        return str(event.get("type", "")), dict(event.get("payload", {}))
+    return "unknown", {}
 
 
 @dataclass(slots=True)
@@ -48,6 +40,7 @@ class SessionState:
     bridge_prompt_danger: bool | None = None
     bridge_prompt_options: tuple[str, ...] = ()
     bridge_prompt_selected_index: int = 0
+    state_epoch: int = 0
     events: list[dict[str, Any]] = field(default_factory=list)
 
     _max_events = 24
@@ -59,8 +52,10 @@ class SessionState:
             self.branch = branch or None
         if thread_id is not None:
             self.thread_id = thread_id or None
+        self.state_epoch += 1
 
     def record_event(self, event: Any) -> None:
+        self.state_epoch += 1
         event_type, payload = _event_payload(event)
         event_dict = event.to_dict() if hasattr(event, "to_dict") else event if isinstance(event, dict) else {"type": event_type, "payload": payload}
         if not isinstance(event_dict, dict):
@@ -152,7 +147,7 @@ class SessionState:
             "bridge_prompt_channel": self.bridge_prompt_channel,
             "bridge_prompt_urgency": self.bridge_prompt_urgency,
             "bridge_prompt_danger": self.bridge_prompt_danger,
-            "bridge_prompt_options": list(self.bridge_prompt_options),
+            "bridge_prompt_options": self.bridge_prompt_options,
             "bridge_prompt_selected_index": self.bridge_prompt_selected_index,
             "events": self.events,
         }
@@ -169,84 +164,42 @@ class SessionIndex:
             return None
         return self.sessions.get(self.active_session_id)
 
-    def ensure_active(
-        self,
-        *,
-        workspace_path: str = ".",
-        branch: str | None = None,
-        thread_id: str | None = None,
-        title: str | None = None,
-    ) -> SessionState:
-        if thread_id:
-            existing = self.find_by_thread_id(thread_id)
-            if existing is not None:
-                self.active_session_id = existing.session_id
-                existing.touch(workspace_path=workspace_path, branch=branch, thread_id=thread_id)
-                if title:
-                    existing.title = title
-                return existing
+    def select(self, session_id: str) -> SessionState | None:
+        if session_id in self.sessions:
+            self.active_session_id = session_id
+            return self.sessions[session_id]
+        return None
 
-        current = self.current()
-        if current is not None:
-            current.touch(workspace_path=workspace_path, branch=branch, thread_id=thread_id)
-            if title:
-                current.title = title
-            return current
-
-        return self.create_session(workspace_path=workspace_path, branch=branch, thread_id=thread_id, title=title)
-
-    def create_session(
-        self,
-        *,
-        workspace_path: str = ".",
-        branch: str | None = None,
-        thread_id: str | None = None,
-        title: str | None = None,
-    ) -> SessionState:
+    def start_new(self, workspace_path: str = ".", branch: str | None = None) -> SessionState:
         session_id = self._new_session_id()
-        session = SessionState(
-            session_id=session_id,
-            workspace_path=workspace_path,
-            branch=branch,
-            thread_id=thread_id,
-            title=title or (thread_id if thread_id else "Untitled session"),
-        )
+        session = SessionState(session_id, workspace_path=workspace_path, branch=branch)
         self.sessions[session_id] = session
         self.active_session_id = session_id
         return session
 
-    def activate(self, session_id: str) -> SessionState | None:
-        session = self.sessions.get(session_id)
-        if session is None:
-            return None
-        self.active_session_id = session_id
-        return session
-
-    def find_by_thread_id(self, thread_id: str) -> SessionState | None:
-        for session in self.sessions.values():
-            if session.thread_id == thread_id:
-                return session
-        return None
-
-    def record(self, events: list[Any]) -> SessionState | None:
+    def ensure_active(self, workspace_path: str = ".", branch: str | None = None, thread_id: str | None = None, title: str | None = None) -> SessionState:
         session = self.current()
         if session is None:
-            session = self.create_session()
-        for event in events:
-            session.record_event(event)
+            session = self.start_new(workspace_path, branch)
+        if thread_id is not None:
+            session.thread_id = thread_id
+        if title is not None:
+            session.title = title
         return session
 
+    def record(self, events: list[Any]) -> None:
+        session = self.current()
+        if session is None:
+            session = self.start_new()
+
+        for event in events:
+            session.record_event(event)
+
     def ordered_sessions(self) -> list[SessionState]:
-        sessions = list(self.sessions.values())
-        if self.active_session_id is None:
-            return sessions
-        active = self.sessions.get(self.active_session_id)
-        if active is None:
-            return sessions
-        return [active] + [session for session in sessions if session.session_id != active.session_id]
+        return sorted(self.sessions.values(), key=lambda s: s.session_id, reverse=True)
 
     def to_dict(self) -> dict[str, Any]:
-        sessions = {session.session_id: session.to_dict() for session in self.ordered_sessions()}
+        sessions = {sid: s.to_dict() for sid, s in self.sessions.items()}
         return {
             "active_session_id": self.active_session_id,
             "sessions": sessions,
@@ -255,6 +208,4 @@ class SessionIndex:
     def _new_session_id(self) -> str:
         session_id = f"session-{self._next_session_number:06d}"
         self._next_session_number += 1
-        return session_id
-n_number += 1
         return session_id

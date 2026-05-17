@@ -102,12 +102,36 @@ async def run_async(args: argparse.Namespace) -> int:
 
         bridge = CardputerBridgeServer(app)
 
+        # Register mDNS service for local discovery
+        zc: Zeroconf | None = None
+        if HAS_ZEROCONF:
+            zc = Zeroconf(ip_version=IPVersion.V4Only)
+            local_ip = "127.0.0.1"
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+            except Exception:
+                pass
+
+            info = ServiceInfo(
+                "_cardputer-codex._tcp.local.",
+                "Cardputer Codex Terminal._cardputer-codex._tcp.local.",
+                addresses=[socket.inet_aton(local_ip)],
+                port=args.port,
+                server="cardputer-codex.local.",
+            )
+            zc.register_service(info)
+
         async def handler(websocket: object, *_: object) -> None:
             await bridge.handle_connection(websocket)
 
         try:
             async with websockets.serve(handler, args.host, args.port):
                 print(f"Cardputer bridge listening on ws://{args.host}:{args.port}")
+                if HAS_ZEROCONF and local_ip:
+                    print(f"mDNS service registered: {local_ip}:{args.port} (_cardputer-codex._tcp.local.)")
                 if args.prompt:
                     events = await app.handle_cardputer_message(
                         CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt}, id="msg-000001")
@@ -116,38 +140,9 @@ async def run_async(args: argparse.Namespace) -> int:
                         print(json.dumps(event.to_dict(), ensure_ascii=False))
                 await asyncio.Future()
         finally:
-            if preview is not None:
-                preview.close()
-        return 0
-
-    if args.prompt:
-        events = await app.handle_cardputer_message(
-            CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt}, id="msg-000001")
-        )
-        for event in events:
-            print(json.dumps(event.to_dict(), ensure_ascii=False))
-
-    if preview is not None:
-        try:
-            await asyncio.Future()
-        finally:
-            preview.close()
-        return 0
-
-    return 0
-
-
-def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
-    return asyncio.run(run_async(args))
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-nally:
-            zc.unregister_all_services()
-            zc.close()
+            if zc is not None:
+                zc.unregister_all_services()
+                zc.close()
             if preview is not None:
                 preview.close()
         return 0

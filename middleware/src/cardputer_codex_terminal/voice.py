@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 import base64
 import io
 import wave
-from typing import Protocol
+from typing import Protocol, Any
 
 
 class VoiceTranscriber(Protocol):
@@ -58,7 +59,6 @@ class FasterWhisperVoiceTranscriber:
 @dataclass(slots=True)
 class VoicePromptBuffer:
     pcm_chunks: list[bytes] = field(default_factory=list)
-...
     sample_rate_hz: int = 16000
     chunk_count: int = 0
 
@@ -75,11 +75,14 @@ class VoicePromptBuffer:
     def has_audio(self) -> bool:
         return len(self.pcm_chunks) > 0
 
-    def sample_count(self) -> int:
-        return sum(len(chunk) for chunk in self.pcm_chunks) // 2
+    def total_bytes(self) -> int:
+        return sum(len(chunk) for chunk in self.pcm_chunks)
 
     def byte_count(self) -> int:
-        return sum(len(chunk) for chunk in self.pcm_chunks)
+        return self.total_bytes()
+
+    def sample_count(self) -> int:
+        return self.total_bytes() // 2
 
     async def transcribe(self, transcriber: VoiceTranscriber) -> str:
         pcm_bytes = b"".join(self.pcm_chunks)
