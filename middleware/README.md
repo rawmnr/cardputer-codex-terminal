@@ -8,11 +8,14 @@ The initial scaffold provides:
 - an event model;
 - a Codex transport abstraction;
 - a mock for early local testing;
+- a stdio Codex app-server transport for the stable real-Codex path;
+- an explicit local WebSocket Codex app-server transport for debug / advanced use;
 - a WebSocket bridge for Cardputer clients.
 - a buffered voice prompt pipeline with a transcriber hook.
 
 The Cardputer message contract is versioned. Current protocol version: `1`.
 The bridge server can also require a shared `bridge_token` for remote access.
+For faster iteration, the middleware can now run a browser preview that mirrors the latest session state into local files under `.cardputer-dev/`.
 
 ## Tooling
 
@@ -35,6 +38,49 @@ Run the bridge server:
 ```bash
 uv run cardputer-codex-middleware --serve --bridge-token <shared-secret>
 ```
+
+Run against real Codex through the stable stdio app-server transport:
+
+```bash
+uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
+uv run cardputer-codex-middleware --serve --real-codex --bridge-token <shared-secret>
+```
+
+The middleware sends JSON-RPC-style app-server messages:
+
+```text
+initialize request -> initialized notification -> thread/start request -> turn/start request -> streamed server notifications
+```
+
+For version drift checks, generate the protocol schemas for the installed Codex build:
+
+```bash
+codex app-server generate-ts --out ./schemas
+codex app-server generate-json-schema --out ./schemas
+```
+
+WebSocket Codex app-server transport is available for local development only:
+
+```bash
+codex app-server --listen ws://127.0.0.1:9000
+uv run cardputer-codex-middleware --codex-transport websocket --codex-ws-url ws://127.0.0.1:9000
+```
+
+Run the local preview:
+
+```bash
+uv run cardputer-codex-middleware --preview
+```
+
+The preview serves a browser UI at `http://127.0.0.1:8787/` by default and mirrors:
+
+- `.cardputer-dev/state.json`
+- `.cardputer-dev/screen.txt`
+- `.cardputer-dev/log.txt`
+- `.cardputer-dev/events.jsonl`
+
+That gives Codex something stable to inspect live while the firmware loop stays on the mock path.
+When the real Cardputer firmware is connected, it also publishes `display_snapshot` events so the preview can show the live on-device screen text instead of only the middleware-generated view.
 
 ## Tests
 

@@ -20,6 +20,7 @@ Build a mobile physical interface for OpenAI Codex, based on the M5Stack Cardput
    - Speech-to-text transcription.
    - JSON-RPC client for `codex app-server`.
    - Routing of Codex events back to the Cardputer display.
+   - Local browser preview and mirrored dev files for fast iteration.
 
 3. **Codex app-server**
    - Thread management.
@@ -61,3 +62,5 @@ Local bridge notification or question -> Cardputer MCP Bridge -> physical select
 - Avoid direct public exposure of the Windows server.
 - Separate transport, transcription, and Codex protocol handling cleanly.
 - Treat the firmware as a binary deliverable first; source layout should always compile to a M5 Launcher-compatible `.bin`.
+- For development, prefer the browser preview and mirrored files under `.cardputer-dev/` before flashing the firmware.
+- The firmware should publish `display_snapshot` events so the preview can track the real on-device screen text when hardware is connected.

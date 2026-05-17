@@ -22,6 +22,14 @@ class MiddlewareLink {
   bool sendBridgeQuestion(const String& title, const String& detail, const std::array<String, 3>& options, size_t option_count);
   bool sendBridgeConfirmation(const String& title, const String& detail);
   bool sendBridgeResponse(bool accepted, size_t selected_index, const String& note);
+  bool sendDisplaySnapshot(
+    const String& screen_text,
+    const String& status_line,
+    const String& active_app,
+    const String& input_line,
+    const String& firmware_name,
+    const String& network_status_line
+  );
   bool sendStatusRequest();
 
  private:

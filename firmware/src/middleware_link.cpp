@@ -123,6 +123,23 @@ bool MiddlewareLink::sendBridgeResponse(bool accepted, size_t selected_index, co
   return sendCardputerMessage(buildEnvelope("bridge_response", payload));
 }
 
+bool MiddlewareLink::sendDisplaySnapshot(
+  const String& screen_text,
+  const String& status_line,
+  const String& active_app,
+  const String& input_line,
+  const String& firmware_name,
+  const String& network_status_line
+) {
+  String payload = String("{\"screen_text\":\"") + escapeJson(screen_text) +
+                   String("\",\"status_line\":\"") + escapeJson(status_line) +
+                   String("\",\"active_app\":\"") + escapeJson(active_app) +
+                   String("\",\"input_line\":\"") + escapeJson(input_line) +
+                   String("\",\"firmware_name\":\"") + escapeJson(firmware_name) +
+                   String("\",\"network_status_line\":\"") + escapeJson(network_status_line) + "\"}";
+  return sendCardputerMessage(buildEnvelope("display_snapshot", payload));
+}
+
 bool MiddlewareLink::sendStatusRequest() {
   return sendCardputerMessage(buildEnvelope("status_request", "{}"));
 }

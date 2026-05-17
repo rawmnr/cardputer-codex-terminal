@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from cardputer_codex_terminal.cli import build_parser
+from cardputer_codex_terminal.cli import _is_loopback_host, build_parser
 
 
 class CliTests(unittest.TestCase):
@@ -12,11 +12,23 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(args.host, "127.0.0.1")
         self.assertEqual(args.port, 8765)
+        self.assertEqual(args.codex_transport, "mock")
         self.assertEqual(args.codex_ws_url, "ws://127.0.0.1:9000")
+        self.assertEqual(args.codex_command, "codex")
         self.assertEqual(args.workspace, ".")
         self.assertIsNone(args.branch)
         self.assertIsNone(args.thread_id)
         self.assertFalse(args.real_codex)
         self.assertFalse(args.serve)
+        self.assertFalse(args.preview)
+        self.assertEqual(args.preview_host, "127.0.0.1")
+        self.assertEqual(args.preview_port, 8787)
         self.assertIsNone(args.bridge_token)
         self.assertEqual(args.prompt, "Hello Codex, start.")
+
+    def test_loopback_detection_for_bridge_safety(self) -> None:
+        self.assertTrue(_is_loopback_host("127.0.0.1"))
+        self.assertTrue(_is_loopback_host("::1"))
+        self.assertTrue(_is_loopback_host("localhost"))
+        self.assertFalse(_is_loopback_host("0.0.0.0"))
+        self.assertFalse(_is_loopback_host("192.168.1.20"))

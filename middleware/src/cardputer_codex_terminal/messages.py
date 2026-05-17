@@ -13,6 +13,7 @@ class CardputerMessageType(StrEnum):
     AUDIO_CHUNK = "audio_chunk"
     VOICE_PROMPT_READY = "voice_prompt_ready"
     APPROVAL_RESPONSE = "approval_response"
+    DISPLAY_SNAPSHOT = "display_snapshot"
     STATUS_REQUEST = "status_request"
     PROJECT_SELECT = "project_select"
     BRANCH_SELECT = "branch_select"

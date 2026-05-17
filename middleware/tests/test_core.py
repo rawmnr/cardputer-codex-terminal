@@ -8,12 +8,17 @@ from dataclasses import asdict
 
 from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
-from cardputer_codex_terminal.codex_transport import LocalWebSocketCodexTransport
+from cardputer_codex_terminal.codex_transport import LocalWebSocketCodexTransport, StdioCodexAppServerTransport
 from cardputer_codex_terminal.events import EventType
 from cardputer_codex_terminal.messages import CardputerMessage, CardputerMessageType
 
 
 class MiddlewareAppTests(unittest.TestCase):
+    def test_stdio_transport_is_the_real_codex_default(self) -> None:
+        app = MiddlewareApp(AppConfig(use_mock_codex=False))
+
+        self.assertIsInstance(app.transport, StdioCodexAppServerTransport)
+
     def test_mock_transport_initialization_and_prompt_flow(self) -> None:
         async def scenario() -> list[dict]:
             app = MiddlewareApp(
@@ -114,10 +119,16 @@ class MiddlewareAppTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.sent: list[str] = []
                 self.messages = [
-                    json.dumps({"kind": "status", "content": "initialized"}),
-                    json.dumps({"thread": {"id": "thr_123"}}),
-                    json.dumps({"thread": {"id": "thr_123"}}),
-                    json.dumps({"kind": "completed", "content": "done"}),
+                    json.dumps({"id": "initialize-1", "result": {}}),
+                    json.dumps({"id": "thread/start-2", "result": {"thread": {"id": "thr_123"}}}),
+                    json.dumps({"id": "thread/metadata/update-3", "result": {}}),
+                    json.dumps({"id": "turn-start-4", "result": {"turn": {"id": "turn_123", "items": [], "status": "inProgress"}}}),
+                    json.dumps(
+                        {
+                            "method": "turn/completed",
+                            "params": {"threadId": "thr_123", "turn": {"id": "turn_123", "items": [], "status": "completed"}},
+                        }
+                    ),
                 ]
 
             async def send(self, message: str) -> None:
@@ -135,6 +146,7 @@ class MiddlewareAppTests(unittest.TestCase):
                     host="127.0.0.1",
                     port=8765,
                     codex_ws_url="ws://127.0.0.1:9000",
+                    codex_transport="websocket",
                     use_mock_codex=False,
                 )
             )
@@ -170,7 +182,16 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertTrue(any('"method": "turn/start"' in item for item in sent))
         self.assertEqual(
             state["events"],
-            [{"type": EventType.CODEX_STATUS.value, "payload": {"content": "done", "kind": "completed", "data": {}}}],
+            [
+                {
+                    "type": EventType.CODEX_STATUS.value,
+                    "payload": {
+                        "content": "turn_completed",
+                        "kind": "completed",
+                        "data": {"threadId": "thr_123", "turn": {"id": "turn_123", "items": [], "status": "completed"}},
+                    },
+                },
+            ],
         )
 
     def test_bridge_prompt_flow_updates_session(self) -> None:
@@ -220,23 +241,65 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertEqual(response_events[1]["payload"]["kind"], "bridge_response")
         self.assertEqual(session, {"bridge_prompt_kind": None, "bridge_prompt_title": None, "bridge_prompt_options": []})
 
+    def test_display_snapshot_updates_preview_event_channel(self) -> None:
+        async def scenario() -> list[dict]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=True,
+                )
+            )
+            await app.initialize()
+            events = await app.handle_cardputer_message(
+                CardputerMessage(
+                    CardputerMessageType.DISPLAY_SNAPSHOT,
+                    {"screen_text": "LIVE SCREEN", "status_line": "firmware snapshot", "active_app": "Codex Buddy"},
+                )
+            )
+            return [event.to_dict() for event in events]
+
+        payloads = asyncio.run(scenario())
+
+        self.assertEqual(
+            payloads,
+            [
+                {
+                    "type": "display_snapshot",
+                    "payload": {
+                        "kind": "display_snapshot",
+                        "content": "firmware snapshot",
+                        "screen_text": "LIVE SCREEN",
+                        "active_app": "Codex Buddy",
+                        "status_line": "firmware snapshot",
+                    },
+                }
+            ],
+        )
+
     def test_approval_request_and_response_flow_updates_session_and_transport(self) -> None:
         class FakeWebSocket:
             def __init__(self) -> None:
                 self.sent: list[str] = []
                 self.messages = [
-                    json.dumps({"kind": "status", "content": "initialized"}),
-                    json.dumps({"thread": {"id": "thr_456"}}),
+                    json.dumps({"id": "initialize-1", "result": {}}),
+                    json.dumps({"id": "thread/start-2", "result": {"thread": {"id": "thr_456"}}}),
+                    json.dumps({"id": "turn-start-3", "result": {"turn": {"id": "turn_456", "items": [], "status": "inProgress"}}}),
                     json.dumps(
                         {
-                            "kind": "approval_request",
-                            "approvalId": "appr_123",
-                            "title": "Delete generated files",
-                            "detail": "Codex needs approval before removing build artifacts.",
-                            "timeoutSeconds": 45,
+                            "id": "server-appr-123",
+                            "method": "item/commandExecution/requestApproval",
+                            "params": {
+                                "approvalId": "appr_123",
+                                "command": "Remove-Item build",
+                                "itemId": "item_123",
+                                "reason": "Codex needs approval before removing build artifacts.",
+                                "threadId": "thr_456",
+                                "turnId": "turn_456",
+                            },
                         }
                     ),
-                    json.dumps({"kind": "status", "content": "approval acknowledged"}),
                 ]
 
             async def send(self, message: str) -> None:
@@ -254,6 +317,7 @@ class MiddlewareAppTests(unittest.TestCase):
                     host="127.0.0.1",
                     port=8765,
                     codex_ws_url="ws://127.0.0.1:9000",
+                    codex_transport="websocket",
                     use_mock_codex=False,
                 )
             )
@@ -265,7 +329,7 @@ class MiddlewareAppTests(unittest.TestCase):
             response_events = await app.handle_cardputer_message(
                 CardputerMessage(
                     CardputerMessageType.APPROVAL_RESPONSE,
-                    {"approved": True, "approval_id": "appr_123", "note": "Looks good to me."},
+                    {"approved": True, "approval_id": "server-appr-123", "note": "Looks good to me."},
                 )
             )
             websocket = app.transport._ws
@@ -292,10 +356,10 @@ class MiddlewareAppTests(unittest.TestCase):
                 {
                     "type": EventType.APPROVAL_REQUEST.value,
                     "payload": {
-                        "approval_id": "appr_123",
+                        "approval_id": "server-appr-123",
                         "detail": "Codex needs approval before removing build artifacts.",
-                        "timeout_seconds": 45,
-                        "title": "Delete generated files",
+                        "timeout_seconds": None,
+                        "title": "Remove-Item build",
                     },
                 }
             ],
@@ -305,7 +369,7 @@ class MiddlewareAppTests(unittest.TestCase):
             [
                 {
                     "type": EventType.APPROVAL_RESPONSE.value,
-                    "payload": {"approval_id": "appr_123", "approved": True, "note": "Looks good to me."},
+                    "payload": {"approval_id": "server-appr-123", "approved": True, "note": "Looks good to me."},
                 }
             ],
         )
@@ -313,16 +377,22 @@ class MiddlewareAppTests(unittest.TestCase):
             state["session"],
             {"workspace_path": ".", "branch": None, "thread_id": "thr_456", "pending_approval_id": None},
         )
-        self.assertTrue(any('"method": "approval/respond"' in item for item in state["sent"]))
+        self.assertTrue(any('"id": "server-appr-123"' in item and '"decision": "accept"' in item for item in state["sent"]))
 
     def test_local_websocket_transport_reports_target_url(self) -> None:
         class FakeWebSocket:
             def __init__(self) -> None:
                 self.sent: list[str] = []
                 self.messages = [
-                    json.dumps({"kind": "status", "content": "initialized"}),
-                    json.dumps({"kind": "delta", "content": "partial"}),
-                    json.dumps({"kind": "completed", "content": "done"}),
+                    json.dumps({"id": "initialize-1", "result": {}}),
+                    json.dumps({"id": "turn-start-2", "result": {"turn": {"id": "turn_123", "items": [], "status": "inProgress"}}}),
+                    json.dumps({"method": "item/agentMessage/delta", "params": {"delta": "partial"}}),
+                    json.dumps(
+                        {
+                            "method": "turn/completed",
+                            "params": {"threadId": "thr_123", "turn": {"id": "turn_123", "items": [], "status": "completed"}},
+                        }
+                    ),
                 ]
 
             async def send(self, message: str) -> None:
@@ -339,7 +409,7 @@ class MiddlewareAppTests(unittest.TestCase):
         async def scenario() -> list[dict]:
             await transport.initialize()
             events = []
-            async for reply in transport.start_turn("Hello Codex"):
+            async for reply in transport.start_turn("Hello Codex", thread_id="thr_123"):
                 events.append(reply)
             return [asdict(event) for event in events]
 
@@ -348,8 +418,12 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertEqual(
             payloads,
             [
-                {"kind": "delta", "content": "partial", "data": {}},
-                {"kind": "completed", "content": "done", "data": {}},
+                {"kind": "delta", "content": "partial", "data": {"delta": "partial"}},
+                {
+                    "kind": "completed",
+                    "content": "turn_completed",
+                    "data": {"threadId": "thr_123", "turn": {"id": "turn_123", "items": [], "status": "completed"}},
+                },
             ],
         )
 
@@ -358,14 +432,39 @@ class MiddlewareAppTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.sent: list[str] = []
                 self.messages = [
-                    json.dumps({"kind": "status", "content": "initialized"}),
+                    json.dumps({"id": "initialize-1", "result": {}}),
+                    json.dumps({"id": "turn-start-2", "result": {"turn": {"id": "turn_123", "items": [], "status": "inProgress"}}}),
                     json.dumps(
                         {
-                            "kind": "thread/tokenUsage/updated",
-                            "tokenUsage": {"inputTokens": 120, "outputTokens": 42, "cachedInputTokens": 8, "reasoningTokens": 16},
+                            "method": "thread/tokenUsage/updated",
+                            "params": {
+                                "threadId": "thr_123",
+                                "turnId": "turn_123",
+                                "tokenUsage": {
+                                    "total": {
+                                        "inputTokens": 120,
+                                        "outputTokens": 42,
+                                        "cachedInputTokens": 8,
+                                        "reasoningOutputTokens": 16,
+                                        "totalTokens": 186,
+                                    },
+                                    "last": {
+                                        "inputTokens": 120,
+                                        "outputTokens": 42,
+                                        "cachedInputTokens": 8,
+                                        "reasoningOutputTokens": 16,
+                                        "totalTokens": 186,
+                                    },
+                                },
+                            },
                         }
                     ),
-                    json.dumps({"kind": "completed", "content": "done"}),
+                    json.dumps(
+                        {
+                            "method": "turn/completed",
+                            "params": {"threadId": "thr_123", "turn": {"id": "turn_123", "items": [], "status": "completed"}},
+                        }
+                    ),
                 ]
 
             async def send(self, message: str) -> None:
@@ -382,7 +481,7 @@ class MiddlewareAppTests(unittest.TestCase):
         async def scenario() -> list[dict]:
             await transport.initialize()
             replies = []
-            async for reply in transport.start_turn("Hello Codex"):
+            async for reply in transport.start_turn("Hello Codex", thread_id="thr_123"):
                 replies.append(asdict(reply))
             return replies
 
@@ -395,15 +494,31 @@ class MiddlewareAppTests(unittest.TestCase):
                     "kind": "usage",
                     "content": "thread usage input=120 output=42 cached=8 reasoning=16",
                     "data": {
+                        "method": "thread/tokenUsage/updated",
+                        "threadId": "thr_123",
+                        "turnId": "turn_123",
                         "tokenUsage": {
-                            "inputTokens": 120,
-                            "outputTokens": 42,
-                            "cachedInputTokens": 8,
-                            "reasoningTokens": 16,
+                            "total": {
+                                "inputTokens": 120,
+                                "outputTokens": 42,
+                                "cachedInputTokens": 8,
+                                "reasoningOutputTokens": 16,
+                                "totalTokens": 186,
+                            },
+                            "last": {
+                                "inputTokens": 120,
+                                "outputTokens": 42,
+                                "cachedInputTokens": 8,
+                                "reasoningOutputTokens": 16,
+                                "totalTokens": 186,
+                            },
                         },
-                        "kind": "thread/tokenUsage/updated",
                     },
                 },
-                {"kind": "completed", "content": "done", "data": {}},
+                {
+                    "kind": "completed",
+                    "content": "turn_completed",
+                    "data": {"threadId": "thr_123", "turn": {"id": "turn_123", "items": [], "status": "completed"}},
+                },
             ],
         )

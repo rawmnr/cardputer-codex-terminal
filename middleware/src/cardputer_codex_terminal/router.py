@@ -46,6 +46,22 @@ class CardputerRouter:
                 ],
             )
 
+        if message.type == CardputerMessageType.DISPLAY_SNAPSHOT:
+            status_line = str(message.payload.get("status_line") or message.payload.get("content") or "display snapshot")
+            event = {
+                "kind": "display_snapshot",
+                "status_line": status_line,
+                "screen_text": str(message.payload.get("screen_text") or ""),
+                "active_app": str(message.payload.get("active_app") or ""),
+            }
+            for key in ("firmware_name", "network_status_line", "input_line"):
+                if message.payload.get(key):
+                    event[key] = str(message.payload[key])
+            return RouterResult(
+                status_line=status_line,
+                outbound_events=[event],
+            )
+
         if message.type == CardputerMessageType.STATUS_REQUEST:
             return RouterResult(status_line="status requested", outbound_events=[{"kind": "status_request"}])
 

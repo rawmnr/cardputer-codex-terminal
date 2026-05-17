@@ -26,6 +26,7 @@ class AppShell {
  private:
   void switchTo(AppId app_id);
   void traceDisplay();
+  void emitDisplaySnapshot();
 
   DeviceState state_;
   NetworkManager network_;

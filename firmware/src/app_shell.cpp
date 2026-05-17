@@ -1,5 +1,6 @@
 #include "app_shell.h"
 #include "device_config.h"
+#include "string_print.h"
 
 namespace {
 String trimmed_copy(const String& input) {
@@ -262,6 +263,7 @@ void AppShell::tick() {
 void AppShell::render() {
   traceDisplay();
   screen_.renderShell(state_, *active_app_, input_line_);
+  emitDisplaySnapshot();
 }
 
 void AppShell::handleKeyboardInput(const String& typed, bool submit, bool backspace) {
@@ -419,4 +421,72 @@ void AppShell::traceDisplay() {
     network_.logMessage(trace);
     last_display_trace_ = trace;
   }
+}
+
+void AppShell::emitDisplaySnapshot() {
+  StringPrint out;
+  out.println(state_.firmware_name);
+  out.print("Net: ");
+  out.println(state_.network_status_line);
+  out.print("App: ");
+  out.println(active_app_ != nullptr ? active_app_->title() : "none");
+  out.print("Battery: ");
+  out.print(state_.battery_percent);
+  out.print("% / ");
+  out.println(state_.battery_voltage_mv);
+  out.print("Codex: ");
+  switch (state_.codex_state) {
+    case CodexState::Offline:
+      out.println("offline");
+      break;
+    case CodexState::Idle:
+      out.println("idle");
+      break;
+    case CodexState::Busy:
+      out.println("busy");
+      break;
+    case CodexState::WaitingForApproval:
+      out.println("waiting for approval");
+      break;
+  }
+  if (state_.codex_stream_line.length() > 0) {
+    out.print("Stream: ");
+    out.println(state_.codex_stream_line);
+  }
+  if (state_.approval_pending) {
+    out.print("Approval: ");
+    out.println(state_.approval_title.length() > 0 ? state_.approval_title : "(untitled)");
+    if (state_.approval_detail_line.length() > 0) {
+      out.print("Approval detail: ");
+      out.println(state_.approval_detail_line);
+    }
+  }
+  if (state_.bridge_prompt_pending) {
+    out.print("Bridge prompt: ");
+    out.println(state_.bridge_prompt_title.length() > 0 ? state_.bridge_prompt_title : "(untitled)");
+    if (state_.bridge_prompt_detail.length() > 0) {
+      out.print("Bridge detail: ");
+      out.println(state_.bridge_prompt_detail);
+    }
+  }
+  out.println();
+  if (active_app_ != nullptr) {
+    active_app_->render(out, state_);
+  }
+  out.println();
+  out.print("> ");
+  out.println(input_line_);
+
+  if (!bridge_.isConnected()) {
+    return;
+  }
+
+  bridge_.sendDisplaySnapshot(
+    out.str(),
+    state_.status_line,
+    active_app_ != nullptr ? active_app_->title() : "",
+    input_line_,
+    state_.firmware_name,
+    state_.network_status_line
+  );
 }

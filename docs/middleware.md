@@ -9,6 +9,7 @@ The Python package in `middleware/` is managed with `uv`:
 ```bash
 uv sync
 uv run cardputer-codex-middleware
+uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
 uv run python -m unittest discover -s tests -v
 ```
 
@@ -28,7 +29,42 @@ When the bridge is exposed beyond loopback, the server can require a shared `bri
 - Handle local bridge notifications, questions, confirmations, and responses.
 
 The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.
-Use `--bridge-token` to require a shared secret for the Cardputer bridge.
+It refuses non-loopback `--serve` listeners unless `--bridge-token` is provided.
+
+## Codex App-Server Transport
+
+The real Codex path uses the official app-server message flow:
+
+```text
+initialize -> initialized -> thread/start -> turn/start -> streamed server notifications
+```
+
+The transport layer is split into:
+
+- `MockCodexTransport` for local scaffolding and tests.
+- `StdioCodexAppServerTransport` for the stable `codex app-server` path.
+- `LocalWebSocketCodexTransport` for loopback-only debug / advanced use.
+
+Use stdio for normal real-Codex runs:
+
+```bash
+uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
+uv run cardputer-codex-middleware --serve --real-codex --bridge-token <shared-secret>
+```
+
+Use WebSocket only when you explicitly start a local app-server listener:
+
+```bash
+codex app-server --listen ws://127.0.0.1:9000
+uv run cardputer-codex-middleware --codex-transport websocket --codex-ws-url ws://127.0.0.1:9000
+```
+
+The app-server schema should be regenerated when upgrading Codex:
+
+```bash
+codex app-server generate-ts --out ./schemas
+codex app-server generate-json-schema --out ./schemas
+```
 
 The voice pipeline is intentionally split into three steps:
 

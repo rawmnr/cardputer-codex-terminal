@@ -10,6 +10,7 @@ class EventType(StrEnum):
     AUDIO_CHUNK = "audio_chunk"
     APPROVAL_REQUEST = "approval_request"
     APPROVAL_RESPONSE = "approval_response"
+    DISPLAY_SNAPSHOT = "display_snapshot"
     CODEX_DELTA = "codex_delta"
     CODEX_STATUS = "codex_status"
     CODEX_USAGE = "codex_usage"

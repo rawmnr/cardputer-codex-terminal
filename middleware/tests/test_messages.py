@@ -66,6 +66,28 @@ class MessageTests(unittest.TestCase):
             [{"kind": "approval_response", "approved": True, "approval_id": "appr_123", "note": "Approved"}],
         )
 
+    def test_router_handles_display_snapshot(self) -> None:
+        router = CardputerRouter()
+        message = CardputerMessage(
+            CardputerMessageType.DISPLAY_SNAPSHOT,
+            {"screen_text": "screen", "status_line": "Status: ok", "active_app": "Codex Buddy"},
+        )
+
+        result = router.route(message)
+
+        self.assertEqual(result.status_line, "Status: ok")
+        self.assertEqual(
+            result.outbound_events,
+            [
+                {
+                    "kind": "display_snapshot",
+                    "screen_text": "screen",
+                    "status_line": "Status: ok",
+                    "active_app": "Codex Buddy",
+                }
+            ],
+        )
+
     def test_router_handles_project_and_branch_selection(self) -> None:
         router = CardputerRouter()
 

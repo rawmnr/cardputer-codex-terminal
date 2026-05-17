@@ -13,6 +13,8 @@
 
 - Do not expose Codex directly to the Internet.
 - Prefer loopback between the middleware and Codex.
+- Treat Codex app-server WebSocket transport as local-development-only unless it has an explicit authenticated boundary in front of it.
+- Do not run the Cardputer bridge on a non-loopback interface without `bridge_token`.
 - Use the overlay VPN for remote access.
 - Require physical confirmation for critical actions.
 - Minimize logging by default.
