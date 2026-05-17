@@ -9,6 +9,7 @@ from ipaddress import ip_address
 
 try:
     from zeroconf import IPVersion, ServiceInfo, Zeroconf
+    from zeroconf.asyncio import AsyncZeroconf
     HAS_ZEROCONF = True
 except ImportError:
     HAS_ZEROCONF = False
@@ -90,9 +91,9 @@ async def run_async(args: argparse.Namespace) -> int:
         mcp_server = CardputerMcpServer(app) if args.mcp else None
 
         # Register mDNS service for local discovery
-        zc: Zeroconf | None = None
+        zc: AsyncZeroconf | None = None
         if HAS_ZEROCONF:
-            zc = Zeroconf(ip_version=IPVersion.V4Only)
+            zc = AsyncZeroconf(ip_version=IPVersion.V4Only)
             local_ip = "127.0.0.1"
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -109,7 +110,7 @@ async def run_async(args: argparse.Namespace) -> int:
                 port=args.port,
                 server="cardputer-codex.local.",
             )
-            zc.register_service(info)
+            await zc.async_register_service(info)
 
         async def handler(websocket: object, *_: object) -> None:
             await bridge.handle_connection(websocket)
@@ -132,8 +133,8 @@ async def run_async(args: argparse.Namespace) -> int:
                     await asyncio.Future()
         finally:
             if zc is not None:
-                zc.unregister_all_services()
-                zc.close()
+                await zc.async_unregister_all_services()
+                await zc.async_close()
             if preview is not None:
                 preview.close()
         return 0
