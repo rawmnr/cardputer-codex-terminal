@@ -50,8 +50,10 @@ enum class PagerScreen {
 
 struct MenuState {
   size_t active_tab = 0;
+  size_t app_menu_selected = 0;
   size_t selected_index = 0;
   size_t scroll_offset = 0;
+  bool app_menu_open = false;
   bool command_palette_open = false;
 };
 

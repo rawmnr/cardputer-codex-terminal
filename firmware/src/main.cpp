@@ -92,6 +92,11 @@ void poll_keyboard_input() {
     return;
   }
 
+  if (status.ctrl && typed.length() == 1 && (typed[0] == 'm' || typed[0] == 'M')) {
+    g_shell.handleAction(UiAction::Menu);
+    return;
+  }
+
   if (status.del) {
     if (input_mode || push_mode) {
       g_shell.handleTextInput("", false, true);

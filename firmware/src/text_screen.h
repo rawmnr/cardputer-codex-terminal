@@ -13,7 +13,8 @@ class TextScreen {
 
  private:
   void drawHeader(const DeviceState& state);
-  void drawFooter(const String& footer_text);
+  void drawAppMenu(const DeviceState& state);
+  void drawFooter(const DeviceState& state, const String& input_line, const String& footer_hint);
 
   M5Canvas canvas_{&M5Cardputer.Display};
 };

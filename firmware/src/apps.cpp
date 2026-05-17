@@ -28,6 +28,36 @@ String trim_copy(String value) {
   return value;
 }
 
+const char* codex_state_label(CodexState state) {
+  switch (state) {
+    case CodexState::Offline:
+      return "offline";
+    case CodexState::Idle:
+      return "idle";
+    case CodexState::Busy:
+      return "busy";
+    case CodexState::WaitingForApproval:
+      return "waiting for approval";
+  }
+  return "unknown";
+}
+
+const char* ptt_state_label(PushToTalkState state) {
+  switch (state) {
+    case PushToTalkState::Idle:
+      return "idle";
+    case PushToTalkState::Armed:
+      return "armed";
+    case PushToTalkState::Recording:
+      return "recording";
+    case PushToTalkState::Ready:
+      return "ready";
+    case PushToTalkState::Error:
+      return "error";
+  }
+  return "unknown";
+}
+
 void clear_bridge_prompt(DeviceState& state) {
   state.bridge_prompt_kind = BridgePromptKind::None;
   state.bridge_prompt_pending = false;
@@ -46,10 +76,6 @@ void set_bridge_options(DeviceState& state, const std::array<String, 3>& options
   for (size_t i = 0; i < state.bridge_prompt_options.size(); ++i) {
     state.bridge_prompt_options[i] = i < count ? options[i] : "";
   }
-}
-
-void print_common_footer(Print& out) {
-  (void)out;
 }
 
 String summarize_session_event(const PagerSessionEvent& event) {
@@ -107,68 +133,58 @@ void BuddyApp::tick(DeviceState& state) {
 }
 
 void BuddyApp::render(Print& out, const DeviceState& state) {
-  out.println("=== Codex Buddy ===");
-  out.print("Wi-Fi: ");
-  out.println(state.wifi_connected ? "connected" : "offline");
-  out.print("Net: ");
-  out.println(state.network_status_line);
-  out.print("Usage: ");
+  out.print("Wi-Fi   ");
+  if (state.wifi_connected) {
+    out.print(state.wifi_ssid.length() > 0 ? state.wifi_ssid : String("connected"));
+    if (state.wifi_ip.length() > 0) {
+      out.print(' ');
+      out.print(state.wifi_ip);
+    }
+    out.println();
+  } else {
+    out.println("offline");
+  }
+
+  out.print("Bridge  ");
+  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : String("idle"));
+
+  out.print("Usage   ");
   if (state.codex_usage_percent >= 0) {
     out.print(state.codex_usage_percent);
-    out.print("%");
+    out.print('%');
     if (state.codex_usage_window_minutes > 0) {
       out.print(" / ");
       out.print(state.codex_usage_window_minutes);
-      out.println("m window");
-    } else {
-      out.println();
+      out.print('m');
     }
+    out.println();
   } else {
-    out.println("unknown");
+    out.println("--");
   }
-  out.print("Codex: ");
-  switch (state.codex_state) {
-    case CodexState::Offline:
-      out.println("offline");
-      break;
-    case CodexState::Idle:
-      out.println("idle");
-      break;
-    case CodexState::Busy:
-      out.println("busy");
-      break;
-    case CodexState::WaitingForApproval:
-      out.println("waiting for approval");
-      break;
-  }
-  out.print("Battery: ");
-  out.print(state.battery_percent);
-  out.println("%");
-  out.print("Session: ");
-  out.println(state.codex_workspace_path);
-  out.print("Branch: ");
-  out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
-  out.print("Thread: ");
-  out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
-  out.print("Bridge: ");
-  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
+
+  out.println();
+
+  out.print("Project ");
+  out.println(state.codex_workspace_path.length() > 0 ? state.codex_workspace_path : String("(none)"));
+  out.print("Branch  ");
+  out.println(state.codex_branch.length() > 0 ? state.codex_branch : String("-"));
+  out.print("Thread  ");
+  out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : String("-"));
+
   if (state.codex_stream_line.length() > 0) {
-    out.print("Last: ");
+    out.print("> ");
     out.println(state.codex_stream_line);
   }
-  out.print("Approval: ");
-  out.println(state.approval_pending ? "pending" : "clear");
+
   if (state.approval_pending) {
-    out.print("Request: ");
-    out.println(state.approval_title.length() > 0 ? state.approval_title : "(untitled)");
+    out.println();
+    out.print("! ");
+    out.println(state.approval_title.length() > 0 ? state.approval_title : String("Approval needed"));
     if (state.approval_detail_line.length() > 0) {
-      out.print("Detail: ");
+      out.print("  ");
       out.println(state.approval_detail_line);
     }
   }
-  out.print("Status: ");
-  out.println(state.status_line);
-  print_common_footer(out);
 }
 
 const char* PushToCodexApp::title() const { return "Push to Codex"; }
@@ -311,81 +327,36 @@ void PushToCodexApp::tick(DeviceState& state) {
 }
 
 void PushToCodexApp::render(Print& out, const DeviceState& state) {
-  out.println("=== Push to Codex ===");
   out.print("Draft: ");
-  out.println(draft_.length() > 0 ? draft_ : "(empty)");
-  out.print("PTT: ");
-  switch (state.ptt_state) {
-    case PushToTalkState::Idle:
-      out.println("idle");
-      break;
-    case PushToTalkState::Armed:
-      out.println("armed");
-      break;
-    case PushToTalkState::Recording:
-      out.println("recording");
-      break;
-    case PushToTalkState::Ready:
-      out.println("ready");
-      break;
-    case PushToTalkState::Error:
-      out.println("error");
-      break;
-  }
-  out.print("Samples: ");
+  out.println(draft_.length() > 0 ? draft_ : String("(empty)"));
+
+  out.print("PTT   ");
+  out.println(ptt_state_label(state.ptt_state));
+
+  out.print("Buf   ");
   out.print(state.ptt_samples_captured);
-  out.print("/");
+  out.print(" / ");
   out.println(state.ptt_sample_limit);
-  out.print("Peak: ");
+
+  out.print("Peak  ");
   out.println(state.ptt_peak_amplitude);
-  out.print("Usage: ");
-  if (state.codex_usage_percent >= 0) {
-    out.print(state.codex_usage_percent);
-    out.println("%");
-  } else {
-    out.println("unknown");
-  }
-  out.print("Detail: ");
-  out.println(state.ptt_detail_line);
-  out.print("Net: ");
-  out.println(state.network_status_line);
-  out.print("Codex state: ");
-  switch (state.codex_state) {
-    case CodexState::Offline:
-      out.println("offline");
-      break;
-    case CodexState::Idle:
-      out.println("idle");
-      break;
-    case CodexState::Busy:
-      out.println("busy");
-      break;
-    case CodexState::WaitingForApproval:
-      out.println("waiting for approval");
-      break;
-  }
-  out.print("Workspace: ");
-  out.println(state.codex_workspace_path);
-  out.print("Branch: ");
-  out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
-  out.print("Thread: ");
-  out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
-  out.print("Bridge: ");
-  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
+
+  out.print("Codex ");
+  out.println(codex_state_label(state.codex_state));
+
+  out.print("Net   ");
+  out.println(state.network_status_line.length() > 0 ? state.network_status_line : String("idle"));
+
   if (state.codex_stream_line.length() > 0) {
-    out.print("Last: ");
+    out.print("> ");
     out.println(state.codex_stream_line);
+  } else if (state.ptt_detail_line.length() > 0) {
+    out.print("  ");
+    out.println(state.ptt_detail_line);
   }
-  out.print("Approval: ");
-  out.println(state.approval_pending ? "pending" : "clear");
-  if (state.approval_pending && state.approval_detail_line.length() > 0) {
-    out.print("Approval detail: ");
-    out.println(state.approval_detail_line);
-  }
-  out.print("Status: ");
-  out.println(state.status_line);
-  out.println("Hold SPACE to record, release to finalize.");
-  print_common_footer(out);
+
+  out.println();
+  out.println("Hold SPACE to record.");
 }
 
 const char* PagerApp::title() const { return "Codex Pager"; }
@@ -592,92 +563,72 @@ void PagerApp::tick(DeviceState& state) {
 
 void PagerApp::render(Print& out, const DeviceState& state) {
   const_cast<PagerApp*>(this)->syncSelectionFromState(const_cast<DeviceState&>(state));
-  out.print("=== Codex Pager ");
+  out.print("[ ");
   out.print(pager_screen_label(state.pager_screen));
-  out.println(" ===");
-  out.print("Active: ");
-  out.println(state.pager.active_session_id.length() > 0 ? state.pager.active_session_id : "(none)");
-  out.print("Mode: ");
-  out.println(state.pager_screen == PagerScreen::Compose ? "type prompt and press Enter" : state.pager_screen == PagerScreen::Inbox ? "browse sessions" : "session detail");
+  out.print(" ]");
+  if (state.pager.active_session_id.length() > 0) {
+    out.print("  active: ");
+    out.print(state.pager.active_session_id);
+  }
+  out.println();
+  out.println();
 
   if (state.pager_screen == PagerScreen::Compose) {
     const PagerSessionSummary* session = selectedSession(state);
-    out.print("Reply target: ");
-    out.println(session != nullptr && session->thread_id.length() > 0 ? session->thread_id : "(new thread)");
-    if (session != nullptr) {
-      out.print("Workspace: ");
-      out.println(session->workspace_path.length() > 0 ? session->workspace_path : "(none)");
-      out.print("Branch: ");
-      out.println(session->branch.length() > 0 ? session->branch : "(none)");
+    out.print("To:  ");
+    out.println(session != nullptr && session->thread_id.length() > 0 ? session->thread_id : String("(new thread)"));
+    if (session != nullptr && session->branch.length() > 0) {
+      out.print("On:  ");
+      out.println(session->branch);
     }
-    out.print("Draft: ");
-    out.println(compose_draft_.length() > 0 ? compose_draft_ : "(empty)");
-    out.println("Keys: Enter=send, inbox/detail for browsing");
+    out.println();
+    out.println("Draft:");
+    out.println(compose_draft_.length() > 0 ? compose_draft_ : String("(empty)"));
   } else if (state.pager_screen == PagerScreen::Inbox) {
-    out.println("Sessions:");
     if (state.pager.session_count == 0) {
-      out.println("  (no sessions yet)");
+      out.println("(no sessions yet)");
     } else {
       const size_t start = state.menu.scroll_offset < state.pager.session_count ? state.menu.scroll_offset : 0;
       const size_t end = min(state.pager.session_count, start + 4);
       for (size_t i = start; i < end; ++i) {
         const PagerSessionSummary& session = state.pager.sessions[i];
         out.print(i == selectedSessionIndex(state) ? "> " : "  ");
-        out.print(i + 1);
+        out.print(static_cast<unsigned>(i + 1));
         out.print(". ");
-        out.print(session.title.length() > 0 ? session.title : "(untitled)");
-        out.print(" [");
-        out.print(session.status.length() > 0 ? session.status : "idle");
+        out.println(session.title.length() > 0 ? session.title : String("(untitled)"));
+        out.print("    [");
+        out.print(session.status.length() > 0 ? session.status : String("idle"));
         out.print("] ");
-        out.println(session.last_event.length() > 0 ? session.last_event : "(no recent event)");
-        out.print("   ");
-        out.print(session.workspace_path.length() > 0 ? session.workspace_path : "(no workspace)");
-        out.print(" / ");
-        out.println(session.branch.length() > 0 ? session.branch : "-");
+        out.println(session.last_event.length() > 0 ? session.last_event : String("-"));
       }
     }
-    out.println("Keys: detail, compose, next, prev, 1-9");
   } else {
     const PagerSessionSummary* session = selectedSession(state);
     if (session == nullptr) {
       out.println("(no session selected)");
     } else {
-      out.print("Session: ");
+      out.print("Title:  ");
       out.println(session->title.length() > 0 ? session->title : session->session_id);
       out.print("Thread: ");
-      out.println(session->thread_id.length() > 0 ? session->thread_id : "(none)");
-      out.print("Workspace: ");
-      out.println(session->workspace_path.length() > 0 ? session->workspace_path : "(none)");
+      out.println(session->thread_id.length() > 0 ? session->thread_id : String("-"));
       out.print("Branch: ");
-      out.println(session->branch.length() > 0 ? session->branch : "(none)");
-      out.print("Status: ");
-      out.println(session->status.length() > 0 ? session->status : "idle");
-      out.print("Last: ");
-      out.println(session->last_event.length() > 0 ? session->last_event : "(none)");
+      out.println(session->branch.length() > 0 ? session->branch : String("-"));
+      out.print("State  ");
+      out.println(session->status.length() > 0 ? session->status : String("idle"));
       if (session->pending_approval_id.length() > 0) {
-        out.print("Approval: ");
+        out.print("! Approval: ");
         out.println(session->pending_approval_id);
       }
-      out.println("Events:");
-      if (session->event_count == 0) {
-        out.println("  (no recent events)");
-      } else {
-        for (size_t i = 0; i < session->event_count; ++i) {
+      out.println();
+      if (session->event_count > 0) {
+        const size_t limit = session->event_count > 3 ? 3 : session->event_count;
+        for (size_t i = 0; i < limit; ++i) {
           out.print("  - ");
           out.println(summarize_session_event(session->events[i]));
         }
       }
     }
-    out.println("Keys: reply, inbox, compose, y/n, i");
   }
-
-  if (state.codex_usage_detail_line.length() > 0) {
-    out.print("Usage: ");
-    out.println(state.codex_usage_detail_line);
-  }
-  out.print("Status: ");
-  out.println(state.status_line);
-  print_common_footer(out);
 }
 
 void PagerApp::showCompose(DeviceState& state, const String& message) {
@@ -995,47 +946,44 @@ void McpBridgeApp::tick(DeviceState& state) {
 }
 
 void McpBridgeApp::render(Print& out, const DeviceState& state) {
-  out.println("=== Cardputer MCP Bridge ===");
   out.print("Bridge: ");
-  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
-  out.print("Prompt: ");
+  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : String("idle"));
+  out.println();
+
   switch (state.bridge_prompt_kind) {
     case BridgePromptKind::None:
-      out.println("none");
-      break;
+      out.println("(no active prompt)");
+      out.println();
+      out.println("Try one of:");
+      out.println("  /notify <text>");
+      out.println("  /ask t|d|a|b|c");
+      out.println("  /confirm <text>");
+      return;
     case BridgePromptKind::Notification:
-      out.println("notification");
+      out.println("[ NOTIFICATION ]");
       break;
     case BridgePromptKind::Question:
-      out.println("question");
+      out.println("[ QUESTION ]");
       break;
     case BridgePromptKind::Confirmation:
-      out.println("confirmation");
+      out.println("[ CONFIRM ]");
       break;
   }
+
   if (state.bridge_prompt_title.length() > 0) {
-    out.print("Title: ");
     out.println(state.bridge_prompt_title);
   }
   if (state.bridge_prompt_detail.length() > 0) {
-    out.print("Detail: ");
     out.println(state.bridge_prompt_detail);
   }
+
   if (state.bridge_prompt_option_count > 0) {
-    out.println("Options:");
+    out.println();
     for (size_t i = 0; i < state.bridge_prompt_option_count; ++i) {
       out.print(i == state.bridge_prompt_selected_index ? " > " : "   ");
-      out.print(i + 1);
-      out.print(". ");
       out.println(state.bridge_prompt_options[i]);
     }
-    out.println("Keys: W/S select, Enter=accept, Del=reject");
   }
-  out.print("Pending: ");
-  out.println(state.bridge_prompt_pending ? "yes" : "no");
-  out.print("Status: ");
-  out.println(state.status_line);
-  print_common_footer(out);
 }
 
 void McpBridgeApp::presentNotification(const String& title, const String& detail, DeviceState& state) {
@@ -1113,7 +1061,7 @@ void SettingsApp::onExit(DeviceState& state) {
 void SettingsApp::onCommand(const String& command, DeviceState& state) {
   const String trimmed = trim_copy(command);
   if (trimmed == "/help") {
-    state.status_line = "Use W/S, Enter, Del, and A/D tabs";
+    state.status_line = "Use W/S, Enter, Del, and Ctrl-M menu";
     append_activity_event(state, state.status_line);
   }
 }
@@ -1140,7 +1088,7 @@ void SettingsApp::onAction(UiAction action, DeviceState& state) {
         state.status_line = state.bridge_status_line.length() > 0 ? state.bridge_status_line : "Bridge not configured";
         break;
       case 2:
-        state.status_line = "A/D tabs, W/S move, Enter select, Del back";
+        state.status_line = "Ctrl-M menu, W/S move, Enter select, Del back";
         break;
       case 3:
         state.status_line = state.firmware_name;
@@ -1155,32 +1103,41 @@ void SettingsApp::tick(DeviceState& state) {
 }
 
 void SettingsApp::render(Print& out, const DeviceState& state) {
-  out.println("=== Settings ===");
   const char* items[] = {"Wi-Fi", "Bridge", "Keymap", "About"};
   for (size_t i = 0; i < kItemCount; ++i) {
-    out.print(i == selected_index_ ? "> " : "  ");
+    out.print(i == selected_index_ ? " > " : "   ");
     out.println(items[i]);
   }
-  out.print("Detail: ");
+  out.println();
+  out.println("Detail");
   switch (selected_index_) {
     case 0:
-      out.println(state.wifi_connected ? "Wi-Fi connected" : "Wi-Fi offline");
+      if (state.wifi_connected) {
+        out.print(" SSID ");
+        out.println(state.wifi_ssid.length() > 0 ? state.wifi_ssid : String("(none)"));
+        out.print(" IP   ");
+        out.println(state.wifi_ip.length() > 0 ? state.wifi_ip : String("-"));
+      } else {
+        out.print(' ');
+        out.println(state.network_status_line.length() > 0 ? state.network_status_line : String("offline"));
+      }
       break;
     case 1:
-      out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(bridge idle)");
+      out.print(' ');
+      out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : String("(idle)"));
       break;
     case 2:
-      out.println("A/D tabs, W/S move, Enter select, Del back");
+      out.println(" Ctrl-M menu");
+      out.println(" W/S  move selection");
+      out.println(" Ent  select / accept");
+      out.println(" Del  back / reject");
+      out.println(" SPC  push-to-talk");
       break;
     case 3:
+      out.print(' ');
       out.println(state.firmware_name);
       break;
   }
-  out.print("Mode: ");
-  out.println(state.ui_mode == UiMode::Menu ? "menu" : "input");
-  out.print("Status: ");
-  out.println(state.status_line);
-  print_common_footer(out);
 }
 
 void PushToCodexApp::beginRecording(DeviceState& state) {

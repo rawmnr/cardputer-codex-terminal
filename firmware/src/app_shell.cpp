@@ -25,6 +25,22 @@ String tab_label(AppId app_id) {
   }
   return "App";
 }
+
+const char* menu_label(AppId app_id) {
+  switch (app_id) {
+    case AppId::Buddy:
+      return "Codex Buddy";
+    case AppId::PushToCodex:
+      return "Push to Codex";
+    case AppId::Pager:
+      return "Codex Pager";
+    case AppId::McpBridge:
+      return "MCP Bridge";
+    case AppId::Settings:
+      return "Settings";
+  }
+  return "App";
+}
 }  // namespace
 
 void AppShell::begin() {
@@ -32,8 +48,10 @@ void AppShell::begin() {
   state_.active_app = AppId::Buddy;
   state_.ui_mode = UiMode::Home;
   state_.menu.active_tab = 0;
+  state_.menu.app_menu_selected = 0;
   state_.menu.selected_index = 0;
   state_.menu.scroll_offset = 0;
+  state_.menu.app_menu_open = false;
   state_.menu.command_palette_open = false;
   state_.battery_percent = 0;
   state_.battery_voltage_mv = 0;
@@ -112,7 +130,7 @@ void AppShell::handleCommand(const String& command) {
 
   if (trimmed == "/help") {
     Serial.println("Menu-first UI:");
-    Serial.println("  A/D or ,/. or ;/'  switch tabs");
+    Serial.println("  Ctrl-M             open app menu");
     Serial.println("  W/S                move selection");
     Serial.println("  Enter              select / approve");
     Serial.println("  Del                back / reject");
@@ -317,6 +335,10 @@ void AppShell::render() {
 }
 
 void AppShell::handleTextInput(const String& typed, bool submit, bool backspace) {
+  if (state_.menu.app_menu_open) {
+    return;
+  }
+
   const bool command_palette = state_.menu.command_palette_open;
   const bool app_text_mode =
     state_.active_app == AppId::PushToCodex ||
@@ -429,33 +451,52 @@ void AppShell::handleAction(UiAction action) {
     return;
   }
 
-  if (action == UiAction::Left) {
-    if (state_.menu.command_palette_open) {
-      return;
-    }
-    const size_t next_tab = (state_.menu.active_tab + 4) % 5;
-    setActiveTab(next_tab);
-    render();
-    return;
-  }
-
-  if (action == UiAction::Right) {
-    if (state_.menu.command_palette_open) {
-      return;
-    }
-    const size_t next_tab = (state_.menu.active_tab + 1) % 5;
-    setActiveTab(next_tab);
-    render();
-    return;
-  }
-
   if (action == UiAction::Menu) {
-    if (!state_.menu.command_palette_open) {
-      state_.menu.command_palette_open = true;
-      state_.ui_mode = UiMode::Input;
-      input_line_ = "";
+    state_.menu.command_palette_open = false;
+    input_line_ = "";
+    state_.menu.app_menu_open = !state_.menu.app_menu_open;
+    if (state_.menu.app_menu_open) {
+      state_.menu.app_menu_selected = tabIndexForApp(state_.active_app);
+      state_.ui_mode = UiMode::Menu;
+    } else {
+      state_.ui_mode = UiMode::Home;
     }
     render();
+    return;
+  }
+
+  if (state_.menu.app_menu_open) {
+    if (action == UiAction::Up) {
+      state_.menu.app_menu_selected = state_.menu.app_menu_selected == 0 ? 4 : state_.menu.app_menu_selected - 1;
+      render();
+      return;
+    }
+
+    if (action == UiAction::Down) {
+      state_.menu.app_menu_selected = (state_.menu.app_menu_selected + 1) % 5;
+      render();
+      return;
+    }
+
+    if (action == UiAction::Select) {
+      setActiveTab(state_.menu.app_menu_selected);
+      state_.menu.app_menu_open = false;
+      state_.ui_mode = UiMode::Home;
+      render();
+      return;
+    }
+
+    if (action == UiAction::Back) {
+      state_.menu.app_menu_open = false;
+      state_.ui_mode = UiMode::Home;
+      render();
+      return;
+    }
+
+    return;
+  }
+
+  if (action == UiAction::Left || action == UiAction::Right) {
     return;
   }
 
@@ -570,6 +611,7 @@ void AppShell::switchTo(AppId app_id) {
 
   state_.active_app = app_id;
   state_.menu.active_tab = tabIndexForApp(app_id);
+  state_.menu.app_menu_selected = state_.menu.active_tab;
   state_.menu.command_palette_open = false;
   input_line_ = "";
 
@@ -635,6 +677,10 @@ AppId AppShell::appForTab(size_t tab_index) const {
 }
 
 String AppShell::footerHint() const {
+  if (state_.menu.app_menu_open) {
+    return "W/S Move  Enter Open  Del Close";
+  }
+
   if (state_.approval_pending) {
     return "Enter Approve  Del Reject";
   }
@@ -644,18 +690,18 @@ String AppShell::footerHint() const {
   }
 
   if (state_.menu.command_palette_open) {
-    return "Enter Run  Del Back  A/D Tabs";
+    return "Enter Run  Del Back  Ctrl-M Menu";
   }
 
   switch (state_.active_app) {
     case AppId::Buddy:
-      return "A/D Tabs  Enter Open Pager  / Cmd";
+      return "Ctrl-M Menu  Enter Open Pager  / Cmd";
     case AppId::PushToCodex:
       return "Enter Send  Space Hold Talk  Del Back";
     case AppId::Pager:
       switch (state_.pager_screen) {
         case PagerScreen::Compose:
-          return "Enter Send  Del Back  A/D Tabs";
+          return "Enter Send  Del Back  Ctrl-M Menu";
         case PagerScreen::Inbox:
           return "W/S Move  Enter Detail  Del Back";
         case PagerScreen::Detail:
@@ -668,16 +714,18 @@ String AppShell::footerHint() const {
       return "W/S Move  Enter Inspect  Del Back";
   }
 
-  return "A/D Tabs  Enter Select  Del Back";
+  return "Ctrl-M Menu  Enter Select  Del Back";
 }
 
 void AppShell::traceDisplay() {
   String trace;
   trace.reserve(280);
-  trace += "display app=";
+  trace += "display active=";
   trace += active_app_ != nullptr ? active_app_->title() : "none";
-  trace += " tab=";
+  trace += " id=";
   trace += tab_label(state_.active_app);
+  trace += " menu=";
+  trace += state_.menu.app_menu_open ? "open" : "closed";
   trace += " mode=";
   switch (state_.ui_mode) {
     case UiMode::Home:
@@ -740,6 +788,8 @@ void AppShell::emitDisplaySnapshot() {
   out.println(state_.network_status_line);
   out.print("App: ");
   out.println(active_app_ != nullptr ? active_app_->title() : "none");
+  out.print("Menu: ");
+  out.println(state_.menu.app_menu_open ? "open" : "closed");
   out.print("Mode: ");
   switch (state_.ui_mode) {
     case UiMode::Home:
@@ -761,8 +811,6 @@ void AppShell::emitDisplaySnapshot() {
       out.println("bridge prompt");
       break;
   }
-  out.print("Tab: ");
-  out.println(tab_label(state_.active_app));
   out.print("Battery: ");
   out.print(state_.battery_percent);
   out.print("% / ");
