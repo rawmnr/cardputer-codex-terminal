@@ -56,6 +56,7 @@ cardputer-codex-terminal.bin
 - streamed Codex deltas, usage, and approval requests are rendered in the app views.
 - the MCP bridge app can show notifications, questions, confirmations, and selection state.
 - the Cardputer can accept or reject pending prompts with physical keys.
+- Cardputer bridge envelopes now include a request `id`, and middleware sends back an `ack` before the semantic response.
 - Wi-Fi and middleware settings can be loaded from `/cardputer-codex/config.ini` on the SD card.
 - the middleware host in that SD config must point at the Windows machine, LAN IP, hostname, or VPN address, not `127.0.0.1`.
 - the firmware can create `/cardputer-codex/` and seed a template config file without overwriting an existing one.

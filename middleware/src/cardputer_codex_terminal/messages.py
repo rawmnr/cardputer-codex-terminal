@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from itertools import count
 from typing import Any
 
 
@@ -31,10 +32,16 @@ class CardputerMessage:
     payload: dict[str, Any] = field(default_factory=dict)
     protocol_version: int = PROTOCOL_VERSION
     auth_token: str | None = None
+    id: str = ""
+
+    _next_id = count(1)
 
     def to_dict(self) -> dict[str, Any]:
+        if not self.id:
+            self.id = f"msg-{next(self._next_id):06d}"
         data = {
             "protocol_version": self.protocol_version,
+            "id": self.id,
             "type": self.type.value,
             "payload": self.payload,
         }
@@ -50,6 +57,11 @@ class CardputerMessage:
         if protocol_version != PROTOCOL_VERSION:
             raise ValueError(f"Unsupported protocol version: {protocol_version}")
 
+        if "id" not in data:
+            raise ValueError("Missing message id.")
+        if not isinstance(data["id"], str) or not data["id"]:
+            raise ValueError("Message id must be a non-empty string.")
+
         if "type" not in data:
             raise ValueError("Missing message type.")
         if not isinstance(data["type"], str):
@@ -62,7 +74,7 @@ class CardputerMessage:
         auth_token = data.get("auth_token")
         if auth_token is not None and not isinstance(auth_token, str):
             raise ValueError("Auth token must be a string when provided.")
-        return cls(message_type, payload, protocol_version, auth_token if auth_token else None)
+        return cls(message_type, payload, protocol_version, auth_token if auth_token else None, str(data["id"]))
 
 
 @dataclass(slots=True)

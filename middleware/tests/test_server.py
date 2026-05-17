@@ -26,15 +26,16 @@ class BridgeServerTests(unittest.TestCase):
             server = CardputerBridgeServer(FakeApp())
             payload = CardputerMessage(CardputerMessageType.STATUS_REQUEST, {}).to_dict()
             responses = await server.handle_raw_message(json.dumps(payload))
-            return server.app.received, responses  # type: ignore[return-value]
+            return server.app.received, responses, payload["id"]  # type: ignore[return-value]
 
-        received, responses = asyncio.run(scenario())
+        received, responses, request_id = asyncio.run(scenario())
 
         self.assertIsNotNone(received)
         self.assertEqual(received.type, CardputerMessageType.STATUS_REQUEST)
         self.assertEqual(
             responses,
             [
+                json.dumps({"type": "ack", "payload": {"id": request_id, "ok": True}}, ensure_ascii=False),
                 json.dumps(
                     {
                         "type": EventType.CODEX_STATUS.value,
@@ -60,23 +61,14 @@ class BridgeServerTests(unittest.TestCase):
             server = CardputerBridgeServer(FakeApp())
             payload = CardputerMessage(CardputerMessageType.STATUS_REQUEST, {}, auth_token="wrong").to_dict()
             responses = await server.handle_raw_message(json.dumps(payload))
-            return server.app.received, responses  # type: ignore[return-value]
+            return server.app.received, responses, payload["id"]  # type: ignore[return-value]
 
-        received, responses = asyncio.run(scenario())
+        received, responses, request_id = asyncio.run(scenario())
 
         self.assertIsNone(received)
         self.assertEqual(
             responses,
             [
-                json.dumps(
-                    {
-                        "type": "error",
-                        "payload": {
-                            "kind": "bridge_auth_failed",
-                            "content": "Bridge authentication failed.",
-                        },
-                    },
-                    ensure_ascii=False,
-                )
+                json.dumps({"type": "ack", "payload": {"id": request_id, "ok": False}}, ensure_ascii=False)
             ],
         )

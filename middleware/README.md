@@ -14,6 +14,7 @@ The initial scaffold provides:
 - a buffered voice prompt pipeline with a transcriber hook.
 
 The Cardputer message contract is versioned. Current protocol version: `1`.
+Cardputer requests now carry a stable `id`, and the middleware replies with an `ack` frame before the semantic response so callers can match responses to pending requests.
 The bridge server can also require a shared `bridge_token` for remote access.
 For faster iteration, the middleware can now run a browser preview that mirrors the latest session state into local files under `.cardputer-dev/`.
 It also has an MCP server mode for Codex, exposed over stdio, so Codex can call the Cardputer directly as tools.

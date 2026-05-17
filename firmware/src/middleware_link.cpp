@@ -19,9 +19,6 @@ void MiddlewareLink::begin(DeviceState& state) {
       CARDPUTER_MIDDLEWARE_TOKEN
     );
   }
-  if (CARDPUTER_MIDDLEWARE_TOKEN[0] != '\0' && auth_token_.length() == 0) {
-    auth_token_ = CARDPUTER_MIDDLEWARE_TOKEN;
-  }
 }
 
 void MiddlewareLink::configure(const String& host, uint16_t port, const String& path, const String& auth_token) {
@@ -29,9 +26,7 @@ void MiddlewareLink::configure(const String& host, uint16_t port, const String& 
   port_ = port;
   path_ = path;
   configured_ = host_.length() > 0 && port_ > 0;
-  if (auth_token.length() > 0) {
-    auth_token_ = auth_token;
-  }
+  auth_token_ = auth_token;
   started_ = false;
 }
 
@@ -59,7 +54,7 @@ void MiddlewareLink::tick(DeviceState& state) {
 }
 
 bool MiddlewareLink::sendTextPrompt(const String& text) {
-  return sendCardputerMessage(buildEnvelope("text_prompt", String("{\"text\":\"") + escapeJson(text) + "\"}"));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "text_prompt", String("{\"text\":\"") + escapeJson(text) + "\"}"));
 }
 
 bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz) {
@@ -87,24 +82,24 @@ bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, siz
   String payload = String("{\"chunk_id\":") + String(chunk_id) +
                    String(",\"pcm_b64\":\"") + pcm_b64 +
                    String("\",\"sample_rate_hz\":") + String(sample_rate_hz) + "}";
-  return sendCardputerMessage(buildEnvelope("audio_chunk", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "audio_chunk", payload));
 }
 
 bool MiddlewareLink::sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample_count, int peak_amplitude) {
   String payload = String("{\"sample_rate_hz\":") + String(sample_rate_hz) +
                    String(",\"sample_count\":") + String(sample_count) +
                    String(",\"peak_amplitude\":") + String(peak_amplitude) + "}";
-  return sendCardputerMessage(buildEnvelope("voice_prompt_ready", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "voice_prompt_ready", payload));
 }
 
 bool MiddlewareLink::sendApprovalResponse(bool approved) {
   String payload = String("{\"approved\":") + (approved ? "true" : "false") + "}";
-  return sendCardputerMessage(buildEnvelope("approval_response", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "approval_response", payload));
 }
 
 bool MiddlewareLink::sendBridgeNotification(const String& title, const String& detail) {
   String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + "\"}";
-  return sendCardputerMessage(buildEnvelope("bridge_notification", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_notification", payload));
 }
 
 bool MiddlewareLink::sendBridgeQuestion(const String& title, const String& detail, const std::array<String, 3>& options, size_t option_count) {
@@ -116,19 +111,19 @@ bool MiddlewareLink::sendBridgeQuestion(const String& title, const String& detai
     payload += String("\"") + escapeJson(options[i]) + "\"";
   }
   payload += "]}";
-  return sendCardputerMessage(buildEnvelope("bridge_question", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_question", payload));
 }
 
 bool MiddlewareLink::sendBridgeConfirmation(const String& title, const String& detail) {
   String payload = String("{\"title\":\"") + escapeJson(title) + String("\",\"detail\":\"") + escapeJson(detail) + "\"}";
-  return sendCardputerMessage(buildEnvelope("bridge_confirmation", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_confirmation", payload));
 }
 
 bool MiddlewareLink::sendBridgeResponse(bool accepted, size_t selected_index, const String& note) {
   String payload = String("{\"accepted\":") + (accepted ? "true" : "false") +
                    String(",\"selected_index\":") + String(selected_index) +
                    String(",\"note\":\"") + escapeJson(note) + "\"}";
-  return sendCardputerMessage(buildEnvelope("bridge_response", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_response", payload));
 }
 
 bool MiddlewareLink::sendDisplaySnapshot(
@@ -145,11 +140,11 @@ bool MiddlewareLink::sendDisplaySnapshot(
                    String("\",\"input_line\":\"") + escapeJson(input_line) +
                    String("\",\"firmware_name\":\"") + escapeJson(firmware_name) +
                    String("\",\"network_status_line\":\"") + escapeJson(network_status_line) + "\"}";
-  return sendCardputerMessage(buildEnvelope("display_snapshot", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "display_snapshot", payload));
 }
 
 bool MiddlewareLink::sendStatusRequest() {
-  return sendCardputerMessage(buildEnvelope("status_request", "{}"));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "status_request", "{}"));
 }
 
 void MiddlewareLink::handleWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -183,9 +178,17 @@ void MiddlewareLink::onWebSocketEvent(WStype_t type, uint8_t* payload, size_t le
       }
 
       const String event_type = doc["type"] | "";
+      const String message_id = doc["id"] | "";
       JsonObjectConst payload_variant = doc["payload"];
       if (payload_variant.isNull()) {
         state_->bridge_status_line = "Bridge payload malformed";
+        append_activity_event(*state_, state_->bridge_status_line);
+        return;
+      }
+
+      if (event_type == "ack") {
+        const bool ok = payload_variant["ok"] | false;
+        state_->bridge_status_line = String("Ack ") + message_id + (ok ? " ok" : " failed");
         append_activity_event(*state_, state_->bridge_status_line);
         return;
       }
@@ -481,17 +484,24 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
   }
 }
 
-String MiddlewareLink::buildMessage(const String& type, const String& payload_json) const {
-  return buildEnvelope(type, payload_json);
+String MiddlewareLink::buildMessage(const String& id, const String& type, const String& payload_json) const {
+  return buildEnvelope(id, type, payload_json);
 }
 
-String MiddlewareLink::buildEnvelope(const String& type, const String& payload_json) const {
-  String output = String("{\"protocol_version\":1,\"type\":\"") + escapeJson(type) + String("\",\"payload\":") + payload_json;
+String MiddlewareLink::buildEnvelope(const String& id, const String& type, const String& payload_json) const {
+  String output = String("{\"protocol_version\":1,\"id\":\"") + escapeJson(id) +
+                  String("\",\"type\":\"") + escapeJson(type) + String("\",\"payload\":") + payload_json;
   if (auth_token_.length() > 0) {
     output += String(",\"auth_token\":\"") + escapeJson(auth_token_) + "\"";
   }
   output += "}";
   return output;
+}
+
+String MiddlewareLink::nextMessageId() {
+  char buffer[16];
+  snprintf(buffer, sizeof(buffer), "msg-%06lu", static_cast<unsigned long>(next_message_id_++));
+  return String(buffer);
 }
 
 String MiddlewareLink::escapeJson(const String& value) const {

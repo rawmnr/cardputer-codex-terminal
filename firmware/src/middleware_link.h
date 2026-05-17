@@ -36,10 +36,11 @@ class MiddlewareLink {
   static void handleWebSocketEvent(WStype_t type, uint8_t* payload, size_t length);
   void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length);
   bool sendCardputerMessage(const String& message);
+  String nextMessageId();
   bool ensureConnection(DeviceState& state);
   void applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload);
-  String buildMessage(const String& type, const String& payload_json) const;
-  String buildEnvelope(const String& type, const String& payload_json) const;
+  String buildMessage(const String& id, const String& type, const String& payload_json) const;
+  String buildEnvelope(const String& id, const String& type, const String& payload_json) const;
   String escapeJson(const String& value) const;
 
   String host_;
@@ -48,6 +49,7 @@ class MiddlewareLink {
   uint16_t port_ = 0;
   bool configured_ = false;
   bool started_ = false;
+  uint32_t next_message_id_ = 1;
   DeviceState* state_ = nullptr;
   WebSocketsClient client_;
   static MiddlewareLink* instance_;

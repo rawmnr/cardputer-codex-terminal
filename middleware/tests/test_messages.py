@@ -14,18 +14,21 @@ class MessageTests(unittest.TestCase):
         self.assertEqual(parsed.type, CardputerMessageType.TEXT_PROMPT)
         self.assertEqual(parsed.payload, {"text": "hello"})
         self.assertEqual(parsed.protocol_version, 1)
+        self.assertEqual(parsed.id, message.id)
 
     def test_message_round_trip_keeps_protocol_version(self) -> None:
         message = CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": "hello"}, protocol_version=1)
         parsed = CardputerMessage.from_dict(message.to_dict())
 
         self.assertEqual(parsed.protocol_version, 1)
+        self.assertEqual(parsed.id, message.id)
 
     def test_message_round_trip_keeps_auth_token(self) -> None:
         message = CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": "hello"}, auth_token="secret")
         parsed = CardputerMessage.from_dict(message.to_dict())
 
         self.assertEqual(parsed.auth_token, "secret")
+        self.assertEqual(parsed.id, message.id)
 
     def test_router_handles_text_prompt(self) -> None:
         router = CardputerRouter()
@@ -169,6 +172,10 @@ class MessageTests(unittest.TestCase):
     def test_message_from_dict_rejects_invalid_types(self) -> None:
         with self.assertRaises(ValueError):
             CardputerMessage.from_dict({"type": "unknown", "payload": {}})
+
+    def test_message_from_dict_rejects_missing_id(self) -> None:
+        with self.assertRaises(ValueError):
+            CardputerMessage.from_dict({"type": "ping", "payload": {}})
 
     def test_message_from_dict_rejects_unsupported_protocol_version(self) -> None:
         with self.assertRaises(ValueError):

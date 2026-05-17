@@ -13,6 +13,18 @@ from .messages import CardputerMessage
 class CardputerBridgeServer:
     app: MiddlewareApp
 
+    def _ack(self, request_id: str | None, ok: bool) -> str:
+        return json.dumps(
+            {
+                "type": "ack",
+                "payload": {
+                    "id": request_id,
+                    "ok": ok,
+                },
+            },
+            ensure_ascii=False,
+        )
+
     async def handle_connection(self, websocket: Any) -> None:
         await websocket.send(
             json.dumps(
@@ -38,24 +50,28 @@ class CardputerBridgeServer:
         if not isinstance(payload, dict):
             raise ValueError("Cardputer messages must be JSON objects.")
 
-        message = CardputerMessage.from_dict(payload)
+        request_id = payload.get("id")
+        request_id_str = request_id if isinstance(request_id, str) else None
+
+        try:
+            message = CardputerMessage.from_dict(payload)
+        except Exception:
+            if request_id_str is not None:
+                return [self._ack(request_id_str, False)]
+            raise
+
         expected_token = self.app.config.bridge_token
         if expected_token is not None and message.auth_token != expected_token:
             return [
-                json.dumps(
-                    {
-                        "type": "error",
-                        "payload": {
-                            "kind": "bridge_auth_failed",
-                            "content": "Bridge authentication failed.",
-                        },
-                    },
-                    ensure_ascii=False,
-                )
+                self._ack(message.id, False),
             ]
 
-        events = await self.app.handle_cardputer_message(message)
-        return [json.dumps(event.to_dict(), ensure_ascii=False) for event in events]
+        try:
+            events = await self.app.handle_cardputer_message(message)
+        except Exception:
+            return [self._ack(message.id, False)]
+
+        return [self._ack(message.id, True)] + [json.dumps(event.to_dict(), ensure_ascii=False) for event in events]
 
     async def iter_responses(self, messages: AsyncIterator[str]) -> AsyncIterator[str]:
         async for raw_message in messages:

@@ -15,6 +15,7 @@ uv run python -m unittest discover -s tests -v
 ```
 
 Cardputer-facing messages use a versioned envelope. The current protocol version is `1`.
+Each request includes a stable `id`, and the middleware replies with an `ack` frame so the sender can correlate replies with pending requests.
 When the bridge is exposed beyond loopback, the server can require a shared `bridge_token` and the firmware must embed the same token in its outgoing envelopes.
 
 The middleware also exposes a Codex-facing MCP server mode over stdio. In that mode, Codex can launch the middleware directly and invoke physical-human tools instead of going through the app-server bridge first.

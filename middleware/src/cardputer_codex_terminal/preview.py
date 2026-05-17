@@ -201,6 +201,7 @@ class DevPreviewServer:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
+        self._message_counter = 1
         self.app.event_observer = self.mirror.record_events
 
     def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -240,7 +241,11 @@ class DevPreviewServer:
             message_payload = raw_payload
         else:
             message_payload = {key: value for key, value in payload.items() if key not in {"type", "message_type", "payload"}}
-        return CardputerMessage(CardputerMessageType(message_type), message_payload)
+        message_id = payload.get("id")
+        if not isinstance(message_id, str) or not message_id:
+            message_id = f"preview-msg-{self._message_counter:06d}"
+            self._message_counter += 1
+        return CardputerMessage(message_id, CardputerMessageType(message_type), message_payload)
 
     def _build_handler(self):
         preview_server = self
