@@ -1,7 +1,8 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 import base64
+import io
+import wave
 from typing import Protocol
 
 
@@ -19,8 +20,45 @@ class MockVoiceTranscriber:
 
 
 @dataclass(slots=True)
+class FasterWhisperVoiceTranscriber:
+    model_size: str = "tiny"
+    device: str = "cpu"
+    compute_type: str = "int8"
+    _model: Any = field(default=None, init=False, repr=False)
+
+    def _ensure_model(self) -> None:
+        if self._model is not None:
+            return
+        from faster_whisper import WhisperModel
+        self._model = WhisperModel(self.model_size, device=self.device, compute_type=self.compute_type)
+
+    async def transcribe(self, pcm_bytes: bytes, sample_rate_hz: int) -> str:
+        # Wrap PCM in a WAV container because faster-whisper/ctranslate2 expects specific formats or files
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(sample_rate_hz)
+            wav.writeframes(pcm_bytes)
+
+        buffer.seek(0)
+        self._ensure_model()
+
+        # transcribe() is a blocking CPU-bound call; run it in a thread to keep the loop free
+        import asyncio
+        loop = asyncio.get_running_loop()
+
+        def _sync_transcribe():
+            segments, info = self._model.transcribe(buffer, beam_size=5)
+            return " ".join(segment.text for segment in segments).strip()
+
+        return await loop.run_in_executor(None, _sync_transcribe)
+
+
+@dataclass(slots=True)
 class VoicePromptBuffer:
     pcm_chunks: list[bytes] = field(default_factory=list)
+...
     sample_rate_hz: int = 16000
     chunk_count: int = 0
 

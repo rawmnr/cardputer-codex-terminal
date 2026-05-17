@@ -10,7 +10,7 @@ from .events import Event, EventType
 from .messages import CardputerMessage, CardputerMessageType
 from .router import CardputerRouter
 from .session import SessionIndex, SessionState
-from .voice import MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
+from .voice import FasterWhisperVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
 
 @dataclass(slots=True)
@@ -21,7 +21,7 @@ class MiddlewareApp:
     session_index: SessionIndex = field(default_factory=SessionIndex)
     session: SessionState = field(init=False)
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
-    transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
+    transcriber: VoiceTranscriber = field(default_factory=FasterWhisperVoiceTranscriber)
     event_observer: Callable[[list[Event]], None] | None = field(default=None, repr=False, compare=False)
     _bridge_prompt_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     _bridge_prompt_future: asyncio.Future[dict[str, Any]] | None = field(default=None, init=False, repr=False, compare=False)

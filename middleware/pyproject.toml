@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Romain Meunier" }]
 dependencies = [
+    "faster-whisper>=1.2.1",
     "websockets>=12.0",
 ]
 
