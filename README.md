@@ -16,6 +16,7 @@ The design is inspired by the excellent [`dakshaymehta/cardputer-claude-os`](htt
 - display Codex status, streaming output, usage, and approvals;
 - surface a local MCP-style bridge for notifications, questions, and confirmations;
 - keep session context on the middleware side instead of the microcontroller;
+- load Wi-Fi and middleware bridge settings from `/cardputer-codex/config.ini` on the SD card;
 - produce a single firmware `.bin` that can be launched from M5 Launcher.
 
 ## Current status

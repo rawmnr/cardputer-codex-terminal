@@ -1,4 +1,5 @@
 #include "app_shell.h"
+#include "device_config.h"
 
 namespace {
 String trimmed_copy(const String& input) {
@@ -16,7 +17,7 @@ void AppShell::begin() {
   state_.wifi_connected = false;
   state_.wifi_ssid = "";
   state_.wifi_ip = "";
-  state_.network_status_line = "Wi-Fi disabled - no credentials configured";
+  state_.network_status_line = "Loading Wi-Fi config from SD";
   state_.codex_state = CodexState::Idle;
   state_.status_line = "Waiting for middleware connection";
   state_.codex_workspace_path = ".";
@@ -39,6 +40,26 @@ void AppShell::begin() {
 
   input_line_ = "";
   network_.begin();
+  const RuntimeNetworkConfig& runtime = network_.config();
+  if (runtime.middleware_host.length() > 0) {
+    bridge_.configure(runtime.middleware_host, runtime.middleware_port, runtime.middleware_path);
+    if (runtime.middleware_token.length() > 0) {
+      state_.bridge_status_line = "Middleware bridge configured from SD";
+    }
+  } else if (String(CARDPUTER_MIDDLEWARE_HOST).length() > 0) {
+    bridge_.configure(CARDPUTER_MIDDLEWARE_HOST, static_cast<uint16_t>(CARDPUTER_MIDDLEWARE_PORT), CARDPUTER_MIDDLEWARE_PATH);
+  }
+
+  if (runtime.sd_mounted) {
+    if (runtime.sd_config_loaded) {
+      append_activity_event(state_, "Loaded configuration from SD");
+    } else {
+      append_activity_event(state_, "SD mounted with no config file");
+    }
+  } else {
+    append_activity_event(state_, "SD card not mounted");
+  }
+
   bridge_.begin(state_);
   screen_.begin();
   switchTo(AppId::Buddy);
@@ -54,6 +75,7 @@ void AppShell::handleCommand(const String& command) {
     Serial.println("Commands:");
     Serial.println("  /app buddy|push|pager|mcp");
     Serial.println("  /wifi on|off");
+    Serial.println("  /wifi reload");
     Serial.println("  /codex idle|busy|approval|offline");
     Serial.println("  /workspace <path>");
     Serial.println("  /branch <name>");
@@ -90,6 +112,17 @@ void AppShell::handleCommand(const String& command) {
   }
 
   if (trimmed.startsWith("/wifi ")) {
+    if (trimmed == "/wifi reload") {
+      network_.begin();
+      const RuntimeNetworkConfig& runtime = network_.config();
+      if (runtime.middleware_host.length() > 0) {
+        bridge_.configure(runtime.middleware_host, runtime.middleware_port, runtime.middleware_path);
+      }
+      state_.status_line = "Wi-Fi and SD config reloaded";
+      append_activity_event(state_, state_.status_line);
+      render();
+      return;
+    }
     state_.wifi_connected = trimmed.endsWith("on");
     state_.status_line = state_.wifi_connected ? "Wi-Fi connected" : "Wi-Fi offline";
     append_activity_event(state_, state_.status_line);

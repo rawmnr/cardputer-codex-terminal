@@ -22,3 +22,25 @@ cardputer-codex-terminal.bin
 - The binary is the primary deliverable, not a desktop executable or loose script bundle.
 - Runtime assets should be embedded or packaged in a way that still results in a single firmware binary.
 - The first code path focuses on the shell, state model, and app switching so we can wire the real Cardputer backends next.
+- Wi-Fi and middleware connection settings can be loaded from `/cardputer-codex/config.ini` on the Cardputer SD card.
+
+## SD Card Configuration
+
+The firmware looks for a simple key-value file at:
+
+```text
+/cardputer-codex/config.ini
+```
+
+Example keys:
+
+```ini
+wifi_ssid=YourNetworkName
+wifi_password=YourWiFiPassword
+middleware_host=127.0.0.1
+middleware_port=8765
+middleware_path=/
+middleware_token=
+```
+
+An example file lives in [`config.example.ini`](config.example.ini).
