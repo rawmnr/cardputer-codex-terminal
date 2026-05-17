@@ -9,7 +9,7 @@ from .codex_transport import CodexTransport, LocalWebSocketCodexTransport, MockC
 from .events import Event, EventType
 from .messages import CardputerMessage, CardputerMessageType
 from .router import CardputerRouter
-from .session import CodexSession
+from .session import SessionIndex, SessionState
 from .voice import MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
 
@@ -18,7 +18,8 @@ class MiddlewareApp:
     config: AppConfig
     transport: CodexTransport = field(init=False)
     router: CardputerRouter = field(default_factory=CardputerRouter)
-    session: CodexSession = field(init=False)
+    session_index: SessionIndex = field(default_factory=SessionIndex)
+    session: SessionState = field(init=False)
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
     event_observer: Callable[[list[Event]], None] | None = field(default=None, repr=False, compare=False)
@@ -36,10 +37,11 @@ class MiddlewareApp:
             self.transport = LocalWebSocketCodexTransport(self.config.codex_ws_url)
         else:
             self.transport = StdioCodexAppServerTransport(list(self.config.codex_command), cwd=self.config.workspace_path)
-        self.session = CodexSession(
+        self.session = self.session_index.ensure_active(
             workspace_path=self.config.workspace_path,
             branch=self.config.branch,
             thread_id=self.config.thread_id,
+            title=self.config.thread_id,
         )
 
     async def initialize(self) -> None:
@@ -64,7 +66,18 @@ class MiddlewareApp:
         return event
 
     async def select_thread(self, thread_id: str) -> Event:
-        self.session.thread_id = await self.transport.resume_thread(thread_id)
+        resumed_thread_id = await self.transport.resume_thread(thread_id)
+        session = self.session_index.find_by_thread_id(resumed_thread_id)
+        if session is None:
+            session = self.session_index.create_session(
+                workspace_path=self.session.workspace_path,
+                branch=self.session.branch,
+                thread_id=resumed_thread_id,
+                title=resumed_thread_id,
+            )
+        else:
+            session.touch(workspace_path=self.session.workspace_path, branch=self.session.branch, thread_id=resumed_thread_id)
+        self.session = session
         event = Event(EventType.CODEX_STATUS, {"kind": "thread_selected", "content": thread_id, "thread_id": thread_id})
         self._notify([event])
         return event
@@ -346,7 +359,9 @@ class MiddlewareApp:
     async def _ensure_thread(self) -> None:
         if self.session.thread_id:
             return
-        self.session.thread_id = await self.transport.start_thread(self.session.workspace_path, self.session.branch)
+        thread_id = await self.transport.start_thread(self.session.workspace_path, self.session.branch)
+        self.session.thread_id = thread_id
+        self.session.title = self.session.title if self.session.title != "Untitled session" else thread_id
 
     async def handle_text_prompt(self, text: str) -> list[Event]:
         events = await self._collect_text_prompt_events(text)
@@ -355,6 +370,9 @@ class MiddlewareApp:
 
     async def _collect_text_prompt_events(self, text: str) -> list[Event]:
         await self._ensure_thread()
+        if self.session.title == "Untitled session" and text.strip():
+            self.session.title = text.strip()
+        self.session.record_event(Event(EventType.TEXT_PROMPT, {"text": text}))
         events: list[Event] = []
         async for reply in self.transport.start_turn(text, thread_id=self.session.thread_id, cwd=self.session.workspace_path):
             if reply.kind == "approval_request":
@@ -479,16 +497,26 @@ class MiddlewareApp:
             return [event]
 
         if message.type == CardputerMessageType.STATUS_REQUEST:
+            active_session = self.session_index.current() or self.session
+            session_index_payload = self.session_index.to_dict()
             event = Event(
                 EventType.CODEX_STATUS,
                 {
                     "kind": "session_status",
+                    "active_session_id": self.session_index.active_session_id,
                     "workspace_path": self.session.workspace_path,
                     "branch": self.session.branch,
                     "thread_id": self.session.thread_id,
+                    "title": self.session.title,
+                    "status": self.session.status,
+                    "last_event": self.session.last_event,
                     "approval_id": self.session.pending_approval_id,
                     "approval_title": self.session.pending_approval_title,
                     "approval_detail": self.session.pending_approval_detail,
+                    "session_index": session_index_payload,
+                    "sessions": list(session_index_payload["sessions"].values()),
+                    "selected_session": active_session.to_dict() if active_session is not None else None,
+                    "interrupt_supported": False,
                     "bridge_prompt_kind": self.session.bridge_prompt_kind,
                     "bridge_prompt_title": self.session.bridge_prompt_title,
                     "bridge_prompt_detail": self.session.bridge_prompt_detail,
@@ -507,6 +535,7 @@ class MiddlewareApp:
         return [event]
 
     def _notify(self, events: list[Event]) -> None:
+        self.session_index.record(events)
         if self.event_observer is None or not events:
             return
         self.event_observer(events)

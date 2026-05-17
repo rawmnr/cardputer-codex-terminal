@@ -15,6 +15,9 @@ class MiddlewareLink {
   bool isConnected();
 
   bool sendTextPrompt(const String& text);
+  bool sendProjectSelect(const String& workspace_path);
+  bool sendBranchSelect(const String& branch);
+  bool sendThreadSelect(const String& thread_id);
   bool sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz);
   bool sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample_count, int peak_amplitude);
   bool sendApprovalResponse(bool approved);

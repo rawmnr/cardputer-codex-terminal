@@ -27,6 +27,23 @@ def _short_payload(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
+def _short_text(value: str, limit: int = 84) -> str:
+    text = value.strip()
+    if len(text) <= limit:
+        return text
+    if limit <= 3:
+        return text[:limit]
+    return text[: limit - 3] + "..."
+
+
+def _friendly_size(size: int) -> str:
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
 @dataclass(slots=True)
 class DevPreviewMirror:
     app: Any
@@ -34,6 +51,8 @@ class DevPreviewMirror:
     mirror_dir_name: str = ".cardputer-dev"
     max_events: int = 200
     max_logs: int = 250
+    max_file_entries: int = 120
+    max_event_entries: int = 60
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     mirror_dir: Path = field(init=False, repr=False)
     recent_events: list[dict[str, Any]] = field(default_factory=list)
@@ -113,14 +132,19 @@ class DevPreviewMirror:
 
     def snapshot(self) -> dict[str, Any]:
         session = self.app.session
+        session_index = self.app.session_index.to_dict()
         return {
             "workspace_root": str(self.workspace_root),
             "mirror_dir": str(self.mirror_dir),
             "last_summary": self.last_summary,
+            "active_session_id": session_index["active_session_id"],
             "session": {
                 "workspace_path": session.workspace_path,
                 "branch": session.branch,
                 "thread_id": session.thread_id,
+                "title": session.title,
+                "status": session.status,
+                "last_event": session.last_event,
                 "pending_approval_id": session.pending_approval_id,
                 "pending_approval_title": session.pending_approval_title,
                 "pending_approval_detail": session.pending_approval_detail,
@@ -131,8 +155,11 @@ class DevPreviewMirror:
                 "bridge_prompt_options": list(session.bridge_prompt_options),
                 "bridge_prompt_selected_index": session.bridge_prompt_selected_index,
             },
-            "recent_events": self.recent_events[-25:],
+            "session_index": session_index,
+            "sessions": list(session_index["sessions"].values()),
+            "recent_events": self.recent_events[-self.max_event_entries :],
             "log_lines": self.log_lines[-50:],
+            "workspace_files": self._workspace_files(),
             "screen_path": str(self.screen_path),
             "log_path": str(self.log_path),
             "events_path": str(self.events_path),
@@ -141,6 +168,51 @@ class DevPreviewMirror:
             "firmware_name": self.last_firmware_name,
             "network_status_line": self.last_network_status_line,
             "input_line": self.last_input_line,
+        }
+
+    def _workspace_files(self) -> list[dict[str, Any]]:
+        files: list[dict[str, Any]] = []
+        excluded = {".git", ".pio", "__pycache__", "node_modules", ".venv"}
+        try:
+            for path in sorted(self.workspace_root.rglob("*")):
+                if len(files) >= self.max_file_entries:
+                    break
+                if not path.is_file():
+                    continue
+                if any(part in excluded for part in path.parts):
+                    continue
+                try:
+                    relative = path.relative_to(self.workspace_root)
+                    stat = path.stat()
+                except OSError:
+                    continue
+                files.append(
+                    {
+                        "path": relative.as_posix(),
+                        "size": stat.st_size,
+                        "size_label": _friendly_size(stat.st_size),
+                        "mtime": int(stat.st_mtime),
+                    }
+                )
+        except OSError:
+            return []
+        return files
+
+    def read_workspace_file(self, relative_path: str, max_bytes: int = 12000) -> dict[str, Any]:
+        candidate = (self.workspace_root / relative_path).resolve()
+        if self.workspace_root not in candidate.parents and candidate != self.workspace_root:
+            raise ValueError("File path escapes the workspace root.")
+        if not candidate.is_file():
+            raise FileNotFoundError(relative_path)
+        raw = candidate.read_bytes()
+        truncated = len(raw) > max_bytes
+        text = raw[:max_bytes].decode("utf-8", errors="replace")
+        return {
+            "path": relative_path,
+            "content": text,
+            "truncated": truncated,
+            "size": len(raw),
+            "size_label": _friendly_size(len(raw)),
         }
 
     def _format_log_line(self, event: dict[str, Any]) -> str:
@@ -245,7 +317,7 @@ class DevPreviewServer:
         if not isinstance(message_id, str) or not message_id:
             message_id = f"preview-msg-{self._message_counter:06d}"
             self._message_counter += 1
-        return CardputerMessage(message_id, CardputerMessageType(message_type), message_payload)
+        return CardputerMessage(CardputerMessageType(message_type), message_payload, id=message_id)
 
     def _build_handler(self):
         preview_server = self
@@ -267,6 +339,21 @@ class DevPreviewServer:
                         return
                     if self.path == "/api/events.json":
                         self._send_json({"events": preview_server.mirror.recent_events})
+                        return
+                    if self.path.startswith("/api/file"):
+                        from urllib.parse import parse_qs, urlparse
+
+                        query = parse_qs(urlparse(self.path).query)
+                        relative_path = query.get("path", [""])[0]
+                        if not relative_path:
+                            self._send_json({"error": "Missing path parameter."}, status=400)
+                            return
+                        try:
+                            payload = preview_server.mirror.read_workspace_file(relative_path)
+                        except Exception as exc:
+                            self._send_json({"error": str(exc)}, status=400)
+                            return
+                        self._send_json(payload)
                         return
                     self.send_error(404, "Not found")
                 except Exception as exc:  # pragma: no cover - defensive HTTP boundary
@@ -325,9 +412,7 @@ class DevPreviewServer:
         return Handler
 
     def render_index_html(self) -> str:
-        state = self.snapshot()
-        session = state["session"]
-        return f"""<!doctype html>
+        return """<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
@@ -337,16 +422,19 @@ class DevPreviewServer:
     :root {{
       color-scheme: dark;
       --bg: #0b1020;
-      --panel: #10192e;
+      --panel: rgba(15, 23, 44, 0.96);
       --panel-2: #0d1629;
-      --line: #22304d;
-      --text: #e7ecf7;
-      --muted: #9db0d1;
-      --accent: #84b8ff;
-      --accent-2: #63e6be;
-      --danger: #ff8080;
+      --panel-3: #0a1323;
+      --line: #233454;
+      --text: #ebf2ff;
+      --muted: #97aacf;
+      --accent: #89b9ff;
+      --accent-2: #73e0b4;
+      --danger: #ff8f8f;
+      --warn: #ffd36b;
       --shadow: 0 10px 36px rgba(0, 0, 0, 0.32);
-      --radius: 8px;
+      --radius: 10px;
+      --radius-sm: 8px;
       font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
     body {{
@@ -354,16 +442,9 @@ class DevPreviewServer:
       background: linear-gradient(180deg, #0a0f1b 0%, #0b1020 100%);
       color: var(--text);
     }}
-    .shell {{
-      display: grid;
-      grid-template-columns: minmax(320px, 1fr) minmax(300px, 420px);
-      gap: 16px;
-      padding: 16px;
-      min-height: 100vh;
-      box-sizing: border-box;
-    }}
+    * {{ box-sizing: border-box; }}
     .panel {{
-      background: rgba(16, 25, 46, 0.95);
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
@@ -378,354 +459,614 @@ class DevPreviewServer:
       color: var(--muted);
       text-transform: uppercase;
     }}
-    .screen-shell {{
+    .app {{
       display: grid;
-      gap: 12px;
+      grid-template-columns: 260px minmax(0, 1fr) 360px;
+      grid-template-rows: minmax(0, 1fr);
+      gap: 14px;
+      min-height: 100vh;
       padding: 14px;
-      justify-items: start;
     }}
-    .screen-label {{
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      font-size: 12px;
-      color: var(--muted);
-    }}
-    .screen-device {{
-      position: relative;
-      width: min(100%, 240px);
-      aspect-ratio: 240 / 135;
-      max-height: 135px;
-      background: #000;
-      border: 1px solid #1f1f1f;
-      border-radius: 2px;
-      box-shadow: none;
-      padding: 0;
-      box-sizing: border-box;
-      overflow: hidden;
-    }}
-    .screen-panel {{
-      position: relative;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      overflow: hidden;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      color: #ffffff;
-      letter-spacing: 0;
-      image-rendering: pixelated;
-    }}
-    .screen-statusbar {{
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 20px;
-      padding: 0 4px;
-      background: #404040;
-      color: #ffffff;
-      border-bottom: 1px solid #303030;
-      box-sizing: border-box;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      font-size: 8px;
-      line-height: 1;
-      overflow: hidden;
-    }}
-    .screen-meta {{
-      position: absolute;
-      left: 0;
-      top: 20px;
-      width: 100%;
-      height: 22px;
-      padding: 3px 4px 0;
-      box-sizing: border-box;
-      color: #ffffff;
-      font-size: 8px;
-      line-height: 1.1;
-      overflow: hidden;
-      white-space: nowrap;
-    }}
-    .screen-meta-row {{
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      overflow: hidden;
-    }}
-    .screen-meta-label {{
-      min-width: 42px;
-    }}
-    .screen-content {{
-      position: absolute;
-      left: 4px;
-      top: 42px;
-      width: calc(100% - 8px);
-      height: calc(100% - 64px);
-      margin: 0;
-      padding: 3px 4px;
-      overflow: hidden;
-      background: #000;
-      color: #ffffff;
-      font-size: 7px;
-      line-height: 1.12;
-      letter-spacing: 0;
-      box-sizing: border-box;
-      white-space: pre-wrap;
-      word-break: break-word;
-      border: 1px solid #404040;
-    }}
-    .screen-footer {{
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      height: 20px;
-      padding: 0 4px;
-      background: #404040;
-      color: #ffffff;
-      font-size: 8px;
-      border-top: 1px solid #303030;
-      box-sizing: border-box;
-      display: flex;
-      align-items: center;
-      overflow: hidden;
-    }}
-    .right {{
+    .sidebar,
+    .main,
+    .inspector {{
+      min-height: 0;
       display: grid;
-      gap: 16px;
+      gap: 14px;
       align-content: start;
     }}
-    .session-strip {{
+    .main {{
+      grid-template-rows: minmax(0, 1fr) auto;
+    }}
+    .scroll {{
+      min-height: 0;
+      overflow: auto;
+    }}
+    .sessions-list,
+    .stream-list,
+    .file-list {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 10px;
       padding: 14px;
-      font-size: 12px;
-      color: var(--muted);
-      border-bottom: 1px solid var(--line);
-      background: rgba(13, 22, 41, 0.7);
     }}
-    .session-strip strong {{
-      color: var(--text);
-      font-weight: 600;
-    }}
-    .controls {{
-      display: grid;
-      gap: 12px;
-      padding: 14px;
-      border-bottom: 1px solid var(--line);
-    }}
-    .row {{
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-    }}
-    input, textarea, button {{
-      border-radius: 6px;
+    .session-card,
+    .event-card,
+    .file-pill {{
       border: 1px solid var(--line);
-      background: var(--panel-2);
-      color: var(--text);
-      font: inherit;
-    }}
-    input, textarea {{
+      background: linear-gradient(180deg, rgba(13, 22, 41, 0.95), rgba(10, 18, 34, 0.95));
+      border-radius: var(--radius-sm);
       padding: 10px 12px;
     }}
-    textarea {{
-      min-height: 76px;
-      resize: vertical;
-    }}
-    button {{
-      padding: 10px 12px;
+    .session-card {{
       cursor: pointer;
-      background: #17305f;
     }}
-    button:hover {{
-      background: #21406f;
+    .session-card.active {{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(137, 185, 255, 0.18) inset;
     }}
-    .chiprow {{
+    .session-head,
+    .event-head,
+    .file-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }}
+    .session-title,
+    .event-title,
+    .file-title {{
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }}
+    .session-meta,
+    .event-meta,
+    .file-meta {{
+      font-size: 11px;
+      color: var(--muted);
+    }}
+    .session-status {{
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--accent-2);
+    }}
+    .session-status.approval {{
+      color: var(--warn);
+    }}
+    .session-status.error {{
+      color: var(--danger);
+    }}
+    .session-status.done {{
+      color: #a8b1c5;
+    }}
+    .stream-window {{
+      display: grid;
+      min-height: 0;
+      grid-template-rows: auto minmax(0, 1fr);
+    }}
+    .stream-toolbar {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(8, 14, 26, 0.45);
+    }}
+    .stream-toolbar strong {{
+      color: var(--text);
+    }}
+    .approval-bar {{
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+      align-items: center;
     }}
-    .chiprow button {{
+    .button {{
+      border: 1px solid var(--line);
+      background: #17305f;
+      color: var(--text);
+      border-radius: 8px;
       padding: 8px 10px;
-      font-size: 12px;
+      cursor: pointer;
+      font: inherit;
     }}
-    .logs {{
-      margin: 0;
+    .button:hover {{
+      background: #21406f;
+    }}
+    .button.danger {{
+      background: #5a1d24;
+      border-color: #7a2f38;
+    }}
+    .button.danger:hover {{
+      background: #742631;
+    }}
+    .button.ghost {{
+      background: transparent;
+    }}
+    .composer {{
+      display: grid;
+      gap: 10px;
       padding: 14px;
-      min-height: 260px;
+      border-top: 1px solid var(--line);
+      background: rgba(8, 14, 26, 0.5);
+    }}
+    .composer textarea {{
+      width: 100%;
+      min-height: 84px;
+      resize: vertical;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }}
+    .composer-row {{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }}
+    .snapshot-panel {{
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }}
+    .screen-frame {{
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+    }}
+    .screen-topbar,
+    .screen-bottombar {{
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 8px;
+      font-size: 11px;
+      background: #3c3c3c;
+      color: #fff;
+    }}
+    .screen-body {{
+      background: #000;
+      color: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.35;
       white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 160px;
+      padding: 8px;
+    }}
+    .file-list-wrap {{
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+    }}
+    .file-pill {{
+      cursor: pointer;
+      display: grid;
+      gap: 4px;
+    }}
+    .file-pill.active {{
+      border-color: var(--accent);
+    }}
+    .file-preview {{
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: #07101e;
+      color: #dbe7ff;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 12px;
-      line-height: 1.45;
-      color: #dbe5fb;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 140px;
+      max-height: 280px;
+      overflow: auto;
     }}
-    .footer {{
-      padding: 12px 14px;
-      border-top: 1px solid var(--line);
+    .hint {{
       color: var(--muted);
       font-size: 12px;
-      word-break: break-all;
+      line-height: 1.4;
     }}
-    .accent {{
+    .tiny {{
+      font-size: 11px;
+      color: var(--muted);
+    }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(137, 185, 255, 0.12);
       color: var(--accent);
+      font-size: 11px;
     }}
-    .danger {{
-      color: var(--danger);
+    .stream-item {{
+      margin-top: 10px;
     }}
-    @media (max-width: 980px) {{
-      .shell {{
+    .stream-item:first-child {{
+      margin-top: 0;
+    }}
+    @media (max-width: 1200px) {{
+      .app {{
         grid-template-columns: 1fr;
       }}
+    }}
+    @media (max-width: 700px) {{
+      .composer-row {{
+        display: grid;
+      }}
+      .button {{
+        width: 100%;
+      }}
+    }}
+    .hidden {{
+      display: none !important;
     }}
   </style>
 </head>
 <body>
-  <main class="shell">
-    <section class="panel">
-      <h2>Cardputer mirror</h2>
-      <div class="screen-shell">
-        <div class="screen-label">
-          <span>Simulated Cardputer screen</span>
-          <span id="screen-status">{html.escape(str(state['last_summary']))}</span>
-        </div>
-        <div class="screen-device">
-          <div class="screen-panel">
-            <div class="screen-statusbar">
-              <span id="screen-left">{html.escape(str(state['firmware_name']))}</span>
-              <span id="screen-right">{html.escape(str(state['network_status_line']))}</span>
-            </div>
-            <div class="screen-meta">
-              <div class="screen-meta-row">
-                <span class="screen-meta-label">App:</span>
-                <span id="screen-app">{html.escape('Codex Buddy')}</span>
-              </div>
-              <div class="screen-meta-row">
-                <span class="screen-meta-label">Battery:</span>
-                <span id="screen-battery">{html.escape('0%')}</span>
-                <span id="screen-battery-mv">{html.escape('0 mV')}</span>
-                <span class="screen-meta-label">Cdx:</span>
-                <span id="screen-cdx">{html.escape('idl')}</span>
-              </div>
-            </div>
-            <pre class="screen-content" id="screen">{html.escape(state['screen_text'])}</pre>
-            <div class="screen-footer">
-              <span id="screen-input">&gt; </span>
-            </div>
+  <main class="app">
+    <aside class="sidebar panel">
+      <h2>Sessions</h2>
+      <div class="sessions-list scroll" id="sessions"></div>
+    </aside>
+
+    <section class="main">
+      <section class="panel stream-window">
+        <div class="stream-toolbar">
+          <div>
+            <strong>Event Stream</strong>
+            <div class="tiny" id="stream-subtitle">Loading session data...</div>
           </div>
+          <div class="approval-bar" id="approval-bar"></div>
         </div>
-      </div>
-      <div class="footer">
-        Mirror files: <span class="accent">{html.escape(state['screen_path'])}</span> |
-        <span class="accent">{html.escape(state['log_path'])}</span>
-      </div>
-    </section>
-    <section class="right">
-      <section class="panel">
-        <h2>Session</h2>
-        <div class="session-strip">
-          <div><strong>Workspace</strong><br><span id="workspace">{html.escape(str(session['workspace_path']))}</span></div>
-          <div><strong>Branch</strong><br><span id="branch">{html.escape(str(session['branch'] or '-'))}</span></div>
-          <div><strong>Thread</strong><br><span id="thread">{html.escape(str(session['thread_id'] or '-'))}</span></div>
-          <div><strong>Approval</strong><br><span id="approval">{html.escape(str(session['pending_approval_title'] or '-'))}</span></div>
-        </div>
+        <div class="scroll" id="stream"></div>
       </section>
-      <section class="panel">
-        <h2>Controls</h2>
-        <div class="controls">
-          <textarea id="prompt" placeholder="Type a prompt for Codex...">Hello Codex</textarea>
-          <div class="row">
-            <button id="send">Send prompt</button>
-            <button id="status">Refresh status</button>
-          </div>
-          <div class="chiprow">
-            <button data-kind="project_select" data-value=".">Project</button>
-            <button data-kind="branch_select" data-value="feature/cardputer">Branch</button>
-            <button data-kind="thread_select" data-value="thr_preview">Thread</button>
-            <button data-kind="status_request" data-value="">Status</button>
-          </div>
-          <input id="custom-type" placeholder="message type, e.g. approval_response" />
-          <input id="custom-json" placeholder='extra JSON payload, e.g. {{"approved":true}}' />
-          <button id="send-custom">Send custom message</button>
+
+      <section class="panel composer">
+        <div class="composer-row">
+          <span class="badge" id="composer-mode">Compose</span>
+          <span class="hint" id="composer-hint">Enter sends a new prompt into the active session.</span>
         </div>
-      </section>
-      <section class="panel">
-        <h2>Live logs</h2>
-        <pre class="logs" id="logs">{html.escape("\n".join(state["log_lines"]))}</pre>
+        <textarea id="composer-input" placeholder="Type a prompt or reply for the selected Codex session..."></textarea>
+        <div class="composer-row">
+          <button class="button" id="send-prompt">Send Prompt</button>
+          <button class="button ghost" id="send-reply">Reply in Thread</button>
+          <button class="button ghost" id="refresh-state">Refresh</button>
+        </div>
       </section>
     </section>
+
+    <aside class="inspector">
+      <section class="panel">
+        <h2>Cardputer Snapshot</h2>
+        <div class="snapshot-panel">
+          <div class="hint" id="snapshot-meta">Waiting for snapshot...</div>
+          <div class="screen-frame">
+            <div class="screen-topbar">
+              <span id="snapshot-top-left">cardputer-codex-terminal</span>
+              <span id="snapshot-top-right">Wi-Fi offline</span>
+            </div>
+            <div class="screen-body" id="snapshot-screen"></div>
+            <div class="screen-bottombar">
+              <span id="snapshot-bottombar-left">App: Codex Buddy</span>
+              <span id="snapshot-bottombar-right">Ready</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Workspace Files</h2>
+        <div class="file-list-wrap">
+          <div class="hint">Browse mirrored artifacts and workspace files. Click a pill to inspect its contents.</div>
+          <div class="file-list scroll" id="files"></div>
+          <div class="file-preview" id="file-preview">Select a file to preview it here.</div>
+        </div>
+      </section>
+    </aside>
   </main>
+
   <script>
+    const stateCache = {{
+      selectedSessionId: null,
+      selectedFilePath: null,
+      previewText: "",
+    }};
+
+    function byId(id) {{
+      return document.getElementById(id);
+    }}
+
+    function sessionList(state) {{
+      const index = state.session_index || {{}};
+      const sessions = state.sessions || Object.values(index.sessions || {{}}) || [];
+      return sessions;
+    }}
+
+    function selectedSession(state) {{
+      const sessions = sessionList(state);
+      if (!sessions.length) {{
+        return null;
+      }}
+      const activeId = stateCache.selectedSessionId || state.active_session_id || (state.session_index && state.session_index.active_session_id) || null;
+      if (activeId) {{
+        const found = sessions.find((session) => session.session_id === activeId);
+        if (found) {{
+          return found;
+        }}
+      }}
+      return sessions[0];
+    }}
+
+    function sessionStatusClass(status) {{
+      const value = String(status || "idle").toLowerCase();
+      if (value === "approval") return "approval";
+      if (value === "error") return "error";
+      if (value === "done") return "done";
+      return "";
+    }}
+
+    function renderSessions(state) {{
+      const container = byId("sessions");
+      const sessions = sessionList(state);
+      if (!sessions.length) {{
+        container.innerHTML = '<div class="hint">No sessions yet. Start a prompt to populate this list.</div>';
+        return;
+      }}
+
+      const active = selectedSession(state);
+      container.innerHTML = sessions.map((session) => {{
+        const isActive = active && session.session_id === active.session_id;
+        const status = String(session.status || "idle");
+        const last = session.last_event || "No recent event";
+        const thread = session.thread_id || "No thread yet";
+        const pending = session.pending_approval_id ? '<span class="badge">Approval pending</span>' : '';
+        return `
+          <div class="session-card ${isActive ? "active" : ""}" data-session-id="${session.session_id}">
+            <div class="session-head">
+              <div>
+                <div class="session-title">${escapeHtml(session.title || session.session_id || "Untitled session")}</div>
+                <div class="session-meta">${escapeHtml(session.workspace_path || ".")} / ${escapeHtml(session.branch || "-")}</div>
+              </div>
+              <div class="session-status ${sessionStatusClass(status)}">${escapeHtml(status)}</div>
+            </div>
+            <div class="session-meta">${escapeHtml(last)}</div>
+            <div class="session-meta">${escapeHtml(thread)}</div>
+            <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+              ${pending}
+            </div>
+          </div>
+        `;
+      }}).join("");
+
+      container.querySelectorAll("[data-session-id]").forEach((node) => {{
+        node.addEventListener("click", async () => {{
+          const sessionId = node.getAttribute("data-session-id");
+          const session = sessions.find((item) => item.session_id === sessionId);
+          if (!session) {{
+            return;
+          }}
+          stateCache.selectedSessionId = session.session_id;
+          if (session.thread_id) {{
+            await send({{ type: "thread_select", payload: {{ thread_id: session.thread_id }} }});
+          }}
+          renderComposerHint(state, session);
+          renderApprovalBar(state, session);
+          renderStream(state);
+        }});
+      }});
+    }}
+
+    function renderStream(state) {{
+      const container = byId("stream");
+      const session = selectedSession(state);
+      const events = session && Array.isArray(session.events) && session.events.length ? session.events : (state.recent_events || []);
+      if (!events.length) {{
+        container.innerHTML = '<div class="stream-list"><div class="hint">No events yet.</div></div>';
+        byId("stream-subtitle").textContent = "Waiting for events.";
+        return;
+      }}
+
+      const subtitle = session
+        ? `${session.title || session.session_id || "Session"} · ${session.status || "idle"}`
+        : "Recent middleware events";
+      byId("stream-subtitle").textContent = subtitle;
+
+      const rendered = events.slice().reverse().map((event) => {{
+        const payload = event.payload || {{}};
+        const summary = shortPayload(payload);
+        return `
+          <article class="event-card stream-item">
+            <div class="event-head">
+              <div class="event-title">${escapeHtml(event.type || "event")}</div>
+              <div class="event-meta">${escapeHtml(payload.kind || payload.channel || "")}</div>
+            </div>
+            <div class="event-meta">${escapeHtml(summary)}</div>
+          </article>
+        `;
+      }}).join("");
+      container.innerHTML = `<div class="stream-list">${rendered}</div>`;
+    }}
+
+    function renderApprovalBar(state, sessionOverride) {{
+      const container = byId("approval-bar");
+      const session = sessionOverride || selectedSession(state);
+      const approvalId = session && session.pending_approval_id ? session.pending_approval_id : "";
+      const detail = session && session.pending_approval_detail ? session.pending_approval_detail : "";
+      if (!approvalId) {{
+        container.innerHTML = '<span class="tiny">No pending approval</span>';
+        return;
+      }}
+
+      container.innerHTML = `
+        <span class="tiny">${escapeHtml(detail || approvalId)}</span>
+        <button class="button" data-approval="yes">Approve</button>
+        <button class="button danger" data-approval="no">Deny</button>
+      `;
+      container.querySelectorAll("[data-approval]").forEach((button) => {{
+        button.addEventListener("click", async () => {{
+          const approved = button.getAttribute("data-approval") === "yes";
+          await send({{
+            type: "approval_response",
+            payload: {{
+              approval_id: approvalId,
+              approved,
+              note: approved ? "Approved from preview" : "Denied from preview",
+            }},
+          }});
+        }});
+      }});
+    }}
+
+    function renderComposerHint(state, sessionOverride) {{
+      const session = sessionOverride || selectedSession(state);
+      const hint = byId("composer-hint");
+      const mode = byId("composer-mode");
+      if (!session) {{
+        mode.textContent = "Compose";
+        hint.textContent = "Start a prompt to create a Codex session.";
+        return;
+      }}
+      mode.textContent = session.status === "approval" ? "Approval" : "Compose";
+      hint.textContent = `${session.title || session.session_id || "Session"} · ${session.workspace_path || "."} · ${session.branch || "-"}`;
+    }}
+
+    function renderSnapshot(state) {{
+      const session = selectedSession(state) || (state.session || {{}});
+      byId("snapshot-meta").textContent = `${state.last_summary || "Preview idle"} · ${state.active_session_id || "no active session"}`;
+      byId("snapshot-top-left").textContent = state.firmware_name || "cardputer-codex-terminal";
+      byId("snapshot-top-right").textContent = state.network_status_line || "Wi-Fi offline";
+      byId("snapshot-screen").textContent = state.screen_text || "";
+      byId("snapshot-bottombar-left").textContent = `App: ${session.title || (state.session && state.session.title) || "Codex Buddy"}`;
+      byId("snapshot-bottombar-right").textContent = `${session.status || "idle"} / ${session.last_event || "waiting"}`;
+    }}
+
+    function renderFiles(state) {{
+      const container = byId("files");
+      const files = state.workspace_files || [];
+      if (!files.length) {{
+        container.innerHTML = '<div class="hint">No workspace files found.</div>';
+        return;
+      }}
+
+      container.innerHTML = files.map((file) => {{
+        const active = stateCache.selectedFilePath === file.path;
+        return `
+          <div class="file-pill ${active ? "active" : ""}" data-file-path="${encodeURIComponent(file.path)}">
+            <div class="file-head">
+              <div class="file-title">${escapeHtml(file.path)}</div>
+              <div class="file-meta">${escapeHtml(file.size_label || "")}</div>
+            </div>
+            <div class="file-meta">${escapeHtml(new Date((file.mtime || 0) * 1000).toLocaleString())}</div>
+          </div>
+        `;
+      }}).join("");
+
+      container.querySelectorAll("[data-file-path]").forEach((node) => {{
+        node.addEventListener("click", async () => {{
+          const path = decodeURIComponent(node.getAttribute("data-file-path") || "");
+          if (!path) {{
+            return;
+          }}
+          stateCache.selectedFilePath = path;
+          await loadFile(path);
+          renderFiles(state);
+        }});
+      }});
+    }}
+
+    async function loadFile(path) {{
+      const preview = byId("file-preview");
+      preview.textContent = "Loading " + path + "...";
+      try {{
+        const response = await fetch("/api/file?path=" + encodeURIComponent(path), {{ cache: "no-store" }});
+        const data = await response.json();
+        if (!response.ok) {{
+          preview.textContent = data.error || "Failed to load file.";
+          return;
+        }}
+        stateCache.previewText = data.content || "";
+        preview.textContent = `${data.path}\\n${data.size_label || ""}${data.truncated ? " (truncated)" : ""}\\n\\n${data.content || ""}`;
+      }} catch (error) {{
+        preview.textContent = String(error);
+      }}
+    }}
+
     async function refresh() {{
-      const response = await fetch('/api/state', {{ cache: 'no-store' }});
+      const response = await fetch("/api/state", {{ cache: "no-store" }});
       const state = await response.json();
-      const session = state.session;
-      document.getElementById('workspace').textContent = session.workspace_path || '-';
-      document.getElementById('branch').textContent = session.branch || '-';
-      document.getElementById('thread').textContent = session.thread_id || '-';
-      document.getElementById('approval').textContent = session.pending_approval_title || '-';
-      document.getElementById('screen-status').textContent = state.last_summary || '';
-      document.getElementById('screen-left').textContent = state.firmware_name || 'cardputer-codex-terminal';
-      document.getElementById('screen-right').textContent = state.network_status_line || 'Wi-Fi offline';
-      document.getElementById('screen-app').textContent = state.active_app_label || 'Codex Buddy';
-      document.getElementById('screen-battery').textContent = (state.battery_percent ?? 0) + '%';
-      document.getElementById('screen-battery-mv').textContent = (state.battery_voltage_mv ?? 0) + ' mV';
-      document.getElementById('screen-cdx').textContent = state.codex_state_label || 'idl';
-      document.getElementById('screen').textContent = state.screen_text || '';
-      document.getElementById('screen-input').textContent = '> ' + (state.input_line || '');
-      document.getElementById('logs').textContent = (state.log_lines || []).join('\\n');
+      const session = selectedSession(state);
+      if (!stateCache.selectedSessionId) {{
+        stateCache.selectedSessionId = state.active_session_id || (state.session_index && state.session_index.active_session_id) || null;
+      }}
+      renderSessions(state);
+      renderStream(state);
+      renderApprovalBar(state, session);
+      renderComposerHint(state, session);
+      renderSnapshot(state);
+      renderFiles(state);
+      if (stateCache.selectedFilePath && !stateCache.previewText) {{
+        await loadFile(stateCache.selectedFilePath);
+      }}
     }}
 
     async function send(payload) {{
-      await fetch('/api/input', {{
-        method: 'POST',
-        headers: {{ 'Content-Type': 'application/json' }},
+      await fetch("/api/input", {{
+        method: "POST",
+        headers: {{ "Content-Type": "application/json" }},
         body: JSON.stringify(payload),
       }});
       await refresh();
     }}
 
-    document.getElementById('send').addEventListener('click', async () => {{
-      await send({{ type: 'text_prompt', payload: {{ text: document.getElementById('prompt').value }} }});
+    function shortPayload(payload) {{
+      if (payload.content) return String(payload.content);
+      if (payload.status_line) return String(payload.status_line);
+      if (payload.kind) return String(payload.kind);
+      return JSON.stringify(payload);
+    }}
+
+    function escapeHtml(value) {{
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }}
+
+    byId("send-prompt").addEventListener("click", async () => {{
+      const text = byId("composer-input").value;
+      await send({{ type: "text_prompt", payload: {{ text }} }});
     }});
 
-    document.getElementById('status').addEventListener('click', async () => {{
-      await send({{ type: 'status_request', payload: {{}} }});
+    byId("send-reply").addEventListener("click", async () => {{
+      const text = byId("composer-input").value;
+      await send({{ type: "text_prompt", payload: {{ text }} }});
     }});
 
-    document.querySelectorAll('[data-kind]').forEach((button) => {{
-      button.addEventListener('click', async () => {{
-        const kind = button.dataset.kind;
-        const value = button.dataset.value || '';
-        if (kind === 'project_select') {{
-          await send({{ type: kind, payload: {{ workspace_path: value }} }});
-          return;
-        }}
-        if (kind === 'branch_select') {{
-          await send({{ type: kind, payload: {{ branch: value }} }});
-          return;
-        }}
-        if (kind === 'thread_select') {{
-          await send({{ type: kind, payload: {{ thread_id: value }} }});
-          return;
-        }}
-        await send({{ type: kind, payload: {{}} }});
-      }});
-    }});
+    byId("refresh-state").addEventListener("click", refresh);
 
-    document.getElementById('send-custom').addEventListener('click', async () => {{
-      const kind = document.getElementById('custom-type').value.trim();
-      const extra = document.getElementById('custom-json').value.trim();
-      let payload = {{}};
-      if (extra) {{
-        payload = JSON.parse(extra);
+    byId("composer-input").addEventListener("keydown", async (event) => {{
+      if (event.key === "Enter" && !event.shiftKey) {{
+        event.preventDefault();
+        const text = byId("composer-input").value;
+        await send({{ type: "text_prompt", payload: {{ text }} }});
       }}
-      await send({{ type: kind || 'text_prompt', payload }});
     }});
 
-    setInterval(refresh, 750);
+    setInterval(refresh, 1000);
+    refresh();
   </script>
 </body>
-</html>"""
+</html>""".replace("{{", "{").replace("}}", "}")

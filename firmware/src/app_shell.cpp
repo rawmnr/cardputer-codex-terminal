@@ -37,6 +37,10 @@ void AppShell::begin() {
   state_.bridge_prompt_selected_index = 0;
   state_.codex_stream_line = "";
   state_.bridge_status_line = "Middleware bridge not configured";
+  state_.pager.session_count = 0;
+  state_.pager.active_session_id = "";
+  state_.pager.selected_session_id = "";
+  state_.pager.interrupt_supported = false;
   append_activity_event(state_, "Booted and waiting for middleware");
 
   input_line_ = "";
@@ -222,6 +226,20 @@ void AppShell::handleCommand(const String& command) {
     append_activity_event(state_, state_.status_line);
     render();
     return;
+  }
+
+  if (state_.active_app == AppId::Pager && (trimmed == "y" || trimmed == "Y")) {
+    if (state_.approval_pending) {
+      handleApprovalDecision(true);
+      return;
+    }
+  }
+
+  if (state_.active_app == AppId::Pager && (trimmed == "n" || trimmed == "N")) {
+    if (state_.approval_pending) {
+      handleApprovalDecision(false);
+      return;
+    }
   }
 
   if (trimmed.startsWith("/battery ")) {

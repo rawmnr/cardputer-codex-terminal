@@ -57,6 +57,18 @@ bool MiddlewareLink::sendTextPrompt(const String& text) {
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "text_prompt", String("{\"text\":\"") + escapeJson(text) + "\"}"));
 }
 
+bool MiddlewareLink::sendProjectSelect(const String& workspace_path) {
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "project_select", String("{\"workspace_path\":\"") + escapeJson(workspace_path) + "\"}"));
+}
+
+bool MiddlewareLink::sendBranchSelect(const String& branch) {
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "branch_select", String("{\"branch\":\"") + escapeJson(branch) + "\"}"));
+}
+
+bool MiddlewareLink::sendThreadSelect(const String& thread_id) {
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "thread_select", String("{\"thread_id\":\"") + escapeJson(thread_id) + "\"}"));
+}
+
 bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz) {
   if (samples == nullptr || sample_count == 0) {
     return false;
@@ -229,6 +241,12 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
 
   if (event_type == "codex_status") {
     if (kind == "session_status") {
+      if (payload["active_session_id"].is<const char*>()) {
+        state.pager.active_session_id = payload["active_session_id"].as<const char*>();
+      }
+      if (payload["interrupt_supported"].is<bool>()) {
+        state.pager.interrupt_supported = payload["interrupt_supported"].as<bool>();
+      }
       if (payload["workspace_path"].is<const char*>()) {
         state.codex_workspace_path = payload["workspace_path"].as<const char*>();
       }
@@ -237,6 +255,16 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       }
       if (payload["thread_id"].is<const char*>()) {
         state.codex_thread_id = payload["thread_id"].as<const char*>();
+      }
+      if (payload["status"].is<const char*>()) {
+        const String session_status = payload["status"].as<const char*>();
+        state.codex_state = session_status == "approval" ? CodexState::WaitingForApproval
+                           : session_status == "running"   ? CodexState::Busy
+                           : session_status == "error"     ? CodexState::Offline
+                                                           : CodexState::Idle;
+      }
+      if (payload["last_event"].is<const char*>()) {
+        state.codex_stream_line = payload["last_event"].as<const char*>();
       }
       if (payload["approval_id"].is<const char*>()) {
         const String approval_id = payload["approval_id"].as<const char*>();
@@ -248,6 +276,60 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       }
       if (payload["approval_detail"].is<const char*>()) {
         state.approval_detail_line = payload["approval_detail"].as<const char*>();
+      }
+      state.pager.session_count = 0;
+      state.pager.selected_session_id = state.pager.active_session_id;
+      JsonArrayConst sessions = payload["sessions"];
+      if (!sessions.isNull()) {
+        size_t i = 0;
+        for (JsonVariantConst session_variant : sessions) {
+          if (i >= state.pager.sessions.size()) {
+            break;
+          }
+          if (!session_variant.is<JsonObjectConst>()) {
+            continue;
+          }
+          JsonObjectConst session = session_variant.as<JsonObjectConst>();
+          PagerSessionSummary& view = state.pager.sessions[i];
+          view.session_id = session["session_id"] | "";
+          view.thread_id = session["thread_id"] | "";
+          view.workspace_path = session["workspace_path"] | "";
+          view.branch = session["branch"] | "";
+          view.title = session["title"] | "";
+          view.status = session["status"] | "";
+          view.last_event = session["last_event"] | "";
+          view.pending_approval_id = session["pending_approval_id"] | "";
+          view.event_count = 0;
+          JsonArrayConst events = session["events"];
+          if (!events.isNull()) {
+            size_t j = 0;
+            for (JsonVariantConst event_variant : events) {
+              if (j >= view.events.size()) {
+                break;
+              }
+              if (!event_variant.is<JsonObjectConst>()) {
+                continue;
+              }
+              JsonObjectConst event = event_variant.as<JsonObjectConst>();
+              view.events[j].type = event["type"] | "";
+              JsonObjectConst event_payload = event["payload"];
+              if (!event_payload.isNull()) {
+                const String content = event_payload["content"] | event_payload["text"] | event_payload["message"] | "";
+                if (content.length() > 0) {
+                  view.events[j].content = content;
+                } else {
+                  view.events[j].content = event_payload["kind"] | "";
+                }
+              } else {
+                view.events[j].content = "";
+              }
+              ++j;
+            }
+            view.event_count = j;
+          }
+          ++i;
+        }
+        state.pager.session_count = i;
       }
       state.status_line = content.length() > 0 ? content : "Session status updated";
       state.bridge_status_line = "Session synchronized";

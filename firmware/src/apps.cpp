@@ -49,6 +49,28 @@ void set_bridge_options(DeviceState& state, const std::array<String, 3>& options
 void print_common_footer(Print& out) {
   (void)out;
 }
+
+String summarize_session_event(const PagerSessionEvent& event) {
+  if (event.content.length() > 0) {
+    return event.content;
+  }
+  if (event.type.length() > 0) {
+    return event.type;
+  }
+  return "(event)";
+}
+
+String pager_screen_label(PagerScreen screen) {
+  switch (screen) {
+    case PagerScreen::Compose:
+      return "COMPOSE";
+    case PagerScreen::Inbox:
+      return "INBOX";
+    case PagerScreen::Detail:
+      return "DETAIL";
+  }
+  return "PAGER";
+}
 }  // namespace
 
 const char* BuddyApp::title() const { return "Codex Buddy"; }
@@ -328,7 +350,12 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
 const char* PagerApp::title() const { return "Codex Pager"; }
 
 void PagerApp::onEnter(DeviceState& state) {
-  state.status_line = "Pager mode active";
+  screen_ = PagerScreen::Compose;
+  compose_draft_ = "";
+  detail_note_ = "";
+  detail_reply_mode_ = false;
+  syncSelectionFromState(state);
+  state.status_line = "Compose prompt and press Enter";
 }
 
 void PagerApp::onExit(DeviceState& state) {
@@ -336,8 +363,96 @@ void PagerApp::onExit(DeviceState& state) {
 }
 
 void PagerApp::onCommand(const String& command, DeviceState& state) {
-  (void)command;
-  state.status_line = "Pager inbox and session detail will arrive next";
+  const String trimmed = trim_copy(command);
+  if (trimmed.length() == 0) {
+    return;
+  }
+
+  if (trimmed == "compose" || trimmed == "/compose") {
+    showCompose(state, "Compose prompt and press Enter");
+    return;
+  }
+
+  if (trimmed == "inbox" || trimmed == "/inbox") {
+    showInbox(state, "Browse recent sessions");
+    return;
+  }
+
+  if (trimmed == "detail" || trimmed == "/detail") {
+    showDetail(state, "Inspect the selected session");
+    return;
+  }
+
+  if (trimmed == "r" || trimmed == "reply" || trimmed == "/reply") {
+    detail_reply_mode_ = true;
+    showCompose(state, "Reply in the selected thread");
+    return;
+  }
+
+  if (trimmed == "i" || trimmed == "interrupt" || trimmed == "/interrupt") {
+    if (canInterrupt(state)) {
+      state.status_line = "Interrupt is not wired yet";
+    } else {
+      state.status_line = "Interrupt unavailable";
+    }
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  if (trimmed == "next") {
+    if (state.pager.session_count == 0) {
+      state.status_line = "No sessions to browse";
+      append_activity_event(state, state.status_line);
+      return;
+    }
+    selected_session_index_ = (selected_session_index_ + 1) % state.pager.session_count;
+    selectSession(state, selected_session_index_);
+    return;
+  }
+
+  if (trimmed == "prev") {
+    if (state.pager.session_count == 0) {
+      state.status_line = "No sessions to browse";
+      append_activity_event(state, state.status_line);
+      return;
+    }
+    selected_session_index_ = (selected_session_index_ + state.pager.session_count - 1) % state.pager.session_count;
+    selectSession(state, selected_session_index_);
+    return;
+  }
+
+  if (screen_ == PagerScreen::Inbox && (trimmed.startsWith("select ") || trimmed.startsWith("open "))) {
+    const int index = trimmed.substring(trimmed.indexOf(' ') + 1).toInt();
+    if (index > 0) {
+      selectSession(state, static_cast<size_t>(index - 1));
+      return;
+    }
+  }
+
+  if (screen_ == PagerScreen::Inbox) {
+    const int index = trimmed.toInt();
+    if (index > 0) {
+      selectSession(state, static_cast<size_t>(index - 1));
+      return;
+    }
+  }
+
+  if (screen_ == PagerScreen::Compose || detail_reply_mode_) {
+    sendReply(state, trimmed);
+    return;
+  }
+
+  if (screen_ == PagerScreen::Detail) {
+    sendReply(state, trimmed);
+    return;
+  }
+
+  state.status_line = "Use compose, inbox, detail, reply, next, prev";
+  append_activity_event(state, state.status_line);
+}
+
+void PagerApp::onSubmit(const String& command, DeviceState& state) {
+  onCommand(command, state);
 }
 
 void PagerApp::tick(DeviceState& state) {
@@ -345,69 +460,265 @@ void PagerApp::tick(DeviceState& state) {
 }
 
 void PagerApp::render(Print& out, const DeviceState& state) {
-  out.println("=== Codex Pager ===");
-  out.print("Active app: ");
-  out.println(app_label(state.active_app));
-  out.print("Net: ");
-  out.println(state.network_status_line);
-  out.print("Usage: ");
-  if (state.codex_usage_percent >= 0) {
-    out.print(state.codex_usage_percent);
-    out.print("%");
-    if (state.codex_usage_window_minutes > 0) {
-      out.print(" window ");
-      out.print(state.codex_usage_window_minutes);
-      out.print("m");
+  syncSelectionFromState(state);
+  out.print("=== Codex Pager ");
+  out.print(pager_screen_label(screen_));
+  out.println(" ===");
+  out.print("Active: ");
+  out.println(state.pager.active_session_id.length() > 0 ? state.pager.active_session_id : "(none)");
+  out.print("Mode: ");
+  out.println(screen_ == PagerScreen::Compose ? "type prompt and press Enter" : screen_ == PagerScreen::Inbox ? "browse sessions" : "session detail");
+
+  if (screen_ == PagerScreen::Compose) {
+    const PagerSessionSummary* session = selectedSession(state);
+    out.print("Reply target: ");
+    out.println(session != nullptr && session->thread_id.length() > 0 ? session->thread_id : "(new thread)");
+    if (session != nullptr) {
+      out.print("Workspace: ");
+      out.println(session->workspace_path.length() > 0 ? session->workspace_path : "(none)");
+      out.print("Branch: ");
+      out.println(session->branch.length() > 0 ? session->branch : "(none)");
     }
-    if (state.codex_usage_resets_at > 0) {
-      out.print(" reset ");
-      out.print(state.codex_usage_resets_at);
+    out.print("Draft: ");
+    out.println(compose_draft_.length() > 0 ? compose_draft_ : "(empty)");
+    out.println("Keys: Enter=send, inbox/detail for browsing");
+  } else if (screen_ == PagerScreen::Inbox) {
+    out.println("Sessions:");
+    if (state.pager.session_count == 0) {
+      out.println("  (no sessions yet)");
+    } else {
+      for (size_t i = 0; i < state.pager.session_count; ++i) {
+        const PagerSessionSummary& session = state.pager.sessions[i];
+        out.print(i == selectedSessionIndex(state) ? "> " : "  ");
+        out.print(i + 1);
+        out.print(". ");
+        out.print(session.title.length() > 0 ? session.title : "(untitled)");
+        out.print(" [");
+        out.print(session.status.length() > 0 ? session.status : "idle");
+        out.print("] ");
+        out.println(session.last_event.length() > 0 ? session.last_event : "(no recent event)");
+        out.print("   ");
+        out.print(session.workspace_path.length() > 0 ? session.workspace_path : "(no workspace)");
+        out.print(" / ");
+        out.println(session.branch.length() > 0 ? session.branch : "-");
+      }
     }
-    out.println();
+    out.println("Keys: detail, compose, next, prev, 1-9");
   } else {
-    out.println("unknown");
+    const PagerSessionSummary* session = selectedSession(state);
+    if (session == nullptr) {
+      out.println("(no session selected)");
+    } else {
+      out.print("Session: ");
+      out.println(session->title.length() > 0 ? session->title : session->session_id);
+      out.print("Thread: ");
+      out.println(session->thread_id.length() > 0 ? session->thread_id : "(none)");
+      out.print("Workspace: ");
+      out.println(session->workspace_path.length() > 0 ? session->workspace_path : "(none)");
+      out.print("Branch: ");
+      out.println(session->branch.length() > 0 ? session->branch : "(none)");
+      out.print("Status: ");
+      out.println(session->status.length() > 0 ? session->status : "idle");
+      out.print("Last: ");
+      out.println(session->last_event.length() > 0 ? session->last_event : "(none)");
+      if (session->pending_approval_id.length() > 0) {
+        out.print("Approval: ");
+        out.println(session->pending_approval_id);
+      }
+      out.println("Events:");
+      if (session->event_count == 0) {
+        out.println("  (no recent events)");
+      } else {
+        for (size_t i = 0; i < session->event_count; ++i) {
+          out.print("  - ");
+          out.println(summarize_session_event(session->events[i]));
+        }
+      }
+    }
+    out.println("Keys: reply, inbox, compose, y/n, i");
   }
+
   if (state.codex_usage_detail_line.length() > 0) {
-    out.print("Usage detail: ");
+    out.print("Usage: ");
     out.println(state.codex_usage_detail_line);
-  }
-  out.print("Workspace: ");
-  out.println(state.codex_workspace_path);
-  out.print("Branch: ");
-  out.println(state.codex_branch.length() > 0 ? state.codex_branch : "(none)");
-  out.print("Thread: ");
-  out.println(state.codex_thread_id.length() > 0 ? state.codex_thread_id : "(none)");
-  out.print("Approval: ");
-  out.println(state.approval_pending ? "pending" : "clear");
-  out.print("Bridge: ");
-  out.println(state.bridge_status_line.length() > 0 ? state.bridge_status_line : "(idle)");
-  if (state.codex_stream_line.length() > 0) {
-    out.print("Last stream: ");
-    out.println(state.codex_stream_line);
-  }
-  if (state.approval_pending) {
-    out.print("Approval request: ");
-    out.println(state.approval_title.length() > 0 ? state.approval_title : "(untitled)");
-    if (state.approval_detail_line.length() > 0) {
-      out.print("Detail: ");
-      out.println(state.approval_detail_line);
-    }
-    out.println("Keys: Enter=approve, Del=reject");
-  }
-  out.println("Recent activity:");
-  const size_t log_count = state.activity_log_count;
-  if (log_count == 0) {
-    out.println("  (no events yet)");
-  } else {
-    for (size_t i = 0; i < log_count; ++i) {
-      const String entry = activity_log_entry(state, i);
-      out.print("  ");
-      out.println(entry.length() > 0 ? entry : "(empty)");
-    }
   }
   out.print("Status: ");
   out.println(state.status_line);
   print_common_footer(out);
+}
+
+void PagerApp::showCompose(DeviceState& state, const String& message) {
+  screen_ = PagerScreen::Compose;
+  state.status_line = message;
+  append_activity_event(state, message);
+}
+
+void PagerApp::showInbox(DeviceState& state, const String& message) {
+  screen_ = PagerScreen::Inbox;
+  detail_reply_mode_ = false;
+  syncSelectionFromState(state);
+  state.status_line = message;
+  append_activity_event(state, message);
+}
+
+void PagerApp::showDetail(DeviceState& state, const String& message) {
+  screen_ = PagerScreen::Detail;
+  detail_reply_mode_ = false;
+  syncSelectionFromState(state);
+  state.status_line = message;
+  append_activity_event(state, message);
+}
+
+void PagerApp::selectSession(DeviceState& state, size_t index) {
+  syncSelectionFromState(state);
+  if (state.pager.session_count == 0) {
+    state.status_line = "No sessions available";
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  if (index >= state.pager.session_count) {
+    index = state.pager.session_count - 1;
+  }
+
+  selected_session_index_ = index;
+  const PagerSessionSummary& session = state.pager.sessions[selected_session_index_];
+  selected_session_id_ = session.session_id;
+  state.pager.selected_session_id = selected_session_id_;
+  detail_reply_mode_ = false;
+  screen_ = PagerScreen::Detail;
+  state.status_line = String("Selected session ") + String(selected_session_index_ + 1);
+  append_activity_event(state, state.status_line);
+
+  if (bridge_ != nullptr) {
+    if (session.workspace_path.length() > 0) {
+      bridge_->sendProjectSelect(session.workspace_path);
+    }
+    if (session.branch.length() > 0) {
+      bridge_->sendBranchSelect(session.branch);
+    }
+    if (session.thread_id.length() > 0) {
+      bridge_->sendThreadSelect(session.thread_id);
+    }
+    bridge_->sendStatusRequest();
+  }
+}
+
+bool PagerApp::sendReply(DeviceState& state, const String& prompt) {
+  const String trimmed = trim_copy(prompt);
+  if (trimmed.length() == 0) {
+    state.status_line = "Prompt is empty";
+    append_activity_event(state, state.status_line);
+    return false;
+  }
+
+  compose_draft_ = trimmed;
+  const PagerSessionSummary* session = selectedSession(state);
+  if (session != nullptr && session->session_id.length() > 0) {
+    state.pager.selected_session_id = session->session_id;
+    selected_session_id_ = session->session_id;
+  }
+
+  if (bridge_ == nullptr || !bridge_->sendTextPrompt(trimmed)) {
+    state.status_line = "Prompt not sent";
+    append_activity_event(state, state.status_line);
+    return false;
+  }
+
+  state.status_line = detail_reply_mode_ ? "Reply sent" : "Prompt sent";
+  append_activity_event(state, state.status_line);
+  detail_reply_mode_ = false;
+  compose_draft_ = "";
+  screen_ = PagerScreen::Detail;
+  return true;
+}
+
+bool PagerApp::canInterrupt(const DeviceState& state) const {
+  return state.pager.interrupt_supported;
+}
+
+size_t PagerApp::selectedSessionIndex(const DeviceState& state) const {
+  if (state.pager.session_count == 0) {
+    return 0;
+  }
+
+  if (selected_session_id_.length() > 0) {
+    for (size_t i = 0; i < state.pager.session_count; ++i) {
+      if (state.pager.sessions[i].session_id == selected_session_id_) {
+        return i;
+      }
+    }
+  }
+
+  if (state.pager.selected_session_id.length() > 0) {
+    for (size_t i = 0; i < state.pager.session_count; ++i) {
+      if (state.pager.sessions[i].session_id == state.pager.selected_session_id) {
+        return i;
+      }
+    }
+  }
+
+  if (state.pager.active_session_id.length() > 0) {
+    for (size_t i = 0; i < state.pager.session_count; ++i) {
+      if (state.pager.sessions[i].session_id == state.pager.active_session_id) {
+        return i;
+      }
+    }
+  }
+
+  return 0;
+}
+
+const PagerSessionSummary* PagerApp::selectedSession(const DeviceState& state) const {
+  if (state.pager.session_count == 0) {
+    return nullptr;
+  }
+
+  const size_t index = selectedSessionIndex(state);
+  if (index >= state.pager.session_count) {
+    return nullptr;
+  }
+  return &state.pager.sessions[index];
+}
+
+void PagerApp::syncSelectionFromState(const DeviceState& state) {
+  if (state.pager.session_count == 0) {
+    selected_session_index_ = 0;
+    selected_session_id_ = "";
+    return;
+  }
+
+  if (selected_session_id_.length() > 0) {
+    for (size_t i = 0; i < state.pager.session_count; ++i) {
+      if (state.pager.sessions[i].session_id == selected_session_id_) {
+        selected_session_index_ = i;
+        return;
+      }
+    }
+  }
+
+  if (state.pager.selected_session_id.length() > 0) {
+    for (size_t i = 0; i < state.pager.session_count; ++i) {
+      if (state.pager.sessions[i].session_id == state.pager.selected_session_id) {
+        selected_session_index_ = i;
+        selected_session_id_ = state.pager.selected_session_id;
+        return;
+      }
+    }
+  }
+
+  if (state.pager.active_session_id.length() > 0) {
+    for (size_t i = 0; i < state.pager.session_count; ++i) {
+      if (state.pager.sessions[i].session_id == state.pager.active_session_id) {
+        selected_session_index_ = i;
+        selected_session_id_ = state.pager.active_session_id;
+        return;
+      }
+    }
+  }
+
+  selected_session_index_ = 0;
+  selected_session_id_ = state.pager.sessions[0].session_id;
 }
 
 const char* McpBridgeApp::title() const { return "Cardputer MCP Bridge"; }

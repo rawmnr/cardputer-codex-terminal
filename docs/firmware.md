@@ -47,6 +47,7 @@ cardputer-codex-terminal.bin
 - Main area: agent stream and latest middleware status.
 - Input line: keyboard prompt.
 - Approval screen: requested action, accept/reject.
+- Pager screen: compose prompts, browse active/recent Codex sessions, and inspect recent events.
 
 ## Current Firmware Bridge Behavior
 
@@ -54,9 +55,12 @@ cardputer-codex-terminal.bin
 - push-to-talk audio chunks are streamed while recording;
 - release sends a voice prompt ready signal to trigger transcription on Windows;
 - streamed Codex deltas, usage, and approval requests are rendered in the app views.
+- the Pager app consumes the middleware session index and renders COMPOSE, INBOX, and DETAIL views from that Python-owned model.
+- reply selection stays on the Cardputer, but the session history and event stream stay in middleware.
 - the MCP bridge app can show notifications, questions, confirmations, and selection state.
 - the Cardputer can accept or reject pending prompts with physical keys.
 - Cardputer bridge envelopes now include a request `id`, and middleware sends back an `ack` before the semantic response.
+- the Pager currently treats `R` as reply, `Y/N` as approve/deny, and `I` as an unavailable interrupt placeholder until app-server cancel support lands.
 - Wi-Fi and middleware settings can be loaded from `/cardputer-codex/config.ini` on the SD card.
 - the middleware host in that SD config must point at the Windows machine, LAN IP, hostname, or VPN address, not `127.0.0.1`.
 - the firmware can create `/cardputer-codex/` and seed a template config file without overwriting an existing one.

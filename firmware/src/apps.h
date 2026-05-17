@@ -69,8 +69,28 @@ class PagerApp final : public App {
   void onEnter(DeviceState& state) override;
   void onExit(DeviceState& state) override;
   void onCommand(const String& command, DeviceState& state) override;
+  void onSubmit(const String& command, DeviceState& state) override;
   void tick(DeviceState& state) override;
   void render(Print& out, const DeviceState& state) override;
+
+ private:
+  void showCompose(DeviceState& state, const String& message);
+  void showInbox(DeviceState& state, const String& message);
+  void showDetail(DeviceState& state, const String& message);
+  void selectSession(DeviceState& state, size_t index);
+  bool sendReply(DeviceState& state, const String& prompt);
+  bool canInterrupt(const DeviceState& state) const;
+  size_t selectedSessionIndex(const DeviceState& state) const;
+  const PagerSessionSummary* selectedSession(const DeviceState& state) const;
+  void syncSelectionFromState(const DeviceState& state);
+
+  PagerScreen screen_ = PagerScreen::Compose;
+  size_t selected_session_index_ = 0;
+  String selected_session_id_;
+  String compose_draft_;
+  String detail_note_;
+  bool detail_reply_mode_ = false;
+  MiddlewareLink* bridge_ = nullptr;
 };
 
 class McpBridgeApp final : public App {

@@ -41,6 +41,8 @@ class PreviewMirrorTests(unittest.TestCase):
 
         self.assertIn("Cardputer Codex Dev Mirror", payloads["screen"])
         self.assertIn("mock_codex_ready", payloads["state"])
+        self.assertIn("session_index", payloads["state"])
+        self.assertIn("workspace_files", payloads["state"])
         self.assertIn("Received: Hello Codex", payloads["logs"])
         self.assertIn("mock_turn_completed", payloads["events"])
 

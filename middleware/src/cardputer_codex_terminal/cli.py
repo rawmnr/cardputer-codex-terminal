@@ -107,7 +107,7 @@ async def run_async(args: argparse.Namespace) -> int:
                 print(f"Cardputer bridge listening on ws://{args.host}:{args.port}")
                 if args.prompt:
                     events = await app.handle_cardputer_message(
-                        CardputerMessage("msg-000001", CardputerMessageType.TEXT_PROMPT, {"text": args.prompt})
+                        CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt}, id="msg-000001")
                     )
                     for event in events:
                         print(json.dumps(event.to_dict(), ensure_ascii=False))
@@ -119,7 +119,7 @@ async def run_async(args: argparse.Namespace) -> int:
 
     if args.prompt:
         events = await app.handle_cardputer_message(
-            CardputerMessage("msg-000001", CardputerMessageType.TEXT_PROMPT, {"text": args.prompt})
+            CardputerMessage(CardputerMessageType.TEXT_PROMPT, {"text": args.prompt}, id="msg-000001")
         )
         for event in events:
             print(json.dumps(event.to_dict(), ensure_ascii=False))

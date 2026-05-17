@@ -16,7 +16,9 @@ The initial scaffold provides:
 The Cardputer message contract is versioned. Current protocol version: `1`.
 Cardputer requests now carry a stable `id`, and the middleware replies with an `ack` frame before the semantic response so callers can match responses to pending requests.
 The bridge server can also require a shared `bridge_token` for remote access.
+The middleware now owns the Codex `SessionIndex` and serializes active/recent session state for the Pager browser instead of asking the microcontroller to keep the model itself.
 For faster iteration, the middleware can now run a browser preview that mirrors the latest session state into local files under `.cardputer-dev/`.
+The preview is a Central Console with session browsing, event stream, prompt composer, approval buttons, live Cardputer snapshot, and workspace file browsing.
 It also has an MCP server mode for Codex, exposed over stdio, so Codex can call the Cardputer directly as tools.
 
 ## Tooling

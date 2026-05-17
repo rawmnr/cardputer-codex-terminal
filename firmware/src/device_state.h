@@ -32,6 +32,42 @@ enum class BridgePromptKind {
   Confirmation,
 };
 
+enum class PagerScreen {
+  Compose,
+  Inbox,
+  Detail,
+};
+
+struct PagerSessionEvent {
+  String type;
+  String content;
+};
+
+struct PagerSessionSummary {
+  static constexpr size_t kMaxEvents = 8;
+
+  String session_id;
+  String thread_id;
+  String workspace_path;
+  String branch;
+  String title;
+  String status;
+  String last_event;
+  String pending_approval_id;
+  std::array<PagerSessionEvent, kMaxEvents> events{};
+  size_t event_count = 0;
+};
+
+struct PagerViewState {
+  static constexpr size_t kMaxSessions = 6;
+
+  std::array<PagerSessionSummary, kMaxSessions> sessions{};
+  size_t session_count = 0;
+  String active_session_id;
+  String selected_session_id;
+  bool interrupt_supported = false;
+};
+
 struct DeviceState {
   static constexpr size_t kActivityLogSize = 8;
 
@@ -69,6 +105,7 @@ struct DeviceState {
   String status_line;
   String codex_usage_label;
   String codex_usage_detail_line;
+  PagerViewState pager;
   size_t ptt_samples_captured = 0;
   size_t ptt_sample_limit = 0;
   uint32_t ptt_sample_rate_hz = 16000;
