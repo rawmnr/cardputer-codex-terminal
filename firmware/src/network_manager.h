@@ -38,6 +38,7 @@ class NetworkManager {
   unsigned long last_attempt_ms_ = 0;
   unsigned long connect_started_ms_ = 0;
   bool connect_in_progress_ = false;
+  wl_status_t last_wifi_status_ = WL_NO_SHIELD;
   String last_logged_network_status_;
   RuntimeNetworkConfig config_;
 };

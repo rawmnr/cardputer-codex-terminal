@@ -43,8 +43,11 @@ String NetworkManager::trimCopy(String value) {
 }
 
 void NetworkManager::begin() {
+  WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(true);
+  WiFi.setHostname("cardputer-codex");
+  WiFi.setAutoReconnect(true);
+  WiFi.setSleep(false);
   loadConfigFromSdCard();
   logMessage("Network manager initialized");
 }
@@ -170,10 +173,15 @@ void NetworkManager::tick(DeviceState& state) {
   const wl_status_t wifi_status = WiFi.status();
   state.wifi_connected = wifi_status == WL_CONNECTED;
 
+  if (wifi_status != last_wifi_status_) {
+    logMessage(String("Wi-Fi status changed: ") + wifiStatusName(wifi_status));
+    last_wifi_status_ = wifi_status;
+  }
+
   if (state.wifi_connected) {
     state.wifi_ssid = WiFi.SSID();
     state.wifi_ip = WiFi.localIP().toString();
-    state.network_status_line = "Wi-Fi connected to " + state.wifi_ssid;
+    state.network_status_line = "Wi-Fi connected to " + state.wifi_ssid + " @ " + state.wifi_ip;
     if (last_logged_network_status_ != state.network_status_line) {
       logMessage(String("Wi-Fi connected: ") + state.wifi_ssid + " @ " + state.wifi_ip);
       last_logged_network_status_ = state.network_status_line;
@@ -182,11 +190,11 @@ void NetworkManager::tick(DeviceState& state) {
     return;
   }
 
-  state.wifi_ssid = "";
-  state.wifi_ip = "";
-
   const String ssid = config_.wifi_ssid.length() > 0 ? config_.wifi_ssid : String(CARDPUTER_WIFI_SSID);
   const String password = config_.wifi_password.length() > 0 ? config_.wifi_password : String(CARDPUTER_WIFI_PASSWORD);
+
+  state.wifi_ssid = ssid;
+  state.wifi_ip = "";
 
   if (ssid.length() == 0) {
     state.network_status_line = "Wi-Fi disabled - no credentials configured";
@@ -199,15 +207,14 @@ void NetworkManager::tick(DeviceState& state) {
 
   if (connect_in_progress_) {
     if (millis() - connect_started_ms_ >= kConnectTimeoutMs) {
+      const unsigned long elapsed_ms = millis() - connect_started_ms_;
+      logMessage(String("Wi-Fi connect timed out after ") + String(elapsed_ms / 1000) + "s; restarting");
       connect_in_progress_ = false;
-      last_attempt_ms_ = millis();
-      state.network_status_line = String("Wi-Fi ") + wifiStatusName(wifi_status) + ", retrying...";
-      logMessage(state.network_status_line);
-      last_logged_network_status_ = state.network_status_line;
+      connect(state);
       return;
     }
 
-    state.network_status_line = String("Wi-Fi connecting (") + wifiStatusName(wifi_status) + ")";
+    state.network_status_line = String("Wi-Fi connecting to ") + ssid + " (" + wifiStatusName(wifi_status) + ")";
     if (last_logged_network_status_ != state.network_status_line) {
       logMessage(state.network_status_line);
       last_logged_network_status_ = state.network_status_line;
@@ -219,7 +226,8 @@ void NetworkManager::tick(DeviceState& state) {
   if (last_attempt_ms_ == 0 || now - last_attempt_ms_ >= kRetryIntervalMs) {
     connect(state);
   } else {
-    state.network_status_line = "Wi-Fi retry pending";
+    const unsigned long remaining_ms = kRetryIntervalMs - (now - last_attempt_ms_);
+    state.network_status_line = String("Wi-Fi retry in ") + String((remaining_ms + 999) / 1000) + "s";
     if (last_logged_network_status_ != state.network_status_line) {
       logMessage(state.network_status_line);
       last_logged_network_status_ = state.network_status_line;
@@ -234,12 +242,11 @@ void NetworkManager::connect(DeviceState& state) {
   const String ssid = config_.wifi_ssid.length() > 0 ? config_.wifi_ssid : String(CARDPUTER_WIFI_SSID);
   const String password = config_.wifi_password.length() > 0 ? config_.wifi_password : String(CARDPUTER_WIFI_PASSWORD);
   state.network_status_line = config_.sd_config_loaded
-                               ? "Connecting Wi-Fi from SD config..."
+                               ? String("Connecting Wi-Fi to ") + ssid + " from SD config..."
                                : "Connecting Wi-Fi...";
-  logMessage(String("Wi-Fi connect attempt for SSID ") + ssid);
+  logMessage(String("Wi-Fi connect attempt for SSID ") + ssid + " (password " + (password.length() > 0 ? "set" : "empty") + ")");
   last_logged_network_status_ = state.network_status_line;
 
-  WiFi.disconnect(true, true);
-  WiFi.setAutoReconnect(true);
+  WiFi.disconnect(false, false);
   WiFi.begin(ssid.c_str(), password.c_str());
 }
