@@ -27,6 +27,7 @@ The shell remains the source of truth for app and menu state; the LVGL layer mir
 The display lifecycle now uses active, dimmed, and low-power brightness levels, and any key press restores a safe visible brightness instead of dropping the panel to black.
 Approval requests and bridge prompts are rendered as LVGL modals with a shared dialog widget; notification prompts can be dismissed with `Enter` or `Del`.
 Push-to-talk now has a dedicated LVGL recording panel that shows armed, recording, ready, and error states along with the peak level and capture progress details.
+Phase 6 starts the per-app LVGL screen split with an `LvglAppScreen` interface and a Buddy dashboard screen; the legacy text renderer remains the fallback path for the other apps during the migration.
 
 ## Packaging Assumptions
 

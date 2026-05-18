@@ -156,6 +156,16 @@ void LvglScreen::begin() {
   modal_.begin(root_, port_.group());
   ptt_.begin(root_);
 
+  content_root_ = lv_obj_create(root_);
+  lv_obj_remove_style_all(content_root_);
+  lv_obj_set_size(content_root_, 224, 84);
+  lv_obj_align(content_root_, LV_ALIGN_TOP_LEFT, 8, 38);
+  lv_obj_set_style_bg_opa(content_root_, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(content_root_, 0, 0);
+  lv_obj_set_style_pad_all(content_root_, 0, 0);
+  lv_obj_clear_flag(content_root_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(content_root_, LV_OBJ_FLAG_HIDDEN);
+
   focus_ = lv_label_create(root_);
   lv_obj_set_width(focus_, 224);
   lv_obj_set_style_text_color(focus_, lv_color_hex(0x7FE7FF), 0);
@@ -173,6 +183,7 @@ void LvglScreen::begin() {
   lv_buttonmatrix_set_selected_button(tabs_, 0);
   last_tab_selection_ = 0;
   last_menu_open_ = false;
+  last_content_open_ = false;
   lv_scr_load(root_);
 }
 
@@ -293,6 +304,43 @@ void LvglScreen::syncPttState(const DeviceState& state) {
   ptt_.sync(state, active_app_visible, modal_open);
 }
 
+void LvglScreen::syncContentScreen(const DeviceState& state) {
+  if (content_root_ == nullptr) {
+    return;
+  }
+
+  const bool content_open = state.active_app == AppId::Buddy && !state.menu.app_menu_open && !modal_.visible();
+  if (content_open != last_content_open_) {
+    if (content_open) {
+      lv_obj_clear_flag(content_root_, LV_OBJ_FLAG_HIDDEN);
+      buddy_screen_.attach(content_root_, port_.group());
+      active_screen_ = &buddy_screen_;
+      if (active_screen_ != nullptr) {
+        active_screen_->onFocus();
+      }
+      lv_obj_add_flag(status_, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(detail_, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(focus_, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(footer_, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      if (active_screen_ != nullptr) {
+        active_screen_->detach();
+        active_screen_ = nullptr;
+      }
+      lv_obj_add_flag(content_root_, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(status_, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(detail_, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(focus_, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(footer_, LV_OBJ_FLAG_HIDDEN);
+    }
+    last_content_open_ = content_open;
+  }
+
+  if (content_open && active_screen_ != nullptr) {
+    active_screen_->sync(state);
+  }
+}
+
 void LvglScreen::renderShell(const DeviceState& state, App& app, const String& input_line, const String& footer_hint) {
   if (root_ == nullptr) {
     begin();
@@ -301,9 +349,11 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   syncMenuState(state);
   syncModalState(state);
   syncPttState(state);
+  syncContentScreen(state);
 
   const bool modal_open = modal_.visible();
   const bool ptt_open = ptt_.visible();
+  const bool content_open = last_content_open_;
   const size_t active_index = tabIndexForApp(state.active_app);
   const size_t focus_index = modal_open
                                ? modal_.selectedIndex()
@@ -319,6 +369,8 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
             : modal_.kind() == ModalKind::Confirmation ? "Confirmation"
             : modal_.kind() == ModalKind::Notification ? "Notification"
             : "Modal";
+  } else if (content_open) {
+    active = "Buddy dashboard";
   } else if (ptt_open) {
     active = String("Recording: ") + (state.ptt_state == PushToTalkState::Ready ? "Ready"
                                          : state.ptt_state == PushToTalkState::Recording ? "Live"
@@ -338,6 +390,9 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   if (ptt_open && state.ptt_detail_line.length() > 0) {
     status = state.ptt_detail_line;
   }
+  if (content_open) {
+    status = state.wifi_connected ? "Wi-Fi connected" : "Wi-Fi offline";
+  }
   setLabelText(status_, last_status_, short_status(status, 48));
 
   String detail = String("Mode ") + ui_mode_label(state.ui_mode);
@@ -355,6 +410,9 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   if (state.bridge_status_line.length() > 0) {
     detail += " | ";
     detail += state.bridge_status_line;
+  }
+  if (content_open && state.approval_pending) {
+    detail += " | Approval pending";
   }
   setLabelText(detail_, last_detail_, short_status(detail, 56));
 
@@ -382,6 +440,9 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   if (ptt_open) {
     footer = String("Space: record  Enter: send  Del: cancel");
   }
+  if (content_open) {
+    footer = String("Buddy dashboard");
+  }
   setLabelText(footer_, last_footer_, footer);
 
   if (modal_open) {
@@ -406,6 +467,8 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
             : state.ptt_state == PushToTalkState::Armed ? "armed"
             : "idle";
     setLabelText(focus_, last_focus_, label);
+  } else if (content_open) {
+    setLabelText(focus_, last_focus_, "Focus: dashboard");
   } else if (state.menu.app_menu_open) {
     const char* focus_text = tabLabel(focus_index);
     String label = String("Focus: ") + focus_text;

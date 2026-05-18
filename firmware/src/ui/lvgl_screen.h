@@ -11,8 +11,10 @@
 
 #include "apps.h"
 #include "device_state.h"
+#include "buddy_screen.h"
 #include "ptt_widget.h"
 #include "modal.h"
+#include "lvgl_app_screen.h"
 #include "lvgl_port.h"
 
 class LvglScreen {
@@ -34,13 +36,17 @@ class LvglScreen {
   void syncMenuState(const DeviceState& state);
   void syncModalState(const DeviceState& state);
   void syncPttState(const DeviceState& state);
+  void syncContentScreen(const DeviceState& state);
 
   LvglPort port_;
   ModalWidget modal_;
   PttWidget ptt_;
+  BuddyScreen buddy_screen_;
+  LvglAppScreen* active_screen_ = nullptr;
   lv_obj_t* root_ = nullptr;
   lv_obj_t* title_ = nullptr;
   lv_obj_t* active_app_ = nullptr;
+  lv_obj_t* content_root_ = nullptr;
   lv_obj_t* status_ = nullptr;
   lv_obj_t* detail_ = nullptr;
   lv_obj_t* wifi_ = nullptr;
@@ -60,6 +66,7 @@ class LvglScreen {
   String last_footer_;
   size_t last_tab_selection_ = kNoSelection;
   bool last_menu_open_ = false;
+  bool last_content_open_ = false;
 };
 #else
 #include "apps.h"
