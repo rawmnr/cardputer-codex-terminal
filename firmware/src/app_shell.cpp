@@ -89,6 +89,7 @@ void AppShell::begin() {
   append_activity_event(state_, "Booted and waiting for middleware");
 
   input_line_ = "";
+  state_.last_interaction_ms = millis();
   network_.begin();
   network_.logMessage("App shell booted");
   const RuntimeNetworkConfig& runtime = network_.config();
@@ -129,7 +130,11 @@ void AppShell::begin() {
 
   bridge_.begin(state_);
   network_.tick(state_);
+#if USE_LVGL_UI
+  lvgl_screen_.begin();
+#else
   screen_.begin();
+#endif
   push_to_codex_app_.setBridge(&bridge_);
   pager_app_.setBridge(&bridge_);
   mcp_bridge_app_.setBridge(&bridge_);
@@ -347,6 +352,10 @@ void AppShell::tick() {
     active_app_->tick(state_);
   }
 
+#if USE_LVGL_UI
+  lvgl_screen_.tick();
+#endif
+
   // Power management
   const unsigned long now = millis();
   const unsigned long idle_time = now - state_.last_interaction_ms;
@@ -364,9 +373,21 @@ void AppShell::tick() {
 
 void AppShell::render() {
   traceDisplay();
+#if USE_LVGL_UI
+  if (active_app_ != nullptr) {
+    lvgl_screen_.renderShell(state_, *active_app_, input_line_, footerHint());
+  }
+#else
   screen_.renderShell(state_, *active_app_, input_line_, footerHint());
+#endif
   emitDisplaySnapshot();
 }
+
+#if USE_LVGL_UI
+void AppShell::handleUiKey(lv_key_t key, bool pressed) {
+  lvgl_screen_.pushKey(key, pressed);
+}
+#endif
 
 void AppShell::handleTextInput(const String& typed, bool submit, bool backspace) {
   if (state_.menu.app_menu_open) {

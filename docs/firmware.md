@@ -14,6 +14,15 @@ Suggested output name:
 cardputer-codex-terminal.bin
 ```
 
+## UI Backends
+
+Phase 1 of the LVGL migration uses two PlatformIO environments:
+
+- `cardputer_codex` builds the LVGL-backed proof-of-concept UI.
+- `cardputer_codex_legacy` keeps the existing text renderer as the fallback.
+
+The active path is controlled by the `USE_LVGL_UI` build flag.
+
 ## Packaging Assumptions
 
 - The firmware source tree must be set up so the build pipeline produces a single installable binary.
