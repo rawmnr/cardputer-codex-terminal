@@ -651,6 +651,10 @@ bool AppShell::isPushToCodexActive() const {
   return state_.active_app == AppId::PushToCodex;
 }
 
+bool AppShell::isAppMenuOpen() const {
+  return state_.menu.app_menu_open;
+}
+
 UiMode AppShell::uiMode() const {
   return state_.ui_mode;
 }

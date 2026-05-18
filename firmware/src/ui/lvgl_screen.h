@@ -21,9 +21,15 @@ class LvglScreen {
   void tick();
 
  private:
+  static constexpr size_t kNoSelection = static_cast<size_t>(-1);
   static const char* const kTabMap[];
 
+  static void setLabelText(lv_obj_t* obj, String& cache, const String& value);
+  static size_t tabIndexForApp(AppId app_id);
+  static const char* tabLabel(size_t index);
   static void onTabEvent(lv_event_t* event);
+
+  void syncMenuState(const DeviceState& state);
 
   LvglPort port_;
   lv_obj_t* root_ = nullptr;
@@ -37,6 +43,17 @@ class LvglScreen {
   lv_obj_t* focus_ = nullptr;
   lv_obj_t* footer_ = nullptr;
   lv_obj_t* tabs_ = nullptr;
+  String last_title_;
+  String last_active_app_;
+  String last_status_;
+  String last_detail_;
+  String last_wifi_;
+  String last_codex_;
+  String last_battery_;
+  String last_focus_;
+  String last_footer_;
+  size_t last_tab_selection_ = kNoSelection;
+  bool last_menu_open_ = false;
 };
 #else
 #include "apps.h"

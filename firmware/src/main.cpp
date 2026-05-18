@@ -12,7 +12,9 @@ AppShell g_shell;
 bool g_last_space_state = false;
 bool g_space_hold_started = false;
 unsigned long g_space_pressed_at_ms = 0;
+unsigned long g_last_menu_nav_ms = 0;
 constexpr unsigned long kPushToTalkHoldMs = 350;
+constexpr unsigned long kMenuNavRepeatMs = 30;
 
 #if USE_LVGL_UI
 void sendLvglKey(lv_key_t key) {
@@ -20,36 +22,25 @@ void sendLvglKey(lv_key_t key) {
   g_shell.handleUiKey(key, false);
 }
 
-void sendLvglAction(UiAction action) {
-  switch (action) {
-    case UiAction::Up:
-      sendLvglKey(LV_KEY_UP);
-      break;
-    case UiAction::Down:
-      sendLvglKey(LV_KEY_DOWN);
-      break;
-    case UiAction::Left:
-      sendLvglKey(LV_KEY_LEFT);
-      break;
-    case UiAction::Right:
-      sendLvglKey(LV_KEY_RIGHT);
-      break;
-    case UiAction::Select:
-      sendLvglKey(LV_KEY_ENTER);
-      break;
-    case UiAction::Back:
-      sendLvglKey(LV_KEY_ESC);
-      break;
-    case UiAction::Menu:
-      sendLvglKey(LV_KEY_NEXT);
-      break;
-    case UiAction::None:
-      break;
+void dispatchAction(UiAction action) {
+  if (action == UiAction::None) {
+    return;
   }
+
+  const bool menu_navigation = g_shell.isAppMenuOpen() && (action == UiAction::Up || action == UiAction::Down);
+  if (menu_navigation) {
+    const unsigned long now = millis();
+    if (now - g_last_menu_nav_ms < kMenuNavRepeatMs) {
+      return;
+    }
+    g_last_menu_nav_ms = now;
+  }
+
+  g_shell.handleAction(action);
 }
 #else
-void sendLvglAction(UiAction action) {
-  (void)action;
+void dispatchAction(UiAction action) {
+  g_shell.handleAction(action);
 }
 #endif
 
@@ -120,14 +111,13 @@ void poll_keyboard_input() {
       g_space_pressed_at_ms = millis();
       g_space_hold_started = false;
     } else {
-    if (push_mode && g_space_hold_started) {
-      g_shell.handleAction(UiAction::PushToTalkStop);
-    } else if (input_mode || push_mode) {
-      g_shell.handleTextInput(" ", false, false);
-    } else {
-      g_shell.handleAction(UiAction::Select);
-      sendLvglAction(UiAction::Select);
-    }
+      if (push_mode && g_space_hold_started) {
+        g_shell.handleAction(UiAction::PushToTalkStop);
+      } else if (input_mode || push_mode) {
+        g_shell.handleTextInput(" ", false, false);
+      } else {
+        dispatchAction(UiAction::Select);
+      }
       g_space_pressed_at_ms = 0;
       g_space_hold_started = false;
     }
@@ -137,19 +127,31 @@ void poll_keyboard_input() {
     return;
   }
 
+  if (status.tab) {
+    if (!input_mode && !push_mode) {
+#if USE_LVGL_UI
+      if (g_shell.isAppMenuOpen()) {
+        sendLvglKey(LV_KEY_NEXT);
+      } else {
+        dispatchAction(UiAction::Menu);
+      }
+#else
+      dispatchAction(UiAction::Menu);
+#endif
+    }
+    return;
+  }
+
   if (status.ctrl && typed.length() == 1 && (typed[0] == 'm' || typed[0] == 'M')) {
-    g_shell.handleAction(UiAction::Menu);
-    sendLvglAction(UiAction::Menu);
+    dispatchAction(UiAction::Menu);
     return;
   }
 
   if (status.del) {
     if (input_mode || push_mode) {
       g_shell.handleTextInput("", false, true);
-      sendLvglAction(UiAction::Back);
     } else {
-      g_shell.handleAction(UiAction::Back);
-      sendLvglAction(UiAction::Back);
+      dispatchAction(UiAction::Back);
     }
     return;
   }
@@ -157,10 +159,8 @@ void poll_keyboard_input() {
   if (status.enter) {
     if (input_mode || push_mode) {
       g_shell.handleTextInput("", true, false);
-      sendLvglAction(UiAction::Select);
     } else {
-      g_shell.handleAction(UiAction::Select);
-      sendLvglAction(UiAction::Select);
+      dispatchAction(UiAction::Select);
     }
     return;
   }
@@ -175,8 +175,7 @@ void poll_keyboard_input() {
       const char ch = typed[i];
       UiAction action = UiAction::None;
       if (mapNavigationChar(ch, status.fn, action)) {
-        g_shell.handleAction(action);
-        sendLvglAction(action);
+        dispatchAction(action);
       } else {
         sendTypedChar(ch);
       }

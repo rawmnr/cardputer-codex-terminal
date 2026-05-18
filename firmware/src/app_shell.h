@@ -33,6 +33,7 @@ class AppShell {
   void handleUiKey(lv_key_t key, bool pressed);
 #endif
   bool isPushToCodexActive() const;
+  bool isAppMenuOpen() const;
   UiMode uiMode() const;
   MiddlewareLink& bridge();
 

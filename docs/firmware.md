@@ -23,6 +23,8 @@ Phase 1 of the LVGL migration uses two PlatformIO environments:
 
 The active path is controlled by the `USE_LVGL_UI` build flag.
 
+The shell remains the source of truth for app and menu state; the LVGL layer mirrors that state and keeps focus/selection visible without doing a second, conflicting state transition.
+
 ## Packaging Assumptions
 
 - The firmware source tree must be set up so the build pipeline produces a single installable binary.
@@ -55,7 +57,7 @@ The active path is controlled by the `USE_LVGL_UI` build flag.
 - App selection is menu-driven, opened with `Ctrl-M`, not a persistent tab bar.
 - The shell chrome uses a slim dark header with status dots, a color-coded Codex pill, and a footer that switches between hints and the command palette input line.
 - The app menu is an overlay list, while app views stay compact and avoid repeating global status that already lives in the chrome.
-- Global navigation: `Ctrl-M` opens the app menu, `Fn+; / Fn+.` move selection, `Enter` select/approve, `Del` back/reject.
+- Global navigation: `Ctrl-M` opens the app menu, `Fn+; / Fn+.` move selection, `Tab` opens the menu or advances LVGL focus, `Enter` select/approve, `Del` back/reject.
 - Contextual footer hints replace the old shell-first help as the primary on-device guide.
 - Command palette remains available through `/`, but it is now the debug layer rather than the default flow.
 - Approval screen: requested action, accept/reject.
@@ -85,6 +87,7 @@ The active path is controlled by the `USE_LVGL_UI` build flag.
 - `,` / `.`: previous / next tab.
 - `;` / `'`: previous / next tab.
 - `W` / `S`: move up / down in lists and prompts.
+- `Tab`: open the app menu, or advance LVGL focus when the menu is already open.
 - `Enter`: select, confirm, or submit typed input.
 - `Del`: back, reject, or clear text one character at a time while editing.
 - `Space` tap: contextual action or literal space while editing text.
