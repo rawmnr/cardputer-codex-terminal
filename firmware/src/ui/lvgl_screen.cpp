@@ -63,6 +63,31 @@ String short_status(const String& value, size_t max_chars) {
   }
   return value.substring(0, max_chars - 1) + "~";
 }
+
+LvglAppScreen* screenForApp(
+    AppId app_id,
+    BuddyScreen& buddy_screen,
+    PushScreen& push_screen,
+    PagerAppScreen& pager_screen,
+    UsageScreen& usage_screen,
+    BridgeScreen& bridge_screen,
+    SettingsScreen& settings_screen) {
+  switch (app_id) {
+    case AppId::Buddy:
+      return &buddy_screen;
+    case AppId::PushToCodex:
+      return &push_screen;
+    case AppId::Pager:
+      return &pager_screen;
+    case AppId::Usage:
+      return &usage_screen;
+    case AppId::McpBridge:
+      return &bridge_screen;
+    case AppId::Settings:
+      return &settings_screen;
+  }
+  return &buddy_screen;
+}
 }  // namespace
 
 const char* const LvglScreen::kTabMap[] = {
@@ -289,19 +314,8 @@ void LvglScreen::syncModalState(const DeviceState& state) {
 }
 
 void LvglScreen::syncPttState(const DeviceState& state) {
-  const bool modal_open = modal_.visible();
-  const bool menu_open = state.menu.app_menu_open;
-  const bool palette_open = state.menu.command_palette_open;
-  const bool active_app_visible = state.active_app == AppId::PushToCodex;
-  const bool should_show = !modal_open && !menu_open && !palette_open &&
-                           (active_app_visible || state.ptt_state != PushToTalkState::Idle);
-
-  if (!should_show) {
-    ptt_.setVisible(false);
-    return;
-  }
-
-  ptt_.sync(state, active_app_visible, modal_open);
+  (void)state;
+  ptt_.setVisible(false);
 }
 
 void LvglScreen::syncContentScreen(const DeviceState& state) {
@@ -309,34 +323,45 @@ void LvglScreen::syncContentScreen(const DeviceState& state) {
     return;
   }
 
-  const bool content_open = state.active_app == AppId::Buddy && !state.menu.app_menu_open && !modal_.visible();
-  if (content_open != last_content_open_) {
-    if (content_open) {
+  const bool content_open = !state.menu.app_menu_open && !modal_.visible();
+  LvglAppScreen* desired_screen = content_open
+                                    ? screenForApp(state.active_app,
+                                                   buddy_screen_,
+                                                   push_screen_,
+                                                   pager_screen_,
+                                                   usage_screen_,
+                                                   bridge_screen_,
+                                                   settings_screen_)
+                                    : nullptr;
+
+  if (desired_screen != active_screen_) {
+    if (active_screen_ != nullptr) {
+      active_screen_->detach();
+      active_screen_ = nullptr;
+    }
+
+    if (desired_screen != nullptr) {
       lv_obj_clear_flag(content_root_, LV_OBJ_FLAG_HIDDEN);
-      buddy_screen_.attach(content_root_, port_.group());
-      active_screen_ = &buddy_screen_;
-      if (active_screen_ != nullptr) {
-        active_screen_->onFocus();
-      }
+      desired_screen->attach(content_root_, port_.group());
+      active_screen_ = desired_screen;
+      active_screen_->onFocus();
       lv_obj_add_flag(status_, LV_OBJ_FLAG_HIDDEN);
       lv_obj_add_flag(detail_, LV_OBJ_FLAG_HIDDEN);
       lv_obj_add_flag(focus_, LV_OBJ_FLAG_HIDDEN);
       lv_obj_add_flag(footer_, LV_OBJ_FLAG_HIDDEN);
     } else {
-      if (active_screen_ != nullptr) {
-        active_screen_->detach();
-        active_screen_ = nullptr;
-      }
       lv_obj_add_flag(content_root_, LV_OBJ_FLAG_HIDDEN);
       lv_obj_clear_flag(status_, LV_OBJ_FLAG_HIDDEN);
       lv_obj_clear_flag(detail_, LV_OBJ_FLAG_HIDDEN);
       lv_obj_clear_flag(focus_, LV_OBJ_FLAG_HIDDEN);
       lv_obj_clear_flag(footer_, LV_OBJ_FLAG_HIDDEN);
     }
-    last_content_open_ = content_open;
+
+    last_content_app_ = state.active_app;
+    last_content_open_ = desired_screen != nullptr;
   }
 
-  if (content_open && active_screen_ != nullptr) {
+  if (active_screen_ != nullptr) {
     active_screen_->sync(state);
   }
 }
@@ -352,7 +377,7 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   syncContentScreen(state);
 
   const bool modal_open = modal_.visible();
-  const bool ptt_open = ptt_.visible();
+  const bool ptt_open = false;
   const bool content_open = last_content_open_;
   const size_t active_index = tabIndexForApp(state.active_app);
   const size_t focus_index = modal_open

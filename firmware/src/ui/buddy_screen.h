@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include "device_state.h"
+#include "lvgl_app_screen.h"
 
 #ifndef USE_LVGL_UI
 #define USE_LVGL_UI 0
@@ -9,9 +10,6 @@
 
 #if USE_LVGL_UI
 #include <lvgl.h>
-
-#include "device_state.h"
-#include "lvgl_app_screen.h"
 
 class BuddyScreen final : public LvglAppScreen {
  public:
@@ -40,8 +38,6 @@ class BuddyScreen final : public LvglAppScreen {
   String last_thread_;
 };
 #else
-#include "lvgl_app_screen.h"
-
 class BuddyScreen final : public LvglAppScreen {
  public:
   void attach(void*, void*) {}

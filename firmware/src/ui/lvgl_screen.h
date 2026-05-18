@@ -12,6 +12,11 @@
 #include "apps.h"
 #include "device_state.h"
 #include "buddy_screen.h"
+#include "bridge_screen.h"
+#include "pager_screen.h"
+#include "push_screen.h"
+#include "settings_screen.h"
+#include "usage_screen.h"
 #include "ptt_widget.h"
 #include "modal.h"
 #include "lvgl_app_screen.h"
@@ -42,6 +47,11 @@ class LvglScreen {
   ModalWidget modal_;
   PttWidget ptt_;
   BuddyScreen buddy_screen_;
+  PushScreen push_screen_;
+  PagerAppScreen pager_screen_;
+  UsageScreen usage_screen_;
+  BridgeScreen bridge_screen_;
+  SettingsScreen settings_screen_;
   LvglAppScreen* active_screen_ = nullptr;
   lv_obj_t* root_ = nullptr;
   lv_obj_t* title_ = nullptr;
@@ -67,6 +77,7 @@ class LvglScreen {
   size_t last_tab_selection_ = kNoSelection;
   bool last_menu_open_ = false;
   bool last_content_open_ = false;
+  AppId last_content_app_ = AppId::Buddy;
 };
 #else
 #include "apps.h"
