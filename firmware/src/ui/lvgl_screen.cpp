@@ -154,6 +154,7 @@ void LvglScreen::begin() {
   lv_obj_add_flag(tabs_, LV_OBJ_FLAG_HIDDEN);
 
   modal_.begin(root_, port_.group());
+  ptt_.begin(root_);
 
   focus_ = lv_label_create(root_);
   lv_obj_set_width(focus_, 224);
@@ -276,6 +277,22 @@ void LvglScreen::syncModalState(const DeviceState& state) {
   modal_.focus();
 }
 
+void LvglScreen::syncPttState(const DeviceState& state) {
+  const bool modal_open = modal_.visible();
+  const bool menu_open = state.menu.app_menu_open;
+  const bool palette_open = state.menu.command_palette_open;
+  const bool active_app_visible = state.active_app == AppId::PushToCodex;
+  const bool should_show = !modal_open && !menu_open && !palette_open &&
+                           (active_app_visible || state.ptt_state != PushToTalkState::Idle);
+
+  if (!should_show) {
+    ptt_.setVisible(false);
+    return;
+  }
+
+  ptt_.sync(state, active_app_visible, modal_open);
+}
+
 void LvglScreen::renderShell(const DeviceState& state, App& app, const String& input_line, const String& footer_hint) {
   if (root_ == nullptr) {
     begin();
@@ -283,8 +300,10 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
 
   syncMenuState(state);
   syncModalState(state);
+  syncPttState(state);
 
   const bool modal_open = modal_.visible();
+  const bool ptt_open = ptt_.visible();
   const size_t active_index = tabIndexForApp(state.active_app);
   const size_t focus_index = modal_open
                                ? modal_.selectedIndex()
@@ -300,6 +319,12 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
             : modal_.kind() == ModalKind::Confirmation ? "Confirmation"
             : modal_.kind() == ModalKind::Notification ? "Notification"
             : "Modal";
+  } else if (ptt_open) {
+    active = String("Recording: ") + (state.ptt_state == PushToTalkState::Ready ? "Ready"
+                                         : state.ptt_state == PushToTalkState::Recording ? "Live"
+                                         : state.ptt_state == PushToTalkState::Error ? "Error"
+                                         : state.ptt_state == PushToTalkState::Armed ? "Armed"
+                                         : "Idle");
   } else {
     active = state.menu.app_menu_open ? String("Current: ") + active_app_label(state.active_app)
                                       : active_app_label(state.active_app);
@@ -310,11 +335,23 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   if (state.menu.command_palette_open && input_line.length() > 0) {
     status = String("Cmd: ") + input_line;
   }
+  if (ptt_open && state.ptt_detail_line.length() > 0) {
+    status = state.ptt_detail_line;
+  }
   setLabelText(status_, last_status_, short_status(status, 48));
 
   String detail = String("Mode ") + ui_mode_label(state.ui_mode);
   detail += " | ";
   detail += codex_label(state.codex_state);
+  if (ptt_open) {
+    detail += " | ";
+    detail += "PTT ";
+    detail += state.ptt_samples_captured;
+    detail += "/";
+    detail += state.ptt_sample_limit;
+    detail += " peak ";
+    detail += state.ptt_peak_amplitude;
+  }
   if (state.bridge_status_line.length() > 0) {
     detail += " | ";
     detail += state.bridge_status_line;
@@ -342,6 +379,9 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   setLabelText(battery_, last_battery_, short_status(battery, 20));
 
   String footer = short_status(footer_hint, 48);
+  if (ptt_open) {
+    footer = String("Space: record  Enter: send  Del: cancel");
+  }
   setLabelText(footer_, last_footer_, footer);
 
   if (modal_open) {
@@ -358,6 +398,14 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
     setLabelText(focus_, last_focus_, modal_line);
   } else if (state.menu.command_palette_open) {
     setLabelText(focus_, last_focus_, "Focus: command palette");
+  } else if (ptt_open) {
+    String label = String("Focus: ");
+    label += state.ptt_state == PushToTalkState::Ready ? "ready"
+            : state.ptt_state == PushToTalkState::Recording ? "recording"
+            : state.ptt_state == PushToTalkState::Error ? "error"
+            : state.ptt_state == PushToTalkState::Armed ? "armed"
+            : "idle";
+    setLabelText(focus_, last_focus_, label);
   } else if (state.menu.app_menu_open) {
     const char* focus_text = tabLabel(focus_index);
     String label = String("Focus: ") + focus_text;

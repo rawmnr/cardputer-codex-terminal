@@ -11,6 +11,7 @@
 
 #include "apps.h"
 #include "device_state.h"
+#include "ptt_widget.h"
 #include "modal.h"
 #include "lvgl_port.h"
 
@@ -32,9 +33,11 @@ class LvglScreen {
 
   void syncMenuState(const DeviceState& state);
   void syncModalState(const DeviceState& state);
+  void syncPttState(const DeviceState& state);
 
   LvglPort port_;
   ModalWidget modal_;
+  PttWidget ptt_;
   lv_obj_t* root_ = nullptr;
   lv_obj_t* title_ = nullptr;
   lv_obj_t* active_app_ = nullptr;
