@@ -4,6 +4,12 @@
 #include "string_print.h"
 
 namespace {
+constexpr unsigned long kDisplayDimAfterMs = 30000;
+constexpr unsigned long kDisplayLowPowerAfterMs = 120000;
+constexpr uint8_t kDisplayActiveBrightness = 128;
+constexpr uint8_t kDisplayDimBrightness = 32;
+constexpr uint8_t kDisplayLowPowerBrightness = 8;
+
 String trimmed_copy(const String& input) {
   String output = input;
   output.trim();
@@ -135,6 +141,7 @@ void AppShell::begin() {
 #else
   screen_.begin();
 #endif
+  applyDisplayBrightness(kDisplayActiveBrightness, DisplayPowerState::Active);
   push_to_codex_app_.setBridge(&bridge_);
   pager_app_.setBridge(&bridge_);
   mcp_bridge_app_.setBridge(&bridge_);
@@ -356,18 +363,16 @@ void AppShell::tick() {
   lvgl_screen_.tick();
 #endif
 
-  // Power management
   const unsigned long now = millis();
   const unsigned long idle_time = now - state_.last_interaction_ms;
-  
-  if (idle_time > 120000) { // 2 minutes: Light sleep
-    M5Cardputer.Display.setBrightness(0);
-    // Note: Light sleep on ESP32-S3 can interfere with WiFi/WebSockets if not handled carefully.
-    // For now, we just dim to 0 to save significant power without dropping the link.
-  } else if (idle_time > 30000) { // 30 seconds: Dim
-    M5Cardputer.Display.setBrightness(32);
-  } else {
-    M5Cardputer.Display.setBrightness(128);
+  const uint8_t target_brightness = brightnessForIdle(idle_time);
+  if (target_brightness != display_brightness_) {
+    const DisplayPowerState target_state =
+      target_brightness == kDisplayActiveBrightness
+        ? DisplayPowerState::Active
+        : target_brightness == kDisplayDimBrightness ? DisplayPowerState::Dimmed
+                                                     : DisplayPowerState::LowPower;
+    applyDisplayBrightness(target_brightness, target_state);
   }
 }
 
@@ -389,7 +394,13 @@ void AppShell::handleUiKey(lv_key_t key, bool pressed) {
 }
 #endif
 
+void AppShell::noteInteraction() {
+  state_.last_interaction_ms = millis();
+  applyDisplayBrightness(kDisplayActiveBrightness, DisplayPowerState::Active);
+}
+
 void AppShell::handleTextInput(const String& typed, bool submit, bool backspace) {
+  noteInteraction();
   if (state_.menu.app_menu_open) {
     return;
   }
@@ -449,6 +460,7 @@ void AppShell::handleTextInput(const String& typed, bool submit, bool backspace)
 }
 
 void AppShell::handleAction(UiAction action) {
+  noteInteraction();
   if (action == UiAction::None) {
     return;
   }
@@ -586,6 +598,7 @@ void AppShell::handleAction(UiAction action) {
 }
 
 void AppShell::handlePushToTalk(bool pressed) {
+  noteInteraction();
   if (active_app_ != nullptr) {
     active_app_->onPushToTalk(pressed, state_);
     append_activity_event(state_, pressed ? "Push-to-talk pressed" : "Push-to-talk released");
@@ -602,6 +615,7 @@ bool AppShell::hasPendingBridgePrompt() const {
 }
 
 void AppShell::handleApprovalDecision(bool approved) {
+  noteInteraction();
   if (!state_.approval_pending) {
     state_.status_line = approved ? "No approval pending to accept" : "No approval pending to reject";
     append_activity_event(state_, state_.status_line);
@@ -624,6 +638,7 @@ void AppShell::handleApprovalDecision(bool approved) {
 }
 
 void AppShell::handleBridgePromptDecision(bool accepted) {
+  noteInteraction();
   if (!state_.bridge_prompt_pending) {
     state_.status_line = accepted ? "No bridge prompt pending to accept" : "No bridge prompt pending to reject";
     append_activity_event(state_, state_.status_line);
@@ -661,6 +676,36 @@ UiMode AppShell::uiMode() const {
 
 MiddlewareLink& AppShell::bridge() {
   return bridge_;
+}
+
+uint8_t AppShell::brightnessForIdle(unsigned long idle_ms) const {
+  if (idle_ms > kDisplayLowPowerAfterMs) {
+    return kDisplayLowPowerBrightness;
+  }
+
+  if (idle_ms > kDisplayDimAfterMs) {
+    return kDisplayDimBrightness;
+  }
+
+  return kDisplayActiveBrightness;
+}
+
+void AppShell::applyDisplayBrightness(uint8_t brightness, DisplayPowerState state) {
+  if (brightness == display_brightness_ && state == display_power_state_) {
+    return;
+  }
+
+  display_brightness_ = brightness;
+  display_power_state_ = state;
+  M5Cardputer.Display.setBrightness(brightness);
+
+#if USE_LVGL_UI
+  lv_display_trigger_activity(nullptr);
+  lv_obj_t* screen = lv_screen_active();
+  if (screen != nullptr) {
+    lv_obj_invalidate(screen);
+  }
+#endif
 }
 
 void AppShell::switchTo(AppId app_id) {

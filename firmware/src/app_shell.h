@@ -32,12 +32,19 @@ class AppShell {
 #if USE_LVGL_UI
   void handleUiKey(lv_key_t key, bool pressed);
 #endif
+  void noteInteraction();
   bool isPushToCodexActive() const;
   bool isAppMenuOpen() const;
   UiMode uiMode() const;
   MiddlewareLink& bridge();
 
  private:
+  enum class DisplayPowerState {
+    Active,
+    Dimmed,
+    LowPower,
+  };
+
   void switchTo(AppId app_id);
   void setActiveTab(size_t tab_index);
   size_t tabIndexForApp(AppId app_id) const;
@@ -45,6 +52,8 @@ class AppShell {
   String footerHint() const;
   void traceDisplay();
   void emitDisplaySnapshot();
+  uint8_t brightnessForIdle(unsigned long idle_ms) const;
+  void applyDisplayBrightness(uint8_t brightness, DisplayPowerState state);
 
   DeviceState state_;
   NetworkManager network_;
@@ -62,4 +71,6 @@ class AppShell {
   McpBridgeApp mcp_bridge_app_;
   SettingsApp settings_app_;
   App* active_app_ = nullptr;
+  DisplayPowerState display_power_state_ = DisplayPowerState::LowPower;
+  uint8_t display_brightness_ = 0;
 };

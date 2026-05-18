@@ -24,6 +24,7 @@ Phase 1 of the LVGL migration uses two PlatformIO environments:
 The active path is controlled by the `USE_LVGL_UI` build flag.
 
 The shell remains the source of truth for app and menu state; the LVGL layer mirrors that state and keeps focus/selection visible without doing a second, conflicting state transition.
+The display lifecycle now uses active, dimmed, and low-power brightness levels, and any key press restores a safe visible brightness instead of dropping the panel to black.
 
 ## Packaging Assumptions
 

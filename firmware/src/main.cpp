@@ -85,6 +85,10 @@ void poll_keyboard_input() {
   const bool push_mode = g_shell.isPushToCodexActive();
   const bool input_mode = g_shell.uiMode() == UiMode::Input;
 
+  if (M5Cardputer.Keyboard.isChange()) {
+    g_shell.noteInteraction();
+  }
+
   if (!M5Cardputer.Keyboard.isChange()) {
     if (push_mode && status.space && !g_space_hold_started && g_space_pressed_at_ms > 0) {
       const unsigned long held_ms = millis() - g_space_pressed_at_ms;
