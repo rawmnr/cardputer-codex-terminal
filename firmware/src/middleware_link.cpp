@@ -406,6 +406,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       state.bridge_prompt_selected_index = 0;
       state.bridge_status_line = state.bridge_prompt_title;
       state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+      state.ui_mode = UiMode::Modal;
       append_activity_event(state, state.status_line);
       return;
     }
@@ -436,6 +437,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       }
       state.bridge_status_line = "Bridge question pending";
       state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+      state.ui_mode = UiMode::BridgePrompt;
       append_activity_event(state, state.bridge_prompt_title);
       return;
     }
@@ -458,6 +460,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       state.bridge_prompt_option_count = 2;
       state.bridge_status_line = "Bridge confirmation pending";
       state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+      state.ui_mode = UiMode::BridgePrompt;
       append_activity_event(state, state.bridge_status_line);
       return;
     }
@@ -471,6 +474,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       state.bridge_prompt_selected_index = 0;
       state.bridge_status_line = content.length() > 0 ? content : "Bridge response recorded";
       state.status_line = state.bridge_status_line;
+      state.ui_mode = UiMode::Home;
       append_activity_event(state, state.bridge_status_line);
       return;
     }
@@ -542,6 +546,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
     state.approval_timeout_seconds = payload["timeout_seconds"] | payload["timeoutSeconds"] | 0;
     state.codex_state = CodexState::WaitingForApproval;
     state.status_line = "Approval pending";
+    state.ui_mode = UiMode::Approval;
     append_activity_event(state, state.approval_title);
     return;
   }
@@ -555,6 +560,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
     state.bridge_prompt_selected_index = 0;
     state.bridge_status_line = state.bridge_prompt_title;
     state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+    state.ui_mode = UiMode::Modal;
     append_activity_event(state, state.status_line);
     return;
   }
@@ -579,6 +585,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       state.bridge_prompt_option_count = i;
     }
     state.status_line = state.bridge_prompt_title;
+    state.ui_mode = UiMode::BridgePrompt;
     append_activity_event(state, state.bridge_prompt_title);
     return;
   }
@@ -595,6 +602,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
     state.bridge_prompt_option_count = 2;
     state.bridge_status_line = "Bridge confirmation pending";
     state.status_line = state.bridge_prompt_detail.length() > 0 ? state.bridge_prompt_detail : state.bridge_prompt_title;
+    state.ui_mode = UiMode::BridgePrompt;
     append_activity_event(state, state.bridge_status_line);
     return;
   }
@@ -608,6 +616,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
     state.bridge_prompt_selected_index = 0;
     state.bridge_status_line = content.length() > 0 ? content : "Bridge response recorded";
     state.status_line = state.bridge_status_line;
+    state.ui_mode = UiMode::Home;
     append_activity_event(state, state.bridge_status_line);
     return;
   }
@@ -640,4 +649,3 @@ String MiddlewareLink::nextMessageId() {
   snprintf(buffer, sizeof(buffer), "msg-%06lu", static_cast<unsigned long>(next_message_id_++));
   return String(buffer);
 }
-

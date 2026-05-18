@@ -51,6 +51,22 @@ const char* menu_label(AppId app_id) {
   }
   return "App";
 }
+
+bool has_visible_modal(const DeviceState& state) {
+  return state.approval_pending || state.bridge_prompt_kind != BridgePromptKind::None;
+}
+
+void clear_bridge_prompt(DeviceState& state) {
+  state.bridge_prompt_pending = false;
+  state.bridge_prompt_kind = BridgePromptKind::None;
+  state.bridge_prompt_title = "";
+  state.bridge_prompt_detail = "";
+  state.bridge_prompt_option_count = 0;
+  state.bridge_prompt_selected_index = 0;
+  for (size_t i = 0; i < state.bridge_prompt_options.size(); ++i) {
+    state.bridge_prompt_options[i] = "";
+  }
+}
 }  // namespace
 
 void AppShell::begin() {
@@ -474,6 +490,20 @@ void AppShell::handleAction(UiAction action) {
     return;
   }
 
+  if (state_.bridge_prompt_kind == BridgePromptKind::Notification) {
+    if (action == UiAction::Select || action == UiAction::Back) {
+      clear_bridge_prompt(state_);
+      state_.ui_mode = state_.menu.command_palette_open ? UiMode::Input
+                        : state_.menu.app_menu_open     ? UiMode::Menu
+                                                        : UiMode::Home;
+      state_.bridge_status_line = "Notification dismissed";
+      state_.status_line = state_.bridge_status_line;
+      append_activity_event(state_, state_.status_line);
+      render();
+    }
+    return;
+  }
+
   if (state_.bridge_prompt_pending) {
     if (action == UiAction::Up && state_.bridge_prompt_option_count > 0) {
       if (state_.bridge_prompt_selected_index == 0) {
@@ -650,12 +680,7 @@ void AppShell::handleBridgePromptDecision(bool accepted) {
   const String selected_text =
     selected_index < state_.bridge_prompt_option_count ? state_.bridge_prompt_options[selected_index] : "";
   bridge_.sendBridgeResponse(accepted, selected_index, selected_text);
-  state_.bridge_prompt_pending = false;
-  state_.bridge_prompt_kind = BridgePromptKind::None;
-  state_.bridge_prompt_title = "";
-  state_.bridge_prompt_detail = "";
-  state_.bridge_prompt_option_count = 0;
-  state_.bridge_prompt_selected_index = 0;
+  clear_bridge_prompt(state_);
   state_.ui_mode = UiMode::Menu;
   state_.status_line = accepted ? "Bridge prompt accepted" : "Bridge prompt rejected";
   append_activity_event(state_, state_.status_line);
@@ -668,6 +693,10 @@ bool AppShell::isPushToCodexActive() const {
 
 bool AppShell::isAppMenuOpen() const {
   return state_.menu.app_menu_open;
+}
+
+bool AppShell::hasVisibleModal() const {
+  return has_visible_modal(state_);
 }
 
 UiMode AppShell::uiMode() const {

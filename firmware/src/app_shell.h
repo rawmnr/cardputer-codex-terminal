@@ -35,6 +35,7 @@ class AppShell {
   void noteInteraction();
   bool isPushToCodexActive() const;
   bool isAppMenuOpen() const;
+  bool hasVisibleModal() const;
   UiMode uiMode() const;
   MiddlewareLink& bridge();
 

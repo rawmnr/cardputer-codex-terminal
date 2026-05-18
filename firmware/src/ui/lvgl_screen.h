@@ -11,6 +11,7 @@
 
 #include "apps.h"
 #include "device_state.h"
+#include "modal.h"
 #include "lvgl_port.h"
 
 class LvglScreen {
@@ -30,8 +31,10 @@ class LvglScreen {
   static void onTabEvent(lv_event_t* event);
 
   void syncMenuState(const DeviceState& state);
+  void syncModalState(const DeviceState& state);
 
   LvglPort port_;
+  ModalWidget modal_;
   lv_obj_t* root_ = nullptr;
   lv_obj_t* title_ = nullptr;
   lv_obj_t* active_app_ = nullptr;

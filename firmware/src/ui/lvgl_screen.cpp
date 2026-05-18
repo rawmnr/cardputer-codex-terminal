@@ -153,6 +153,8 @@ void LvglScreen::begin() {
   lv_group_add_obj(port_.group(), tabs_);
   lv_obj_add_flag(tabs_, LV_OBJ_FLAG_HIDDEN);
 
+  modal_.begin(root_, port_.group());
+
   focus_ = lv_label_create(root_);
   lv_obj_set_width(focus_, 224);
   lv_obj_set_style_text_color(focus_, lv_color_hex(0x7FE7FF), 0);
@@ -178,7 +180,8 @@ void LvglScreen::syncMenuState(const DeviceState& state) {
     return;
   }
 
-  const bool menu_open = state.menu.app_menu_open;
+  const bool modal_open = state.approval_pending || state.bridge_prompt_kind != BridgePromptKind::None;
+  const bool menu_open = state.menu.app_menu_open && !modal_open;
   if (menu_open != last_menu_open_) {
     if (menu_open) {
       lv_obj_clear_flag(tabs_, LV_OBJ_FLAG_HIDDEN);
@@ -198,21 +201,109 @@ void LvglScreen::syncMenuState(const DeviceState& state) {
   }
 }
 
+void LvglScreen::syncModalState(const DeviceState& state) {
+  const bool approval_open = state.approval_pending;
+  const bool bridge_modal_open = state.bridge_prompt_kind != BridgePromptKind::None;
+
+  if (!approval_open && !bridge_modal_open) {
+    modal_.setVisible(false);
+    if (state.menu.app_menu_open && last_menu_open_) {
+      lv_group_focus_obj(tabs_);
+    }
+    return;
+  }
+
+  ModalKind kind = ModalKind::None;
+  String title;
+  String detail;
+  std::array<String, 4> options{};
+  size_t option_count = 0;
+  size_t selected_index = 0;
+
+  if (approval_open) {
+    kind = ModalKind::Approval;
+    title = state.approval_title.length() > 0 ? state.approval_title : "Approval requested";
+    detail = state.approval_detail_line;
+    options[0] = "Accept";
+    options[1] = "Reject";
+    option_count = 2;
+    selected_index = 0;
+  } else {
+    switch (state.bridge_prompt_kind) {
+      case BridgePromptKind::None:
+        break;
+      case BridgePromptKind::Notification:
+        kind = ModalKind::Notification;
+        title = state.bridge_prompt_title.length() > 0 ? state.bridge_prompt_title : "Notification";
+        detail = state.bridge_prompt_detail;
+        option_count = 1;
+        options[0] = "OK";
+        selected_index = 0;
+        break;
+      case BridgePromptKind::Question:
+        kind = ModalKind::Question;
+        title = state.bridge_prompt_title.length() > 0 ? state.bridge_prompt_title : "Question";
+        detail = state.bridge_prompt_detail;
+        option_count = state.bridge_prompt_option_count;
+        for (size_t i = 0; i < option_count && i < options.size(); ++i) {
+          options[i] = state.bridge_prompt_options[i];
+        }
+        if (option_count == 0) {
+          options[0] = "Yes";
+          options[1] = "No";
+          option_count = 2;
+        }
+        selected_index = state.bridge_prompt_selected_index < option_count ? state.bridge_prompt_selected_index : 0;
+        break;
+      case BridgePromptKind::Confirmation:
+        kind = ModalKind::Confirmation;
+        title = state.bridge_prompt_title.length() > 0 ? state.bridge_prompt_title : "Confirmation";
+        detail = state.bridge_prompt_detail;
+        options[0] = "Accept";
+        options[1] = "Reject";
+        option_count = 2;
+        selected_index = state.bridge_prompt_selected_index < option_count ? state.bridge_prompt_selected_index : 0;
+        break;
+    }
+  }
+
+  if (kind == ModalKind::None) {
+    modal_.setVisible(false);
+    return;
+  }
+
+  modal_.setContent(kind, title, detail, options, option_count, selected_index);
+  modal_.focus();
+}
+
 void LvglScreen::renderShell(const DeviceState& state, App& app, const String& input_line, const String& footer_hint) {
   if (root_ == nullptr) {
     begin();
   }
 
   syncMenuState(state);
+  syncModalState(state);
 
+  const bool modal_open = modal_.visible();
   const size_t active_index = tabIndexForApp(state.active_app);
-  const size_t focus_index = state.menu.app_menu_open ? state.menu.app_menu_selected : active_index;
+  const size_t focus_index = modal_open
+                               ? modal_.selectedIndex()
+                               : state.menu.app_menu_open ? state.menu.app_menu_selected : active_index;
 
   const String title = state.menu.app_menu_open ? "Applications" : "Cardputer Codex";
   setLabelText(title_, last_title_, title);
 
-  String active = state.menu.app_menu_open ? String("Current: ") + active_app_label(state.active_app)
-                                           : active_app_label(state.active_app);
+  String active;
+  if (modal_open) {
+    active = modal_.kind() == ModalKind::Approval ? "Approval"
+            : modal_.kind() == ModalKind::Question ? "Question"
+            : modal_.kind() == ModalKind::Confirmation ? "Confirmation"
+            : modal_.kind() == ModalKind::Notification ? "Notification"
+            : "Modal";
+  } else {
+    active = state.menu.app_menu_open ? String("Current: ") + active_app_label(state.active_app)
+                                      : active_app_label(state.active_app);
+  }
   setLabelText(active_app_, last_active_app_, active);
 
   String status = state.status_line.length() > 0 ? state.status_line : String("Ready");
@@ -253,7 +344,19 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   String footer = short_status(footer_hint, 48);
   setLabelText(footer_, last_footer_, footer);
 
-  if (state.menu.command_palette_open) {
+  if (modal_open) {
+    String modal_line = String(modal_.kind() == ModalKind::Approval ? "Approval"
+                               : modal_.kind() == ModalKind::Question ? "Question"
+                               : modal_.kind() == ModalKind::Confirmation ? "Confirmation"
+                               : modal_.kind() == ModalKind::Notification ? "Notification"
+                               : "Modal");
+    const char* choice = modal_.selectedLabel();
+    if (choice != nullptr && String(choice).length() > 0) {
+      modal_line += " | ";
+      modal_line += choice;
+    }
+    setLabelText(focus_, last_focus_, modal_line);
+  } else if (state.menu.command_palette_open) {
     setLabelText(focus_, last_focus_, "Focus: command palette");
   } else if (state.menu.app_menu_open) {
     const char* focus_text = tabLabel(focus_index);

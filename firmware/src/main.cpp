@@ -132,7 +132,7 @@ void poll_keyboard_input() {
   }
 
   if (status.tab) {
-    if (!input_mode && !push_mode) {
+    if (!input_mode && !push_mode && !g_shell.hasVisibleModal()) {
 #if USE_LVGL_UI
       if (g_shell.isAppMenuOpen()) {
         sendLvglKey(LV_KEY_NEXT);
