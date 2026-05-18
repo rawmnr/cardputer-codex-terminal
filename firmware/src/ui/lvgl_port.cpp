@@ -13,6 +13,9 @@ void LvglPort::begin() {
   g_port = this;
   last_tick_ms_ = millis();
 
+  // M5GFX expects 16-bit flush buffers in swapped RGB565 byte order here.
+  M5Cardputer.Display.setSwapBytes(true);
+
   display_ = lv_display_create(kScreenWidth, kScreenHeight);
   lv_display_set_color_format(display_, LV_COLOR_FORMAT_RGB565);
   lv_display_set_buffers(display_, buffer_.data(), nullptr, sizeof(buffer_), LV_DISPLAY_RENDER_MODE_PARTIAL);

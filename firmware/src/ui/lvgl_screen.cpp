@@ -91,7 +91,7 @@ LvglAppScreen* screenForApp(
 }  // namespace
 
 const char* const LvglScreen::kTabMap[] = {
-  "Buddy", "Push", "Pager", "Usage", "MCP", "Set", nullptr,
+  "Codex Buddy", "\n", "Push to Codex", "\n", "Codex Pager", "\n", "Codex Usage", "\n", "MCP Bridge", "\n", "Settings", nullptr,
 };
 
 void LvglScreen::setLabelText(lv_obj_t* obj, String& cache, const String& value) {
@@ -125,7 +125,7 @@ const char* LvglScreen::tabLabel(size_t index) {
   if (index >= kTabCount) {
     return "App";
   }
-  return kTabMap[index];
+  return kTabMap[index * 2];
 }
 
 void LvglScreen::begin() {
@@ -170,8 +170,8 @@ void LvglScreen::begin() {
   setLabelText(detail_, last_detail_, "Mode Home | Offline");
 
   tabs_ = lv_buttonmatrix_create(root_);
-  lv_obj_set_size(tabs_, 224, 42);
-  lv_obj_align(tabs_, LV_ALIGN_BOTTOM_MID, 0, -18);
+  lv_obj_set_size(tabs_, 224, 110);
+  lv_obj_align(tabs_, LV_ALIGN_TOP_MID, 0, 18);
   lv_buttonmatrix_set_map(tabs_, kTabMap);
   lv_buttonmatrix_set_one_checked(tabs_, true);
   lv_obj_add_event_cb(tabs_, onTabEvent, LV_EVENT_VALUE_CHANGED, this);
@@ -323,7 +323,8 @@ void LvglScreen::syncContentScreen(const DeviceState& state) {
     return;
   }
 
-  const bool content_open = !state.menu.app_menu_open && !modal_.visible();
+  const bool modal_open = state.approval_pending || state.bridge_prompt_kind != BridgePromptKind::None;
+  const bool content_open = !state.menu.app_menu_open && !modal_open;
   LvglAppScreen* desired_screen = content_open
                                     ? screenForApp(state.active_app,
                                                    buddy_screen_,
@@ -345,16 +346,8 @@ void LvglScreen::syncContentScreen(const DeviceState& state) {
       desired_screen->attach(content_root_, port_.group());
       active_screen_ = desired_screen;
       active_screen_->onFocus();
-      lv_obj_add_flag(status_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_add_flag(detail_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_add_flag(focus_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_add_flag(footer_, LV_OBJ_FLAG_HIDDEN);
     } else {
       lv_obj_add_flag(content_root_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_clear_flag(status_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_clear_flag(detail_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_clear_flag(focus_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_clear_flag(footer_, LV_OBJ_FLAG_HIDDEN);
     }
 
     last_content_app_ = state.active_app;
@@ -379,6 +372,8 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   const bool modal_open = modal_.visible();
   const bool ptt_open = false;
   const bool content_open = last_content_open_;
+  const bool menu_open = state.menu.app_menu_open && !modal_open;
+
   const size_t active_index = tabIndexForApp(state.active_app);
   const size_t focus_index = modal_open
                                ? modal_.selectedIndex()
@@ -386,6 +381,38 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
 
   const String title = state.menu.app_menu_open ? "Applications" : "Cardputer Codex";
   setLabelText(title_, last_title_, title);
+
+  if (menu_open || modal_open) {
+    lv_obj_add_flag(active_app_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(status_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(detail_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(wifi_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(codex_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(battery_, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_clear_flag(active_app_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(status_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(detail_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(wifi_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(codex_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(battery_, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  if (content_open) {
+    lv_obj_add_flag(status_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(detail_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(focus_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(footer_, LV_OBJ_FLAG_HIDDEN);
+  } else if (!menu_open && !modal_open) {
+    lv_obj_clear_flag(status_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(detail_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(focus_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(footer_, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    // Menu or Modal: keep focus and footer but hide content areas
+    lv_obj_clear_flag(focus_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(footer_, LV_OBJ_FLAG_HIDDEN);
+  }
 
   String active;
   if (modal_open) {
