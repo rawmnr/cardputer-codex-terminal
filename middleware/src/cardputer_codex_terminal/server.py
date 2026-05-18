@@ -1,13 +1,24 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass
 import asyncio
 from typing import Any, AsyncIterator
 
+from websockets.exceptions import ConnectionClosed
+
 from .core import MiddlewareApp
 from .events import Event, EventType
 from .messages import CardputerMessage
+
+_DISCONNECT_EXCEPTIONS = (
+    ConnectionClosed,
+    ConnectionResetError,
+    ConnectionAbortedError,
+    BrokenPipeError,
+    OSError,
+)
 
 
 @dataclass(slots=True)
@@ -24,6 +35,20 @@ class CardputerBridgeServer:
                 },
             },
             ensure_ascii=False,
+        )
+
+    def _bridge_connected_message(self) -> str:
+        return json.dumps(
+            {
+                "type": "codex_status",
+                "payload": {
+                    "kind": "bridge_connected",
+                    "state_epoch": self.app.session.state_epoch,
+                    "workspace_path": self.app.session.workspace_path,
+                    "branch": self.app.session.branch,
+                    "thread_id": self.app.session.thread_id,
+                },
+            }
         )
 
     async def handle_connection(self, websocket: Any) -> None:
@@ -48,40 +73,42 @@ class CardputerBridgeServer:
         prev_observer = self.app.event_observer
         self.app.event_observer = observer
 
-        # Push initial status
-        await websocket.send(
-            json.dumps(
-                {
-                    "type": "codex_status",
-                    "payload": {
-                        "kind": "bridge_connected",
-                        "state_epoch": self.app.session.state_epoch,
-                        "workspace_path": self.app.session.workspace_path,
-                        "branch": self.app.session.branch,
-                        "thread_id": self.app.session.thread_id,
-                    },
-                }
-            )
-        )
+        push_task: asyncio.Task[None] | None = None
 
-        async def push_loop():
+        async def push_loop() -> None:
             try:
                 while True:
                     msg = await queue.get()
-                    await websocket.send(msg)
-                    queue.task_done()
+                    try:
+                        await websocket.send(msg)
+                    finally:
+                        queue.task_done()
+            except asyncio.CancelledError:
+                raise
+            except _DISCONNECT_EXCEPTIONS:
+                return
             except Exception:
-                pass
-
-        push_task = asyncio.create_task(push_loop())
+                return
 
         try:
+            await websocket.send(self._bridge_connected_message())
+
+            push_task = asyncio.create_task(push_loop())
+
             async for raw_message in websocket:
                 responses = await self.handle_raw_message(raw_message)
                 for response in responses:
-                    await websocket.send(response)
+                    try:
+                        await websocket.send(response)
+                    except _DISCONNECT_EXCEPTIONS:
+                        return
+        except _DISCONNECT_EXCEPTIONS:
+            return
         finally:
-            push_task.cancel()
+            if push_task is not None:
+                push_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await push_task
             self.app.event_observer = prev_observer
 
     async def handle_raw_message(self, raw_message: str) -> list[str]:

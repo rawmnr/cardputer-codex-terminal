@@ -11,6 +11,7 @@ from cardputer_codex_terminal.core import MiddlewareApp
 from cardputer_codex_terminal.codex_transport import LocalWebSocketCodexTransport, StdioCodexAppServerTransport
 from cardputer_codex_terminal.events import EventType
 from cardputer_codex_terminal.messages import CardputerMessage, CardputerMessageType
+from cardputer_codex_terminal.server import CardputerBridgeServer
 
 
 class MiddlewareAppTests(unittest.TestCase):
@@ -275,6 +276,43 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertEqual(response_events[0]["payload"]["kind"], "bridge_question")
         self.assertEqual(response_events[1]["payload"]["kind"], "bridge_response")
         self.assertEqual(session, {"bridge_prompt_kind": None, "bridge_prompt_title": None, "bridge_prompt_options": []})
+
+    def test_bridge_connection_reset_is_treated_as_disconnect(self) -> None:
+        class FakeWebSocket:
+            def __init__(self) -> None:
+                self.sent: list[str] = []
+
+            async def send(self, message: str) -> None:
+                self.sent.append(message)
+
+            def __aiter__(self) -> "FakeWebSocket":
+                return self
+
+            async def __anext__(self) -> str:
+                raise ConnectionResetError("network connection dropped")
+
+        sentinel = object()
+
+        async def scenario() -> tuple[list[str], object | None]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=True,
+                )
+            )
+            await app.initialize()
+            app.event_observer = sentinel
+            bridge = CardputerBridgeServer(app)
+            websocket = FakeWebSocket()
+            await bridge.handle_connection(websocket)
+            return websocket.sent, app.event_observer
+
+        sent, observer = asyncio.run(scenario())
+
+        self.assertTrue(sent)
+        self.assertIs(observer, sentinel)
 
     def test_display_snapshot_updates_preview_event_channel(self) -> None:
         async def scenario() -> list[dict]:
