@@ -11,6 +11,7 @@ from .messages import CardputerMessage, CardputerMessageType
 from .router import CardputerRouter
 from .runs import AgentRun, RunIndex, RunMode, RunRole
 from .session import SessionIndex, SessionState
+from .policies import ApprovalPolicyManager
 from .voice import FasterWhisperVoiceTranscriber, MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
 from pathlib import Path
@@ -24,6 +25,7 @@ class MiddlewareApp:
     session_index: SessionIndex = field(default_factory=SessionIndex)
     run_index: RunIndex = field(default_factory=RunIndex)
     worktree_manager: WorktreeManager = field(init=False)
+    policy_manager: ApprovalPolicyManager = field(default_factory=ApprovalPolicyManager)
     session: SessionState = field(init=False)
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
@@ -417,6 +419,16 @@ class MiddlewareApp:
         events: list[Event] = []
         async for reply in self.transport.start_turn(text, thread_id=self.session.thread_id, cwd=self.session.workspace_path):
             if reply.kind == "approval_request":
+                # Evaluate policy
+                run = self.run_index.current()
+                if run:
+                    policy = self.policy_manager.get_policy(run.mode)
+                    approved, reason = self.policy_manager.evaluate_request(policy, reply.data)
+                    if approved is not None:
+                        # Auto-approve or Auto-reject
+                        await self.handle_approval_response(approved, approval_id=reply.data.get("approval_id"), note=reason)
+                        continue
+
                 events.append(self._set_pending_approval(reply.data))
                 break
             events.append(
@@ -507,6 +519,27 @@ class MiddlewareApp:
                     role=RunRole.TESTER,
                 )
                 return [Event(EventType.CODEX_STATUS, {"kind": "run_started", "content": f"Started run {run.run_id} in {name} ({mode_str})"})]
+        if cmd == "/mode":
+            # /mode <safe|yolo|review>
+            if len(parts) == 2:
+                mode_str = parts[1].lower()
+                new_mode = RunMode.SAFE
+                if mode_str == "yolo":
+                    new_mode = RunMode.YOLO_WORKTREE
+                elif mode_str == "review":
+                    new_mode = RunMode.REVIEW_ONLY
+
+                run = self.run_index.current()
+                if run:
+                    # Check protection if YOLO
+                    if new_mode == RunMode.YOLO_WORKTREE:
+                        if self.worktree_manager.is_protected(run.branch or run.base_branch):
+                            return [Event(EventType.ERROR, {"content": f"Cannot enable YOLO on protected branch {run.branch or run.base_branch}"})]
+
+                    run.mode = new_mode
+                    self._update_run_ui(run)
+                    return [Event(EventType.CODEX_STATUS, {"kind": "mode_changed", "content": f"Mode changed to {new_mode.value}"})]
+
 
         return [Event(EventType.ERROR, {"content": f"Unknown command: {text}"})]
     async def handle_cardputer_message(self, message: CardputerMessage) -> list[Event]:
@@ -694,6 +727,30 @@ class MiddlewareApp:
     def _notify(self, events: list[Event]) -> None:
         self.session_index.record(events)
         self.run_index.record(events, run_id=self.session.run_id)
+        self._update_run_ui()
+
         if self.event_observer is None or not events:
             return
         self.event_observer(events)
+
+    def _update_run_ui(self, run: AgentRun | None = None) -> None:
+        if run is None:
+            run = self.run_index.current()
+        if run is None:
+            return
+
+        policy = self.policy_manager.get_policy(run.mode)
+        run.badge_mode = run.mode.value.upper().replace("_", "-")
+
+        if run.pending_approval:
+            req = run.pending_approval
+            # Use evaluate_request to get danger summary if possible
+            approved, reason = self.policy_manager.evaluate_request(policy, req.to_dict())
+            if approved is False:
+                run.danger_summary = f"REJECTED: {reason}"
+            elif approved is True:
+                run.danger_summary = f"AUTO: {reason}"
+            else:
+                run.danger_summary = "USER APPROVAL REQUIRED"
+        else:
+            run.danger_summary = ""

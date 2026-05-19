@@ -119,6 +119,9 @@ class AgentRun:
     pending_approval: ApprovalRequest | None = None
     diff_summary: DiffSummary | None = None
     test_summary: TestSummary | None = None
+    danger_summary: str = ""
+    badge_mode: str = "SAFE"
+
     state_epoch: int = 0
 
     def touch(
@@ -132,11 +135,21 @@ class AgentRun:
         session_id: str | None = None,
         current_step: str | None = None,
         last_event: str | None = None,
+        danger_summary: str | None = None,
+        badge_mode: str | None = None,
     ) -> None:
         if workspace_path is not None and workspace_path:
             self.workspace_path = workspace_path
         if base_branch is not None and base_branch:
             self.base_branch = base_branch
+        if current_step is not None:
+            self.current_step = current_step
+        if last_event is not None:
+            self.last_event = last_event
+        if danger_summary is not None:
+            self.danger_summary = danger_summary
+        if badge_mode is not None:
+            self.badge_mode = badge_mode
         if worktree_path is not None:
             self.worktree_path = worktree_path or None
         if branch is not None:
@@ -145,10 +158,6 @@ class AgentRun:
             self.thread_id = thread_id or None
         if session_id is not None:
             self.session_id = session_id or None
-        if current_step is not None:
-            self.current_step = current_step
-        if last_event is not None:
-            self.last_event = last_event
         self.state_epoch += 1
 
     def record_event(self, event: Any) -> None:
@@ -248,6 +257,8 @@ class AgentRun:
             "pending_approval": None if self.pending_approval is None else self.pending_approval.to_dict(),
             "diff_summary": None if self.diff_summary is None else self.diff_summary.to_dict(),
             "test_summary": None if self.test_summary is None else self.test_summary.to_dict(),
+            "danger_summary": self.danger_summary,
+            "badge_mode": self.badge_mode,
             "state_epoch": self.state_epoch,
         }
 
