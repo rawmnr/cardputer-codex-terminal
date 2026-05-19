@@ -1,59 +1,87 @@
-# Firmware
+# Cardputer Codex Firmware
 
-This folder is reserved for the Cardputer firmware source tree.
+The embedded firmware for the M5Stack Cardputer ADV, designed to transform the device into a physical terminal for the OpenAI Codex ecosystem.
 
-## Current Scaffold
+This firmware manages the hardware interface, UI rendering via LVGL, Wi-Fi connectivity, and the WebSocket communication bridge to the Windows middleware.
 
-The first firmware pass uses PlatformIO with a small Arduino-based shell that can already build into a flashable `.bin`.
+---
 
-## Build Target
+## 🚀 Overview
 
-The firmware must compile into a single flashable `.bin` file that can be launched with M5 Launcher on the Cardputer.
+The firmware provides a seamless, interactive terminal experience on the Cardputer's 240x135 display. Key features include:
 
-## Expected Output
+*   **Interactive UI**: A sophisticated interface built with LVGL for navigating apps, browsing sessions, and managing settings.
+*   **Codex Integration**: Real-time streaming of Codex responses and event handling via the WebSocket bridge.
+*   **Push-to-Talk (PTT)**: Hardware-triggered voice input pipeline.
+*   **Robust Connectivity**: Managed Wi-Fi and secure bridge authentication.
+*   **Persistence**: Configuration and logging stored on the microSD card.
 
-```text
-cardputer-codex-terminal.bin
+---
+
+## 🛠 Build Instructions
+
+The firmware is built using [PlatformIO](https://platformio.org/).
+
+### Prerequisites
+
+*   [Python 3.x](https://www.python.org/)
+*   [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation.html)
+
+### Compilation
+
+To compile the firmware for the Cardputer:
+
+```bash
+cd firmware
+python -m platformio run
 ```
 
-## Working Assumptions
+### Build Output
 
-- The source layout should be chosen so the build system emits a M5 Launcher-compatible binary.
-- The binary is the primary deliverable, not a desktop executable or loose script bundle.
-- Runtime assets should be embedded or packaged in a way that still results in a single firmware binary.
-- The first code path focuses on the shell, state model, and app switching so we can wire the real Cardputer backends next.
-- Wi-Fi and middleware connection settings can be loaded from `/cardputer-codex/config.ini` on the Cardputer SD card.
-- On first boot, the firmware creates `/cardputer-codex/` and seeds a template `config.ini` if one does not already exist.
+The build process includes a post-build script that renames the output for compatibility with the M5 Launcher. The resulting binary is located at:
 
-## SD Card Configuration
+`firmware/cardputer-codex-terminal.bin`
 
-The firmware looks for a simple key-value file at:
+---
 
-```text
-/cardputer-codex/config.ini
-```
+## 📲 Deployment
 
-Example keys:
+1.  **Flashing**: Use the [M5 Launcher](https://github.com/m5stack/M5Launcher) or a standard ESP32 flashing tool to upload the `.bin` file to your Cardputer.
+2.  **SD Card Setup**: Ensure a microSD card is inserted. The firmware will automatically create a `/cardputer-codex/` directory on the first boot.
+
+---
+
+## ⚙️ Configuration
+
+Connectivity and middleware settings are managed via a simple key-value configuration file stored on the microSD card.
+
+**Path**: `/cardputer-codex/config.ini`
+
+### Example Configuration
+
+You can use the provided template as a starting point:
 
 ```ini
+# Wi-Fi Settings
 wifi_ssid=YourNetworkName
 wifi_password=YourWiFiPassword
-# Use your Windows host, LAN IP, hostname, or VPN address here.
-# 127.0.0.1 points back to the Cardputer itself, not the Windows PC.
+
+# Middleware Bridge Settings
+# Use the IP address of your Windows host
 middleware_host=192.168.1.50
 middleware_port=8765
 middleware_path=/
-middleware_token=
+middleware_token=your_shared_secret_here
 ```
 
-An example file lives in [`config.example.ini`](config.example.ini).
+*Note: `127.0.0.1` refers to the Cardputer itself. Always use the host machine's LAN IP or hostname to connect to the middleware.*
 
-## SD Card Log
+---
 
-The firmware also appends a plain text log to:
+## 🔍 Logging & Diagnostics
 
-```text
-/cardputer-codex/log.txt
-```
+For debugging connectivity or startup issues, the firmware appends a plain text log to the microSD card.
 
-It is intended to survive firmware updates and help debug Wi-Fi, SD config loading, and bridge startup from the card itself.
+**Path**: `/cardputer-codex/log.txt`
+
+This log is persistent across firmware updates and is the primary tool for diagnosing Wi-Fi, SD card, or bridge connection failures.
