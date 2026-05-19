@@ -7,7 +7,7 @@ import asyncio
 from typing import Any, AsyncIterator
 
 from websockets.exceptions import ConnectionClosed
-
+from .bus import EventFilter
 from .core import MiddlewareApp
 from .events import Event, EventType
 from .messages import CardputerMessage
@@ -52,44 +52,40 @@ class CardputerBridgeServer:
         )
 
     async def handle_connection(self, websocket: Any) -> None:
-        queue: asyncio.Queue[str] = asyncio.Queue()
-
-        def observer(events: list[Event]) -> None:
-            for event in events:
-                # We specifically want to push status and deltas to keep the firmware in sync
-                if event.type in {EventType.CODEX_STATUS, EventType.CODEX_DELTA, EventType.CODEX_USAGE, EventType.APPROVAL_REQUEST, EventType.ERROR}:
-                    # If it's a generic status, ensure we include the epoch
-                    payload = dict(event.payload)
-                    if event.type == EventType.CODEX_STATUS:
-                        payload["state_epoch"] = self.app.session.state_epoch
-                    
-                    msg = json.dumps({
-                        "type": event.type.value,
-                        "payload": payload
-                    }, ensure_ascii=False)
-                    queue.put_nowait(msg)
-
-        # Register the observer
-        prev_observer = self.app.event_observer
-        self.app.event_observer = observer
+        subscriber_id = f"websocket-{id(websocket)}"
+        filters = EventFilter(types={
+            EventType.CODEX_STATUS,
+            EventType.CODEX_DELTA,
+            EventType.CODEX_USAGE,
+            EventType.APPROVAL_REQUEST,
+            EventType.ERROR,
+        })
+        event_queue = await self.app.event_bus.subscribe(subscriber_id, filters)
 
         push_task: asyncio.Task[None] | None = None
 
         async def push_loop() -> None:
             try:
                 while True:
-                    msg = await queue.get()
+                    event = await event_queue.get()
                     try:
+                        payload = dict(event.payload)
+                        if event.type == EventType.CODEX_STATUS:
+                            payload["state_epoch"] = self.app.session.state_epoch
+
+                        msg = json.dumps({
+                            "type": event.type.value,
+                            "payload": payload
+                        }, ensure_ascii=False)
                         await websocket.send(msg)
                     finally:
-                        queue.task_done()
+                        event_queue.task_done()
             except asyncio.CancelledError:
                 raise
             except _DISCONNECT_EXCEPTIONS:
                 return
             except Exception:
                 return
-
         try:
             await websocket.send(self._bridge_connected_message())
 
@@ -109,7 +105,7 @@ class CardputerBridgeServer:
                 push_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await push_task
-            self.app.event_observer = prev_observer
+            await self.app.event_bus.unsubscribe(subscriber_id)
 
     async def handle_raw_message(self, raw_message: str) -> list[str]:
         payload = json.loads(raw_message)

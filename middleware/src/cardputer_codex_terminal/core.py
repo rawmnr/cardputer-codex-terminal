@@ -12,6 +12,7 @@ from .router import CardputerRouter
 from .runs import AgentRun, RunIndex, RunMode, RunRole
 from .session import SessionIndex, SessionState
 from .policies import ApprovalPolicyManager
+from .bus import EventBus
 from .voice import FasterWhisperVoiceTranscriber, MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
 from pathlib import Path
@@ -29,6 +30,7 @@ class MiddlewareApp:
     session: SessionState = field(init=False)
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
+    event_bus: EventBus = field(default_factory=EventBus)
     event_observer: Callable[[list[Event]], None] | None = field(default=None, repr=False, compare=False)
     _bridge_prompt_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     _bridge_prompt_future: asyncio.Future[dict[str, Any]] | None = field(default=None, init=False, repr=False, compare=False)
@@ -729,6 +731,12 @@ class MiddlewareApp:
         self.run_index.record(events, run_id=self.session.run_id)
         self._update_run_ui()
 
+        metadata = {
+            "run_id": self.session.run_id,
+            "session_id": self.session.session_id,
+        }
+        for event in events:
+            self.event_bus.publish(event, metadata=metadata)
         if self.event_observer is None or not events:
             return
         self.event_observer(events)
