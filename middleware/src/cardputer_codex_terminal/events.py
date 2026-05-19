@@ -14,6 +14,10 @@ class EventType(StrEnum):
     CODEX_DELTA = "codex_delta"
     CODEX_STATUS = "codex_status"
     CODEX_USAGE = "codex_usage"
+    RUN_LIST = "run_list"
+    RUN_DETAIL = "run_detail"
+    APPROVAL_INBOX = "approval_inbox"
+    STATUS_SNAPSHOT = "status_snapshot"
     ERROR = "error"
 
 

@@ -13,6 +13,7 @@ from .runs import AgentRun, RunIndex, RunMode, RunRole
 from .session import SessionIndex, SessionState
 from .policies import ApprovalPolicyManager
 from .bus import EventBus
+from .projections import CardputerProjection
 from .voice import FasterWhisperVoiceTranscriber, MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
 from pathlib import Path
@@ -31,6 +32,7 @@ class MiddlewareApp:
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
     event_bus: EventBus = field(default_factory=EventBus)
+    projection: CardputerProjection = field(init=False)
     event_observer: Callable[[list[Event]], None] | None = field(default=None, repr=False, compare=False)
     _bridge_prompt_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     _bridge_prompt_future: asyncio.Future[dict[str, Any]] | None = field(default=None, init=False, repr=False, compare=False)
@@ -47,6 +49,7 @@ class MiddlewareApp:
         else:
             self.transport = StdioCodexAppServerTransport(list(self.config.codex_command), cwd=self.config.workspace_path)
         self.worktree_manager = WorktreeManager(Path(self.config.workspace_path))
+        self.projection = CardputerProjection(self.run_index)
         self.session = self.session_index.ensure_active(
             workspace_path=self.config.workspace_path,
             branch=self.config.branch,
@@ -651,6 +654,10 @@ class MiddlewareApp:
             return [event]
 
         if message.type == CardputerMessageType.STATUS_REQUEST:
+            if message.payload.get("snapshot"):
+                proj = self.projection.build_status_snapshot(self.session)
+                return [Event(EventType.STATUS_SNAPSHOT, proj["payload"])]
+
             sessions = []
             for s in self.session_index.ordered_sessions()[:10]:
                 sd = s.to_dict()
@@ -712,6 +719,21 @@ class MiddlewareApp:
             )
             self._notify([event])
             return [event]
+
+        if message.type == CardputerMessageType.RUN_LIST_REQUEST:
+            proj = self.projection.build_run_list()
+            return [Event(EventType.RUN_LIST, proj["payload"])]
+
+        if message.type == CardputerMessageType.RUN_DETAIL_REQUEST:
+            run_id = str(message.payload.get("run_id") or self.run_index.active_run_id or "")
+            proj = self.projection.build_run_detail(run_id)
+            if proj:
+                return [Event(EventType.RUN_DETAIL, proj["payload"])]
+            return [Event(EventType.ERROR, {"content": f"Run {run_id} not found"})]
+
+        if message.type == CardputerMessageType.APPROVAL_INBOX_REQUEST:
+            proj = self.projection.build_approval_inbox()
+            return [Event(EventType.APPROVAL_INBOX, proj["payload"])]
 
         if message.type == CardputerMessageType.INTERRUPT:
             thread_id = message.payload.get("thread_id") or self.session.thread_id

@@ -24,6 +24,9 @@ class CardputerMessageType(StrEnum):
     BRIDGE_CONFIRMATION = "bridge_confirmation"
     BRIDGE_RESPONSE = "bridge_response"
     INTERRUPT = "interrupt"
+    RUN_LIST_REQUEST = "run_list_request"
+    RUN_DETAIL_REQUEST = "run_detail_request"
+    APPROVAL_INBOX_REQUEST = "approval_inbox_request"
     PING = "ping"
 
 
