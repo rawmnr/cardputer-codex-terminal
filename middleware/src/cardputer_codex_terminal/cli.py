@@ -20,6 +20,7 @@ from .mcp import CardputerMcpServer
 from .messages import CardputerMessage, CardputerMessageType
 from .preview import DevPreviewServer
 from .server import CardputerBridgeServer
+from .persistence import DEFAULT_STATE_PATH
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--preview-port", type=int, default=8787)
     parser.add_argument("--bridge-token", default=None, help="Shared token required by the Cardputer bridge.")
     parser.add_argument("--mcp", action="store_true", help="Run as a stdio MCP server for Codex and keep the bridge listener alive.")
+    parser.add_argument("--state-path", default=None, help="Path to local run persistence JSON file.")
     return parser
 
 
@@ -71,6 +73,7 @@ async def run_async(args: argparse.Namespace) -> int:
             workspace_path=args.workspace,
             branch=args.branch,
             thread_id=args.thread_id,
+            state_path=args.state_path or str(DEFAULT_STATE_PATH),
         )
     )
     loop = asyncio.get_running_loop()

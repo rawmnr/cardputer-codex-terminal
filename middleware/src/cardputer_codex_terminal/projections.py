@@ -64,12 +64,13 @@ class CardputerProjection:
                 "test": self._project_test(run.test_summary),
                 "danger": run.danger_summary,
                 "badge": run.badge_mode,
+                "wt": run.worktree_exists,
+                "stale": _trim(run.staleness_reason, 24),
             },
         }
 
     def build_approval_inbox(self) -> dict[str, Any]:
         runs_with_approval = [run for run in self.run_index.runs.values() if run.pending_approval is not None]
-
         return {
             "type": "approval_inbox",
             "v": self.version,
@@ -79,7 +80,9 @@ class CardputerProjection:
             },
         }
 
-    def _project_run_brief(self, run: AgentRun) -> dict[str, Any]:
+    def _project_run_brief(self, run: AgentRun | None) -> dict[str, Any] | None:
+        if run is None:
+            return None
         return {
             "id": run.run_id,
             "title": _trim(run.current_step or run.role.value, 20),
@@ -87,6 +90,8 @@ class CardputerProjection:
             "mode": run.mode.value,
             "status": run.status.value,
             "last": _trim(run.last_event, 24),
+            "wt": "ok" if run.worktree_exists else "missing",
+            "warn": _trim(run.staleness_reason, 16),
         }
 
     def _project_diff(self, diff: DiffSummary | None) -> dict[str, Any] | None:

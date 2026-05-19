@@ -121,6 +121,8 @@ class AgentRun:
     test_summary: TestSummary | None = None
     danger_summary: str = ""
     badge_mode: str = "SAFE"
+    worktree_exists: bool = True
+    staleness_reason: str = ""
 
     state_epoch: int = 0
 
@@ -259,8 +261,69 @@ class AgentRun:
             "test_summary": None if self.test_summary is None else self.test_summary.to_dict(),
             "danger_summary": self.danger_summary,
             "badge_mode": self.badge_mode,
+            "worktree_exists": self.worktree_exists,
+            "staleness_reason": self.staleness_reason,
             "state_epoch": self.state_epoch,
         }
+
+    def to_persisted_dict(self) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "role": self.role.value,
+            "workspace_path": self.workspace_path,
+            "base_branch": self.base_branch,
+            "worktree_path": self.worktree_path,
+            "branch": self.branch,
+            "thread_id": self.thread_id,
+            "session_id": self.session_id,
+            "mode": self.mode.value,
+            "status": self.status.value,
+            "diff_summary": None if self.diff_summary is None else self.diff_summary.to_dict(),
+            "test_summary": None if self.test_summary is None else self.test_summary.to_dict(),
+            "danger_summary": self.danger_summary,
+            "badge_mode": self.badge_mode,
+            "worktree_exists": self.worktree_exists,
+            "staleness_reason": self.staleness_reason,
+            "state_epoch": self.state_epoch,
+        }
+
+    @classmethod
+    def from_persisted_dict(cls, data: dict[str, Any]) -> "AgentRun":
+        run = cls(
+            str(data.get("run_id") or ""),
+            role=RunRole(str(data.get("role") or RunRole.MAIN.value)),
+            workspace_path=str(data.get("workspace_path") or "."),
+            base_branch=str(data.get("base_branch") or "main"),
+            worktree_path=str(data.get("worktree_path") or "") or None,
+            branch=str(data.get("branch") or "") or None,
+            thread_id=str(data.get("thread_id") or "") or None,
+            session_id=str(data.get("session_id") or "") or None,
+            mode=RunMode(str(data.get("mode") or RunMode.SAFE.value)),
+            status=RunStatus(str(data.get("status") or RunStatus.IDLE.value)),
+            danger_summary=str(data.get("danger_summary") or ""),
+            badge_mode=str(data.get("badge_mode") or "SAFE"),
+            worktree_exists=bool(data.get("worktree_exists", True)),
+            staleness_reason=str(data.get("staleness_reason") or ""),
+            state_epoch=int(data.get("state_epoch") or 0),
+        )
+        diff_summary = data.get("diff_summary")
+        if isinstance(diff_summary, dict):
+            run.diff_summary = DiffSummary(
+                files_changed=int(diff_summary.get("files_changed") or 0),
+                insertions=int(diff_summary.get("insertions") or 0),
+                deletions=int(diff_summary.get("deletions") or 0),
+                summary=str(diff_summary.get("summary") or ""),
+            )
+        test_summary = data.get("test_summary")
+        if isinstance(test_summary, dict):
+            run.test_summary = TestSummary(
+                tests_run=int(test_summary.get("tests_run") or 0),
+                passed=int(test_summary.get("passed") or 0),
+                failed=int(test_summary.get("failed") or 0),
+                skipped=int(test_summary.get("skipped") or 0),
+                summary=str(test_summary.get("summary") or ""),
+            )
+        return run
 
 
 @dataclass(slots=True)
@@ -383,6 +446,32 @@ class RunIndex:
             "active_run_id": self.active_run_id,
             "runs": runs,
         }
+
+    def to_persisted_dict(self) -> dict[str, Any]:
+        return {
+            "active_run_id": self.active_run_id,
+            "runs": [run.to_persisted_dict() for run in self.ordered_runs()],
+        }
+
+    @classmethod
+    def from_persisted_dict(cls, data: dict[str, Any]) -> "RunIndex":
+        runs_data = data.get("runs")
+        runs: dict[str, AgentRun] = {}
+        next_run_number = 1
+        if isinstance(runs_data, list):
+            for item in runs_data:
+                if not isinstance(item, dict):
+                    continue
+                run = AgentRun.from_persisted_dict(item)
+                if not run.run_id:
+                    continue
+                runs[run.run_id] = run
+                if run.run_id.startswith("run-"):
+                    try:
+                        next_run_number = max(next_run_number, int(run.run_id.split("-", 1)[1]) + 1)
+                    except ValueError:
+                        pass
+        return cls(runs=runs, active_run_id=str(data.get("active_run_id") or "") or None, _next_run_number=next_run_number)
 
     def _new_run_id(self) -> str:
         run_id = f"run-{self._next_run_number:06d}"

@@ -14,6 +14,7 @@ from .session import SessionIndex, SessionState
 from .policies import ApprovalPolicyManager
 from .bus import EventBus
 from .projections import CardputerProjection
+from .persistence import RunPersistenceStore
 from .voice import FasterWhisperVoiceTranscriber, MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
 from pathlib import Path
@@ -33,6 +34,8 @@ class MiddlewareApp:
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
     event_bus: EventBus = field(default_factory=EventBus)
     projection: CardputerProjection = field(init=False)
+    persistence: RunPersistenceStore = field(init=False)
+    _persistence_report: Any = field(default=None, init=False, repr=False, compare=False)
     event_observer: Callable[[list[Event]], None] | None = field(default=None, repr=False, compare=False)
     _bridge_prompt_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     _bridge_prompt_future: asyncio.Future[dict[str, Any]] | None = field(default=None, init=False, repr=False, compare=False)
@@ -49,6 +52,8 @@ class MiddlewareApp:
         else:
             self.transport = StdioCodexAppServerTransport(list(self.config.codex_command), cwd=self.config.workspace_path)
         self.worktree_manager = WorktreeManager(Path(self.config.workspace_path))
+        self.persistence = RunPersistenceStore(self.config.state_path)
+        self.run_index, self._persistence_report = self.persistence.load(self.worktree_manager)
         self.projection = CardputerProjection(self.run_index)
         self.session = self.session_index.ensure_active(
             workspace_path=self.config.workspace_path,
@@ -56,12 +61,16 @@ class MiddlewareApp:
             thread_id=self.config.thread_id,
             title=self.config.thread_id,
         )
+        if self.run_index.current() is not None and self.session.run_id is None:
+            self.session.run_id = self.run_index.active_run_id
         self._ensure_run_for_session(self.session, sync=True)
 
     def _ensure_run_for_session(self, session: SessionState, *, sync: bool = False) -> AgentRun:
         run = self.run_index.find_by_session_id(session.session_id)
         if run is None and session.run_id is not None:
             run = self.run_index.runs.get(session.run_id)
+        if run is None:
+            run = self.run_index.current()
         if run is None:
             run = self.run_index.create_run(
                 workspace_path=session.workspace_path,
@@ -497,6 +506,13 @@ class MiddlewareApp:
                     return [Event(EventType.CODEX_STATUS, {"kind": "worktree_removed", "content": f"Removed worktree {name}"})]
                 except WorktreeError as e:
                     return [Event(EventType.ERROR, {"content": str(e)})]
+
+        if cmd == "/runs" and len(parts) == 2 and parts[1] == "cleanup":
+            report = self.persistence.cleanup_orphans(self.run_index)
+            self.persistence.save(self.run_index)
+            content = f"Cleanup removed {report.removed_runs} orphan run(s)."
+            return [Event(EventType.CODEX_STATUS, {"kind": "runs_cleanup", "content": content, "removed": report.removed_runs})]
+
         if cmd == "/run":
             # /run worker <name> <mode>
             if len(parts) == 4 and parts[1] == "worker":
@@ -750,7 +766,8 @@ class MiddlewareApp:
 
     def _notify(self, events: list[Event]) -> None:
         self.session_index.record(events)
-        self.run_index.record(events, run_id=self.session.run_id)
+        if not any(event.payload.get("kind") == "runs_cleanup" for event in events):
+            self.run_index.record(events, run_id=self.session.run_id)
         self._update_run_ui()
 
         metadata = {
@@ -759,6 +776,8 @@ class MiddlewareApp:
         }
         for event in events:
             self.event_bus.publish(event, metadata=metadata)
+        self.persistence.reconcile(self.run_index, self.worktree_manager)
+        self.persistence.save(self.run_index)
         if self.event_observer is None or not events:
             return
         self.event_observer(events)

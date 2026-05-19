@@ -19,3 +19,4 @@ class AppConfig:
     workspace_path: str = "."
     branch: str | None = None
     thread_id: str | None = None
+    state_path: str | None = None
