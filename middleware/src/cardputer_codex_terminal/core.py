@@ -13,6 +13,8 @@ from .runs import AgentRun, RunIndex, RunMode, RunRole
 from .session import SessionIndex, SessionState
 from .voice import FasterWhisperVoiceTranscriber, MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
+from pathlib import Path
+from .worktree import WorktreeManager
 
 @dataclass(slots=True)
 class MiddlewareApp:
@@ -21,6 +23,7 @@ class MiddlewareApp:
     router: CardputerRouter = field(default_factory=CardputerRouter)
     session_index: SessionIndex = field(default_factory=SessionIndex)
     run_index: RunIndex = field(default_factory=RunIndex)
+    worktree_manager: WorktreeManager = field(init=False)
     session: SessionState = field(init=False)
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
@@ -39,6 +42,7 @@ class MiddlewareApp:
             self.transport = LocalWebSocketCodexTransport(self.config.codex_ws_url)
         else:
             self.transport = StdioCodexAppServerTransport(list(self.config.codex_command), cwd=self.config.workspace_path)
+        self.worktree_manager = WorktreeManager(Path(self.config.workspace_path))
         self.session = self.session_index.ensure_active(
             workspace_path=self.config.workspace_path,
             branch=self.config.branch,
@@ -405,6 +409,8 @@ class MiddlewareApp:
 
     async def _collect_text_prompt_events(self, text: str) -> list[Event]:
         await self._ensure_thread()
+        if text.startswith("/"):
+            return await self._handle_command(text)
         if self.session.title == "Untitled session" and text.strip():
             self.session.title = text.strip()
         self.session.record_event(Event(EventType.TEXT_PROMPT, {"text": text}))
@@ -442,6 +448,67 @@ class MiddlewareApp:
             )
         return events
 
+    async def _handle_command(self, text: str) -> list[Event]:
+        parts = text.strip().split()
+        if not parts:
+            return [Event(EventType.ERROR, {"content": "Empty command"})]
+
+        cmd = parts[0]
+
+        if cmd == "/worktrees":
+            wts = self.worktree_manager.list_worktrees()
+            lines = [f"{wt.path.name} ({wt.branch})" for wt in wts]
+            content = "Worktrees:\n" + "\n".join(lines) if lines else "No worktrees found."
+            return [Event(EventType.CODEX_STATUS, {"kind": "worktree_list", "content": content})]
+
+        if cmd == "/worktree":
+            if len(parts) == 5 and parts[1] == "create" and parts[3] == "from":
+                name, branch = parts[2], parts[4]
+                try:
+                    path = self.worktree_manager.create_worktree(branch, name)
+                    return [Event(EventType.CODEX_STATUS, {"kind": "worktree_created", "content": f"Created worktree {name} from {branch} at {path}"})]
+                except WorktreeError as e:
+                    return [Event(EventType.ERROR, {"content": str(e)})]
+
+            if len(parts) == 3 and parts[1] == "remove":
+                name = parts[2]
+                try:
+                    worktree_path = self.worktree_manager.get_worktree_by_name(name)
+                    if not worktree_path:
+                        return [Event(EventType.ERROR, {"content": f"Worktree {name} not found"})]
+                    self.worktree_manager.remove_worktree(worktree_path)
+                    return [Event(EventType.CODEX_STATUS, {"kind": "worktree_removed", "content": f"Removed worktree {name}"})]
+                except WorktreeError as e:
+                    return [Event(EventType.ERROR, {"content": str(e)})]
+        if cmd == "/run":
+            # /run worker <name> <mode>
+            if len(parts) == 4 and parts[1] == "worker":
+                name, mode_str = parts[2], parts[3]
+                worktree_path = self.worktree_manager.get_worktree_by_name(name)
+                if not worktree_path:
+                    return [Event(EventType.ERROR, {"content": f"Worktree {name} not found"})]
+
+                mode = RunMode.YOLO_WORKTREE if mode_str == "yolo" else RunMode.SAFE
+
+                # Check protection if YOLO
+                if mode == RunMode.YOLO_WORKTREE:
+                    # We need to know the branch of this worktree
+                    # Let's use the manager to get the branch
+                    # I'll add a method to WorktreeManager for this.
+                    wt_info = next((wt for wt in self.worktree_manager.list_worktrees() if wt.path == worktree_path), None)
+                    if wt_info and self.worktree_manager.is_protected(wt_info.branch):
+                        return [Event(EventType.ERROR, {"content": f"Cannot run YOLO on protected branch {wt_info.branch}"})]
+
+                run = self.run_index.create_run(
+                    workspace_path=str(worktree_path),
+                    worktree_path=str(worktree_path),
+                    mode=mode,
+                    session_id=self.session.session_id,
+                    role=RunRole.TESTER,
+                )
+                return [Event(EventType.CODEX_STATUS, {"kind": "run_started", "content": f"Started run {run.run_id} in {name} ({mode_str})"})]
+
+        return [Event(EventType.ERROR, {"content": f"Unknown command: {text}"})]
     async def handle_cardputer_message(self, message: CardputerMessage) -> list[Event]:
         routed = self.router.route(message)
 
