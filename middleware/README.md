@@ -1,122 +1,120 @@
-# Middleware
+# Cardputer Codex Middleware
 
-This folder contains the first Windows bridge prototype between the Cardputer and Codex.
+The Windows bridge that connects the M5Stack Cardputer ADV to the OpenAI Codex ecosystem.
 
-The initial scaffold provides:
+This middleware acts as a multi-faceted gateway, providing communication, protocol translation, and developer tooling to enable a physical terminal experience.
 
-- a CLI;
-- an event model;
-- a Codex transport abstraction;
-- a mock for early local testing;
-- a stdio Codex app-server transport for the stable real-Codex path;
-- an explicit local WebSocket Codex app-server transport for debug / advanced use;
-- a WebSocket bridge for Cardputer clients.
-- a buffered voice prompt pipeline with a transcriber hook.
+## 🚀 Architecture
 
-The Cardputer message contract is versioned. Current protocol version: `1`.
-Cardputer requests now carry a stable `id`, and the middleware replies with an `ack` frame before the semantic response so callers can match responses to pending requests.
-The bridge server can also require a shared `bridge_token` for remote access.
-The middleware now owns the Codex `SessionIndex` and serializes active/recent session state for the Pager browser instead of asking the microcontroller to keep the model itself.
-For faster iteration, the middleware can now run a browser preview that mirrors the latest session state into local files under `.cardputer-dev/`.
-The preview is a Central Console with session browsing, event stream, prompt composer, approval buttons, live Cardputer snapshot, and workspace file browsing.
-It also has an MCP server mode for Codex, exposed over stdio, so Codex can call the Cardputer directly as tools.
+The middleware orchestrates four primary roles:
 
-## Tooling
+1.  **WebSocket Bridge Server**: Provides a secure WebSocket interface for the Cardputer hardware. It handles message routing, session state management, and authentication via a `bridge_token`.
+2.  **Codex Transport**: Manages the connection to the Codex app-server.
+    *   **Production**: Uses `stdio` for high-reliability transport via the `StdioCodexAppServerTransport`.
+    *   **Development**: Supports `websocket` transport for local loopback testing.
+3.  **MCP Server**: Exposes the Cardputer as a set of Model Context Protocol (MCP) tools, allowing Codex to interact directly with the physical device (e.g., sending notifications, asking questions).
+4.  **Developer Preview**: A web-based dashboard that mirrors the device's current session state, event stream, and screen content for real-time debugging.
 
-This package is managed with `uv`.
+---
 
-Set up the environment:
+## 🛠 Prerequisites
+
+*   **Python 3.11+**
+*   **[uv](https://github.com/astral-sh/uv)** (Python package and project manager)
+
+---
+
+## 📦 Installation
+
+Navigate to the `middleware/` directory and sync the environment:
 
 ```bash
+cd middleware
 uv sync
 ```
 
-Run the CLI:
+---
+
+## 🚦 Usage
+
+### 1. Running the Bridge Server
+To connect a physical Cardputer, start the WebSocket bridge. Use a `bridge_token` to secure remote access.
 
 ```bash
-uv run cardputer-codex-middleware --help
-```
+# Basic local serve
+uv run cardputer-codex-middleware --serve
 
-Run the bridge server:
-
-```bash
+# Secure remote serve
 uv run cardputer-codex-middleware --serve --bridge-token <shared-secret>
 ```
 
-Run against real Codex through the stable stdio app-server transport:
+### 2. Integrating with Real Codex
+For production use, connect the middleware to the Codex app-server via the stable `stdio` transport.
 
 ```bash
+# Run a quick prompt test
 uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
+
+# Run the bridge server with real Codex integration
 uv run cardputer-codex-middleware --serve --real-codex --bridge-token <shared-secret>
 ```
 
-The middleware sends JSON-RPC-style app-server messages:
-
-```text
-initialize request -> initialized notification -> thread/start request -> turn/start request -> streamed server notifications
-```
-
-For version drift checks, generate the protocol schemas for the installed Codex build:
+### 3. Local Development & Preview
+To debug interactions without physical hardware, use the mock/preview modes.
 
 ```bash
-codex app-server generate-ts --out ./schemas
-codex app-server generate-json-schema --out ./schemas
-```
-
-WebSocket Codex app-server transport is available for local development only:
-
-```bash
-codex app-server --listen ws://127.0.0.1:9000
-uv run cardputer-codex-middleware --codex-transport websocket --codex-ws-url ws://127.0.0.1:9000
-```
-
-Run the local preview:
-
-```bash
+# Run the local developer preview dashboard
 uv run cardputer-codex-middleware --preview
 ```
+The preview dashboard is available at `http://127.0.0.1:8787/`.
 
-Run as a Codex MCP server:
+### 4. Codex MCP Mode
+Expose the Cardputer as an MCP server so Codex can use it as a toolset.
 
 ```bash
 uv run cardputer-codex-middleware --mcp
 ```
 
-That mode serves the MCP tools over stdio and keeps the Cardputer WebSocket bridge available on the normal host/port.
-
-The Codex MCP config can point at the middleware like this:
-
+**Example Codex MCP Configuration (`config.toml`):**
 ```toml
 [mcp_servers.cardputer]
 command = "uv"
 args = ["run", "cardputer-codex-middleware", "--mcp"]
-cwd = "C:\\Gitlab\\cardputer-codex-terminal\\middleware"
+cwd = "C:\\path\\to\\cardputer-codex-terminal\\middleware"
 tool_timeout_sec = 120
 ```
 
-The exposed tools are:
+---
 
-- `cardputer.notify(title, body, urgency)`
-- `cardputer.ask(question, choices, timeout_s)`
-- `cardputer.confirm(title, detail, danger, timeout_s)`
-- `cardputer.show(text, channel)`
-- `cardputer.dictate(prompt, max_seconds)` placeholder for later
+## 📜 Protocol & Contract
 
-Use `cardputer.confirm` for destructive or irreversible actions where software-only confirmation is not enough.
+The Cardputer message contract is versioned to ensure compatibility between firmware and middleware.
 
-The preview serves a browser UI at `http://127.0.0.1:8787/` by default and mirrors:
+*   **Current Protocol Version**: `1`
+*   **Message Envelope**: All messages follow a structured JSON-RPC-style envelope.
+*   **Reliability**: Requests include a unique `id`. The middleware responds with an `ack` frame before the semantic response to allow callers to track pending requests.
 
-- `.cardputer-dev/state.json`
-- `.cardputer-dev/screen.txt`
-- `.cardputer-dev/log.txt`
-- `.cardputer-dev/events.jsonl`
+### Available MCP Tools
+When running in MCP mode, the following tools are exposed:
+*   `cardputer.notify(title, body, urgency)`: Send a notification to the device.
+*   `cardputer.ask(question, choices, timeout_s)`: Prompt the user with multiple choice options.
+*   `cardputer.confirm(title, detail, danger, timeout_s)`: Request explicit confirmation for critical actions.
+*   `cardputer.show(text, channel)`: Display a short text message on a specific screen channel.
+*   `cardputer.dictate(prompt, max_seconds)`: *(Planned)* Trigger voice dictation.
 
-That gives Codex something stable to inspect live while the firmware loop stays on the mock path.
-When the real Cardputer firmware is connected, it also publishes `display_snapshot` events so the preview can show the live on-device screen text instead of only the middleware-generated view.
+---
 
-## Tests
+## 🔧 Tooling & Development
 
-Run the middleware tests with:
+### Schema Generation
+If the Codex app-server updates, regenerate the protocol schemas:
+```bash
+codex app-server generate-ts --out ./schemas
+codex app-server generate-json-schema --out ./schemas
+```
+
+### Running Tests
+The middleware is tested using `unittest`.
 
 ```bash
 uv run python -m unittest discover -s tests -v
