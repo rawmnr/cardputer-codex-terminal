@@ -4,9 +4,11 @@ import asyncio
 import json
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 from .core import MiddlewareApp
+from .lvgl_preview import run_lvgl_preview
 
 
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -206,6 +208,44 @@ class CardputerMcpServer:
                     "title": "Dictate from Cardputer",
                 },
             },
+            {
+                "name": "cardputer.preview_lvgl_ui",
+                "title": "Preview LVGL UI",
+                "description": "Generate a 240x135 PNG preview of a Cardputer LVGL screen using a fixture and optional actions.",
+                "inputSchema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "screen": {
+                            "type": "string",
+                            "enum": ["buddy", "push", "pager", "usage", "bridge", "settings"],
+                        },
+                        "fixture": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "object"},
+                            ]
+                        },
+                        "actions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["screen"],
+                },
+                "outputSchema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "status": {"type": "string"},
+                        "image_b64": {"type": "string"},
+                        "width": {"type": "integer"},
+                        "height": {"type": "integer"},
+                        "fixture": {"type": "object"},
+                    },
+                    "required": ["status", "image_b64", "width", "height"],
+                },
+            },
         ]
 
     def _initialize_result(self, protocol_version: str) -> dict[str, Any]:
@@ -362,6 +402,43 @@ class CardputerMcpServer:
                 raise ValueError("max_seconds must be a positive integer.")
             result = await self.app.dictate_cardputer(prompt, max_seconds)
             return _tool_result(result, is_error=result.get("status") == "unsupported")
+
+        if name == "cardputer.preview_lvgl_ui":
+            screen = str(arguments.get("screen") or "buddy")
+            fixture = arguments.get("fixture")
+            actions = arguments.get("actions")
+            if not isinstance(actions, list) and actions is not None:
+                raise ValueError("Actions must be an array of strings.")
+            
+            # Workspace root is likely two levels up from this file's directory
+            workspace_root = Path(__file__).parent.parent.parent.parent.resolve()
+            
+            try:
+                result = await asyncio.to_thread(
+                    run_lvgl_preview,
+                    workspace_root=workspace_root,
+                    screen=screen,
+                    fixture=fixture,
+                    actions=actions,
+                )
+                structured = {
+                    "status": "success",
+                    "image_b64": result["image_b64"],
+                    "width": result["width"],
+                    "height": result["height"],
+                    "fixture": result["fixture"],
+                }
+                
+                # For MCP image content support
+                mcp_result = _tool_result(structured)
+                mcp_result["content"].append({
+                    "type": "image",
+                    "data": result["image_b64"],
+                    "mimeType": "image/png"
+                })
+                return mcp_result
+            except Exception as exc:
+                raise RuntimeError(f"LVGL preview failed: {exc}")
 
         raise ValueError(f"Unknown tool: {name}")
 

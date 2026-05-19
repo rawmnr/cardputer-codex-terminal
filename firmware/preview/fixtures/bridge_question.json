@@ -1,0 +1,10 @@
+{
+  "active_app": 0,
+  "ui_mode": 5,
+  "bridge_prompt_kind": 2,
+  "bridge_prompt_title": "Update Available",
+  "bridge_prompt_detail": "Install firmware v1.2.3 now?",
+  "bridge_prompt_options": ["Later", "Now"],
+  "bridge_prompt_option_count": 2,
+  "bridge_prompt_selected_index": 1
+}

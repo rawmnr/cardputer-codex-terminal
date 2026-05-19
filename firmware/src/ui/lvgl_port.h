@@ -40,10 +40,18 @@ class LvglPort {
   lv_indev_t* keypad_ = nullptr;
   lv_group_t* group_ = nullptr;
   std::array<lv_color_t, kBufferPixels> buffer_{};
+#ifndef ARDUINO
+  std::array<uint16_t, kScreenWidth * kScreenHeight> full_framebuffer_{};
+#endif
   std::array<KeyEvent, kKeyQueueSize> key_queue_{};
   size_t key_head_ = 0;
   size_t key_tail_ = 0;
   unsigned long last_tick_ms_ = 0;
+
+ public:
+#ifndef ARDUINO
+  const uint16_t* framebuffer() const { return full_framebuffer_.data(); }
+#endif
 };
 #else
 class LvglPort {

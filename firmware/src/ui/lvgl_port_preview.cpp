@@ -1,7 +1,6 @@
 #include "lvgl_port.h"
 
-#if USE_LVGL_UI
-#include <M5Cardputer.h>
+#if USE_LVGL_UI && !defined(ARDUINO)
 
 namespace {
 LvglPort* g_port = nullptr;
@@ -12,9 +11,6 @@ void LvglPort::begin() {
 
   g_port = this;
   last_tick_ms_ = millis();
-
-  // M5GFX expects 16-bit flush buffers in swapped RGB565 byte order here.
-  M5Cardputer.Display.setSwapBytes(true);
 
   display_ = lv_display_create(kScreenWidth, kScreenHeight);
   lv_display_set_color_format(display_, LV_COLOR_FORMAT_RGB565);
@@ -87,9 +83,16 @@ void LvglPort::flushArea(const lv_area_t* area, const uint8_t* px_map) {
     return;
   }
 
-  M5Cardputer.Display.startWrite();
-  M5Cardputer.Display.pushImage(area->x1, area->y1, width, height, reinterpret_cast<const uint16_t*>(px_map));
-  M5Cardputer.Display.endWrite();
+  const uint16_t* src = reinterpret_cast<const uint16_t*>(px_map);
+  for (int32_t y = 0; y < height; ++y) {
+    for (int32_t x = 0; x < width; ++x) {
+      const int32_t dst_x = area->x1 + x;
+      const int32_t dst_y = area->y1 + y;
+      if (dst_x >= 0 && dst_x < kScreenWidth && dst_y >= 0 && dst_y < kScreenHeight) {
+        full_framebuffer_[dst_y * kScreenWidth + dst_x] = src[y * width + x];
+      }
+    }
+  }
 }
 
 bool LvglPort::popKey(KeyEvent& event) {

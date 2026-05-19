@@ -29,6 +29,10 @@ class LvglScreen {
   void pushKey(lv_key_t key, bool pressed);
   void tick();
 
+#ifndef ARDUINO
+  const uint16_t* framebuffer() const { return port_.framebuffer(); }
+#endif
+
  private:
   static constexpr size_t kNoSelection = static_cast<size_t>(-1);
   static const char* const kTabMap[];

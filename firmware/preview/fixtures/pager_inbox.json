@@ -1,0 +1,22 @@
+{
+  "active_app": 2,
+  "ui_mode": 0,
+  "codex_state": 1,
+  "pager": {
+    "session_count": 2,
+    "sessions": [
+      {
+        "session_id": "sess_1",
+        "title": "Fix bug #123",
+        "status": "done",
+        "last_event": "Commit pushed"
+      },
+      {
+        "session_id": "sess_2",
+        "title": "Add preview tool",
+        "status": "busy",
+        "last_event": "Running tests..."
+      }
+    ]
+  }
+}

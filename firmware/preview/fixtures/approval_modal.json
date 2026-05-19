@@ -1,0 +1,9 @@
+{
+  "active_app": 0,
+  "ui_mode": 4,
+  "codex_state": 3,
+  "approval_pending": true,
+  "approval_title": "Delete folder?",
+  "approval_detail_line": "This will permanently remove 'src/old_code'",
+  "status_line": "Waiting for approval..."
+}

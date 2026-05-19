@@ -1,0 +1,12 @@
+{
+  "active_app": 0,
+  "ui_mode": 1,
+  "codex_state": 1,
+  "wifi_connected": true,
+  "battery_percent": 100,
+  "status_line": "App Menu",
+  "menu": {
+    "app_menu_open": true,
+    "app_menu_selected": 2
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "active_app": 0,
+  "ui_mode": 0,
+  "codex_state": 1,
+  "wifi_connected": true,
+  "wifi_ssid": "CodexNet",
+  "wifi_ip": "192.168.1.42",
+  "battery_percent": 85,
+  "codex_usage_percent": 12,
+  "codex_workspace_path": "cardputer-codex-terminal",
+  "codex_branch": "main",
+  "codex_thread_id": "thread_abc123",
+  "status_line": "Ready",
+  "bridge_status_line": "connected"
+}

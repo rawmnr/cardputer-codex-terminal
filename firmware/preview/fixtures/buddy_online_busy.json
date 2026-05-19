@@ -1,0 +1,15 @@
+{
+  "active_app": 0,
+  "ui_mode": 0,
+  "codex_state": 2,
+  "wifi_connected": true,
+  "wifi_ssid": "CodexNet",
+  "wifi_ip": "192.168.1.42",
+  "battery_percent": 42,
+  "codex_usage_percent": 88,
+  "codex_workspace_path": "cardputer-codex-terminal",
+  "codex_branch": "feat/mcp-preview",
+  "codex_thread_id": "thread_busy_456",
+  "status_line": "Analyzing codebase...",
+  "bridge_status_line": "active"
+}
