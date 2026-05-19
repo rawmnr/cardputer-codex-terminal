@@ -17,8 +17,8 @@ uv run python -m unittest discover -s tests -v
 Cardputer-facing messages use a versioned envelope. The current protocol version is `1`.
 Each request includes a stable `id`, and the middleware replies with an `ack` frame so the sender can correlate replies with pending requests.
 When the bridge is exposed beyond loopback, the server can require a shared `bridge_token` and the firmware must embed the same token in its outgoing envelopes.
-The middleware also owns the Codex session index and returns it in `status_request` snapshots so the Pager can browse active and recent sessions without storing the model on-device.
-The browser preview surfaces that same session index as a Central Console with session list, event stream, composer, approvals, live screen snapshot, and workspace file browser.
+The middleware also owns the Codex session index and a parallel `RunIndex`; `status_request` snapshots now return both `session_index` and a `runs` list so the Pager can browse active and recent sessions without storing the model on-device.
+The browser preview surfaces the same session index and run list as a Central Console with session list, event stream, composer, approvals, live screen snapshot, and workspace file browser.
 
 The middleware also exposes a Codex-facing MCP server mode over stdio. In that mode, Codex can launch the middleware directly and invoke physical-human tools instead of going through the app-server bridge first.
 
@@ -33,8 +33,8 @@ The middleware also exposes a Codex-facing MCP server mode over stdio. In that m
 - Relay deltas and status updates back to the Cardputer.
 - Handle approval requests.
 - Maintain a `SessionIndex` in Python with `SessionState` records for active and recent Codex threads.
-- Return `session_index`, `active_session_id`, and per-session event history in `session_status` payloads.
-- Handle local bridge notifications, questions, confirmations, and responses.
+- Maintain a `RunIndex` in Python with `AgentRun` records for active and recent execution runs.
+- Return `session_index`, `active_session_id`, `active_run_id`, and per-session/run history in `session_status` payloads.
 - Expose MCP tools for notifications, questions, confirmations, and display-only text.
 
 The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.

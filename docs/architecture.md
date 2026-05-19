@@ -20,7 +20,7 @@ Build a mobile physical interface for OpenAI Codex, based on the M5Stack Cardput
    - Speech-to-text transcription.
    - JSON-RPC client for `codex app-server`.
    - stdio MCP server for Codex human-in-the-loop tools.
-   - Python-owned session index and recent-event history for the Pager browser.
+   - Python-owned session and run indexes plus recent-event history for the Pager browser.
    - Routing of Codex events back to the Cardputer display.
    - Local browser preview and mirrored dev files for fast iteration.
 
@@ -54,7 +54,7 @@ Codex approval request -> middleware -> Cardputer alert -> user keypress -> midd
 ### Pager Browser
 
 ```text
-Codex session events -> middleware SessionIndex -> Cardputer pager inbox/detail -> reply, approval, or session browse actions
+Codex session and run events -> middleware SessionIndex + RunIndex -> Cardputer pager inbox/detail -> reply, approval, or session browse actions
 ```
 
 ### Local Bridge Prompt

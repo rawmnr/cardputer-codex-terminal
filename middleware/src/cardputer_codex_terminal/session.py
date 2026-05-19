@@ -22,6 +22,7 @@ def _event_payload(event: Any) -> tuple[str, dict[str, Any]]:
 @dataclass(slots=True)
 class SessionState:
     session_id: str
+    run_id: str | None = None
     thread_id: str | None = None
     workspace_path: str = "."
     branch: str | None = None
@@ -165,6 +166,7 @@ class SessionState:
     def to_dict(self) -> dict[str, Any]:
         return {
             "session_id": self.session_id,
+            "run_id": self.run_id,
             "thread_id": self.thread_id,
             "workspace_path": self.workspace_path,
             "branch": self.branch,
@@ -212,21 +214,47 @@ class SessionIndex:
             return self.sessions[session_id]
         return None
 
-    def start_new(self, workspace_path: str = ".", branch: str | None = None) -> SessionState:
+    def find_by_thread_id(self, thread_id: str) -> SessionState | None:
+        for session in self.ordered_sessions():
+            if session.thread_id == thread_id:
+                return session
+        return None
+
+    def create_session(
+        self,
+        workspace_path: str = ".",
+        branch: str | None = None,
+        *,
+        thread_id: str | None = None,
+        title: str | None = None,
+        run_id: str | None = None,
+    ) -> SessionState:
         session_id = self._new_session_id()
-        session = SessionState(session_id, workspace_path=workspace_path, branch=branch)
+        session = SessionState(
+            session_id,
+            thread_id=thread_id,
+            workspace_path=workspace_path,
+            branch=branch,
+            title=title or "Untitled session",
+            run_id=run_id,
+        )
         self.sessions[session_id] = session
         self.active_session_id = session_id
         return session
 
-    def ensure_active(self, workspace_path: str = ".", branch: str | None = None, thread_id: str | None = None, title: str | None = None) -> SessionState:
+    def start_new(self, workspace_path: str = ".", branch: str | None = None) -> SessionState:
+        return self.create_session(workspace_path, branch)
+
+    def ensure_active(self, workspace_path: str = ".", branch: str | None = None, thread_id: str | None = None, title: str | None = None, run_id: str | None = None) -> SessionState:
         session = self.current()
         if session is None:
-            session = self.start_new(workspace_path, branch)
+            session = self.create_session(workspace_path, branch, thread_id=thread_id, title=title, run_id=run_id)
         if thread_id is not None:
             session.thread_id = thread_id
         if title is not None:
             session.title = title
+        if run_id is not None:
+            session.run_id = run_id or None
         return session
 
     def record(self, events: list[Any]) -> None:

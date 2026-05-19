@@ -9,6 +9,7 @@ from .codex_transport import CodexTransport, LocalWebSocketCodexTransport, MockC
 from .events import Event, EventType
 from .messages import CardputerMessage, CardputerMessageType
 from .router import CardputerRouter
+from .runs import AgentRun, RunIndex, RunMode, RunRole
 from .session import SessionIndex, SessionState
 from .voice import FasterWhisperVoiceTranscriber, MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
 
@@ -19,6 +20,7 @@ class MiddlewareApp:
     transport: CodexTransport = field(init=False)
     router: CardputerRouter = field(default_factory=CardputerRouter)
     session_index: SessionIndex = field(default_factory=SessionIndex)
+    run_index: RunIndex = field(default_factory=RunIndex)
     session: SessionState = field(init=False)
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
     transcriber: VoiceTranscriber = field(default_factory=MockVoiceTranscriber)
@@ -43,6 +45,36 @@ class MiddlewareApp:
             thread_id=self.config.thread_id,
             title=self.config.thread_id,
         )
+        self._ensure_run_for_session(self.session, sync=True)
+
+    def _ensure_run_for_session(self, session: SessionState, *, sync: bool = False) -> AgentRun:
+        run = self.run_index.find_by_session_id(session.session_id)
+        if run is None and session.run_id is not None:
+            run = self.run_index.runs.get(session.run_id)
+        if run is None:
+            run = self.run_index.create_run(
+                workspace_path=session.workspace_path,
+                base_branch=self.config.branch or session.branch or "main",
+                branch=session.branch,
+                thread_id=session.thread_id,
+                session_id=session.session_id,
+                role=RunRole.MAIN,
+                mode=RunMode.SAFE,
+            )
+            session.run_id = run.run_id
+        else:
+            session.run_id = run.run_id
+            if sync:
+                run.touch(
+                    workspace_path=session.workspace_path,
+                    base_branch=self.config.branch or session.branch or run.base_branch,
+                    branch=session.branch,
+                    thread_id=session.thread_id,
+                    session_id=session.session_id,
+                )
+        self.run_index.select(run.run_id)
+        return run
+
 
     async def initialize(self) -> None:
         await self.transport.initialize()
@@ -50,6 +82,7 @@ class MiddlewareApp:
     async def select_workspace(self, workspace_path: str) -> Event:
         self.session.workspace_path = workspace_path
         self.session.thread_id = None
+        self._ensure_run_for_session(self.session, sync=True)
         event = Event(
             EventType.CODEX_STATUS,
             {"kind": "project_selected", "content": workspace_path, "workspace_path": workspace_path},
@@ -61,6 +94,7 @@ class MiddlewareApp:
         self.session.branch = branch
         if self.session.thread_id is not None:
             await self.transport.update_thread_metadata(self.session.thread_id, branch=branch)
+        self._ensure_run_for_session(self.session, sync=True)
         event = Event(EventType.CODEX_STATUS, {"kind": "branch_selected", "content": branch, "branch": branch})
         self._notify([event])
         return event
@@ -78,6 +112,7 @@ class MiddlewareApp:
         else:
             session.touch(workspace_path=self.session.workspace_path, branch=self.session.branch, thread_id=resumed_thread_id)
         self.session = session
+        self._ensure_run_for_session(self.session, sync=True)
         event = Event(EventType.CODEX_STATUS, {"kind": "thread_selected", "content": thread_id, "thread_id": thread_id})
         self._notify([event])
         return event
@@ -536,11 +571,13 @@ class MiddlewareApp:
                     sd["events"] = pruned_events
                 sessions.append(sd)
 
+            runs = [run.to_dict() for run in self.run_index.ordered_runs()[:10]]
             event = Event(
                 EventType.CODEX_STATUS,
                 {
                     "kind": "session_status",
                     "active_session_id": self.session_index.active_session_id,
+                    "active_run_id": self.run_index.active_run_id,
                     "workspace_path": self.session.workspace_path,
                     "branch": self.session.branch,
                     "thread_id": self.session.thread_id,
@@ -559,6 +596,7 @@ class MiddlewareApp:
                     "approval_title": self.session.pending_approval_title,
                     "approval_detail": self.session.pending_approval_detail,
                     "sessions": sessions,
+                    "runs": runs,
                     "interrupt_supported": True,
                     "bridge_prompt_kind": self.session.bridge_prompt_kind,
                     "bridge_prompt_title": self.session.bridge_prompt_title,
@@ -588,6 +626,7 @@ class MiddlewareApp:
 
     def _notify(self, events: list[Event]) -> None:
         self.session_index.record(events)
+        self.run_index.record(events, run_id=self.session.run_id)
         if self.event_observer is None or not events:
             return
         self.event_observer(events)

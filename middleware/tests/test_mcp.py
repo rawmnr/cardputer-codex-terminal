@@ -44,6 +44,7 @@ class McpServerTests(unittest.TestCase):
                 "cardputer.confirm",
                 "cardputer.show",
                 "cardputer.dictate",
+                "cardputer.preview_lvgl_ui",
             ],
         )
 
