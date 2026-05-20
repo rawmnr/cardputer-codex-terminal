@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <string>
 
 #include "device_state.h"
 #include "lvgl_screen.h"
@@ -106,6 +107,10 @@ uint32_t keyFromName(const std::string& name) {
   if (name == "backspace") return LV_KEY_BACKSPACE;
   if (name == "home") return LV_KEY_HOME;
   if (name == "end") return LV_KEY_END;
+  if (name == "tab") return LV_KEY_NEXT;
+  if (name == "prev") return LV_KEY_PREV;
+  if (name == "del") return LV_KEY_DEL;
+  if (name.length() == 1) return name[0];
   return 0;
 }
 
@@ -117,7 +122,6 @@ void exportPng(const char* path, const uint16_t* framebuffer, int width, int hei
   std::vector<uint8_t> rgb888(width * height * 3);
   for (int i = 0; i < width * height; ++i) {
     uint16_t rgb565 = framebuffer[i];
-    // RGB565 to RGB888
     uint8_t r = (rgb565 >> 11) & 0x1F;
     uint8_t g = (rgb565 >> 5) & 0x3F;
     uint8_t b = rgb565 & 0x1F;
@@ -131,47 +135,41 @@ void exportPng(const char* path, const uint16_t* framebuffer, int width, int hei
 
 int main(int argc, char** argv) {
   std::string fixture_path = "firmware/preview/fixtures/buddy_idle.json";
-  std::string output_path = "preview.png";
+  std::string output_prefix = "preview";
 
   if (argc > 1) fixture_path = argv[1];
-  if (argc > 2) output_path = argv[2];
+  if (argc > 2) output_prefix = argv[2];
 
   std::cout << "Loading fixture: " << fixture_path << std::endl;
-  std::ifstream f(fixture_path);
-  if (!f.is_open()) {
-    std::cerr << "Could not open fixture file!" << std::endl;
-    return 1;
-  }
-
-  std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-  StaticJsonDocument<4096> doc;
-  DeserializationError err = deserializeJson(doc, content);
-  if (err) {
-    std::cerr << "JSON parsing failed!" << std::endl;
-    return 1;
-  }
-  std::cout << "Deserialized JSON" << std::endl;
-
   DeviceState state;
-  loadFixture(fixture_path, state);
-  std::cout << "Loaded fixture into state" << std::endl;
+  if (!loadFixture(fixture_path, state)) {
+    return 1;
+  }
 
   LvglScreen screen;
-  std::cout << "Created LvglScreen" << std::endl;
   screen.begin();
-  std::cout << "Initialized LvglScreen" << std::endl;
 
   MockApp app;
-  // Run a few ticks to let LVGL stabilize
-  std::cout << "Stabilizing..." << std::endl;
-  for (int i = 0; i < 20; ++i) {
+  auto render = [&](const std::string& suffix) {
     screen.renderShell(state, app, "", "");
-    screen.tick();
-  }
-  std::cout << "Stabilized" << std::endl;
+    for (int i = 0; i < 20; ++i) screen.tick();
+    std::string path = output_prefix + (suffix.empty() ? "" : "_" + suffix) + ".png";
+    std::cout << "Exporting " << path << "..." << std::endl;
+    exportPng(path.c_str(), screen.framebuffer(), 240, 135);
+  };
+
+  // Initial state
+  render("0_initial");
+
+  // Re-read actions from JSON
+  std::ifstream f(fixture_path);
+  std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  StaticJsonDocument<4096> doc;
+  deserializeJson(doc, content);
 
   if (doc.containsKey("actions")) {
     JsonArray actions = doc["actions"].as<JsonArray>();
+    int step = 1;
     for (JsonVariant v : actions) {
       if (v.is<const char*>()) {
         std::string action = v.as<const char*>();
@@ -182,17 +180,11 @@ int main(int argc, char** argv) {
           for (int i = 0; i < 5; ++i) screen.tick();
           screen.pushKey(key, false);
           for (int i = 0; i < 10; ++i) screen.tick();
+          render(std::to_string(step++) + "_" + action);
         }
       }
     }
-    // Final sync after actions
-    screen.renderShell(state, app, "", "");
-    for (int i = 0; i < 10; ++i) screen.tick();
   }
 
-  std::cout << "Exporting PNG..." << std::endl;
-  exportPng(output_path.c_str(), screen.framebuffer(), 240, 135);
-
-  std::cout << "Preview generated: " << output_path << std::endl;
   return 0;
 }

@@ -1,0 +1,20 @@
+{
+  "active_app": 0,
+  "ui_mode": 0,
+  "codex_state": 0,
+  "wifi_connected": true,
+  "wifi_ssid": "M5Stack",
+  "wifi_ip": "192.168.1.100",
+  "battery_percent": 85,
+  "actions": [
+    "right",
+    "right",
+    "left",
+    "tab",
+    "enter",
+    "A",
+    "B",
+    "C",
+    "esc"
+  ]
+}

@@ -28,6 +28,23 @@ pio run -e preview
 
 The resulting binary will be located at `.pio/build/preview/program` (or `program.exe`).
 
+
+### Multi-page and Interactive Navigation
+The preview tool supports sequential actions defined in the fixture JSON. Each action produces a new screenshot.
+
+**Fixture Actions Example**:
+```json
+{
+  "actions": ["right", "right", "tab", "enter", "A", "esc"]
+}
+```
+
+**Supported Action Names**:
+- `up`, `down`, `left`, `right`
+- `enter`, `esc`, `tab`, `backspace`, `del`, `home`, `end`, `prev`
+- Single characters (e.g., `"A"`, `"1"`, `"#"`)
+
+Running the preview with such a fixture will generate `prefix_0_initial.png`, `prefix_1_action.png`, etc.
 ## Workflow
 
 ### Using Fixtures
