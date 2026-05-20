@@ -445,16 +445,30 @@ class MiddlewareApp:
 
                 events.append(self._set_pending_approval(reply.data))
                 break
-            events.append(
-                Event(
-                    EventType.CODEX_DELTA
-                    if reply.kind == "delta"
-                    else EventType.CODEX_USAGE
-                    if reply.kind == "usage"
-                    else EventType.CODEX_STATUS,
-                    {"content": reply.content, "kind": reply.kind, "data": reply.data},
-                )
+            event_type = (
+                EventType.CODEX_DELTA
+                if reply.kind == "delta"
+                else EventType.CODEX_USAGE
+                if reply.kind == "usage"
+                else EventType.CODEX_STATUS
             )
+            payload = {"content": reply.content, "kind": reply.kind, "data": reply.data}
+            if event_type == EventType.CODEX_USAGE:
+                # We record it first to update the session state
+                self.session.record_event(Event(event_type, payload))
+                # Then we enrich the payload for the firmware
+                payload.update({
+                    "codex_usage_percent": self.session.codex_usage_percent,
+                    "codex_usage_secondary_percent": self.session.codex_usage_secondary_percent,
+                    "codex_usage_window_minutes": self.session.codex_usage_window_minutes,
+                    "codex_usage_secondary_window_minutes": self.session.codex_usage_secondary_window_minutes,
+                    "codex_usage_resets_at": self.session.codex_usage_resets_at,
+                    "codex_usage_secondary_resets_at": self.session.codex_usage_secondary_resets_at,
+                    "codex_usage_reset_line": self.session.codex_usage_reset_line,
+                })
+                events.append(Event(event_type, payload))
+            else:
+                events.append(Event(event_type, payload))
         if (
             not isinstance(self.transport, MockCodexTransport)
             and events

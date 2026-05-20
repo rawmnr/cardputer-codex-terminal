@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <iostream>
 
 #ifndef USE_LVGL_UI
 #define USE_LVGL_UI 0
@@ -40,7 +41,7 @@ class LvglPort {
   lv_indev_t* keypad_ = nullptr;
   lv_group_t* group_ = nullptr;
   std::array<lv_color_t, kBufferPixels> buffer_{};
-#ifndef ARDUINO
+#if !defined(ARDUINO) || defined(NATIVE_BUILD)
   std::array<uint16_t, kScreenWidth * kScreenHeight> full_framebuffer_{};
 #endif
   std::array<KeyEvent, kKeyQueueSize> key_queue_{};
@@ -49,8 +50,11 @@ class LvglPort {
   unsigned long last_tick_ms_ = 0;
 
  public:
-#ifndef ARDUINO
-  const uint16_t* framebuffer() const { return full_framebuffer_.data(); }
+#if !defined(ARDUINO) || defined(NATIVE_BUILD)
+  const uint16_t* framebuffer() const {
+    std::cout << "LvglPort::framebuffer() called" << std::endl;
+    return full_framebuffer_.data();
+  }
 #endif
 };
 #else

@@ -1,6 +1,9 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 #include <Arduino.h>
+#include <lvgl.h>
+#include <src/display/lv_display.h>
+#include <src/indev/lv_indev.h>
 #include <ArduinoJson.h>
 #include <fstream>
 #include <iostream>
@@ -93,7 +96,7 @@ bool loadFixture(const std::string& path, DeviceState& state) {
   return true;
 }
 
-lv_key_t keyFromName(const std::string& name) {
+uint32_t keyFromName(const std::string& name) {
   if (name == "up") return LV_KEY_UP;
   if (name == "down") return LV_KEY_DOWN;
   if (name == "left") return LV_KEY_LEFT;
@@ -107,6 +110,10 @@ lv_key_t keyFromName(const std::string& name) {
 }
 
 void exportPng(const char* path, const uint16_t* framebuffer, int width, int height) {
+  if (!framebuffer) {
+    std::cerr << "Error: null framebuffer" << std::endl;
+    return;
+  }
   std::vector<uint8_t> rgb888(width * height * 3);
   for (int i = 0; i < width * height; ++i) {
     uint16_t rgb565 = framebuffer[i];
@@ -129,31 +136,48 @@ int main(int argc, char** argv) {
   if (argc > 1) fixture_path = argv[1];
   if (argc > 2) output_path = argv[2];
 
+  std::cout << "Loading fixture: " << fixture_path << std::endl;
   std::ifstream f(fixture_path);
+  if (!f.is_open()) {
+    std::cerr << "Could not open fixture file!" << std::endl;
+    return 1;
+  }
+
   std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   StaticJsonDocument<4096> doc;
-  deserializeJson(doc, content);
+  DeserializationError err = deserializeJson(doc, content);
+  if (err) {
+    std::cerr << "JSON parsing failed!" << std::endl;
+    return 1;
+  }
+  std::cout << "Deserialized JSON" << std::endl;
 
   DeviceState state;
   loadFixture(fixture_path, state);
+  std::cout << "Loaded fixture into state" << std::endl;
 
   LvglScreen screen;
+  std::cout << "Created LvglScreen" << std::endl;
   screen.begin();
+  std::cout << "Initialized LvglScreen" << std::endl;
 
   MockApp app;
   // Run a few ticks to let LVGL stabilize
+  std::cout << "Stabilizing..." << std::endl;
   for (int i = 0; i < 20; ++i) {
     screen.renderShell(state, app, "", "");
     screen.tick();
   }
+  std::cout << "Stabilized" << std::endl;
 
   if (doc.containsKey("actions")) {
     JsonArray actions = doc["actions"].as<JsonArray>();
     for (JsonVariant v : actions) {
       if (v.is<const char*>()) {
         std::string action = v.as<const char*>();
-        lv_key_t key = keyFromName(action);
+        uint32_t key = keyFromName(action);
         if (key != 0) {
+          std::cout << "Action: " << action << std::endl;
           screen.pushKey(key, true);
           for (int i = 0; i < 5; ++i) screen.tick();
           screen.pushKey(key, false);
@@ -166,6 +190,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 10; ++i) screen.tick();
   }
 
+  std::cout << "Exporting PNG..." << std::endl;
   exportPng(output_path.c_str(), screen.framebuffer(), 240, 135);
 
   std::cout << "Preview generated: " << output_path << std::endl;

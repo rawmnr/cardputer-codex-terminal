@@ -1,6 +1,6 @@
 #include "lvgl_port.h"
 
-#if USE_LVGL_UI && !defined(ARDUINO)
+#if USE_LVGL_UI && (!defined(ARDUINO) || defined(NATIVE_BUILD))
 
 namespace {
 LvglPort* g_port = nullptr;
@@ -8,6 +8,7 @@ LvglPort* g_port = nullptr;
 
 void LvglPort::begin() {
   lv_init();
+
 
   g_port = this;
   last_tick_ms_ = millis();
@@ -28,13 +29,9 @@ void LvglPort::begin() {
 }
 
 void LvglPort::tick() {
-  const unsigned long now = millis();
-  const uint32_t elapsed = now >= last_tick_ms_ ? static_cast<uint32_t>(now - last_tick_ms_) : 0;
-  if (elapsed > 0) {
-    lv_tick_inc(elapsed);
-    last_tick_ms_ = now;
-  }
-
+  uint32_t now = millis();
+  lv_tick_inc(now - last_tick_ms_);
+  last_tick_ms_ = now;
   lv_timer_handler();
 }
 
@@ -49,6 +46,14 @@ bool LvglPort::ready() const {
 lv_group_t* LvglPort::group() const {
   return group_;
 }
+
+#if !defined(ARDUINO) || defined(NATIVE_BUILD)
+// Already defined in header for native
+#else
+const uint16_t* LvglPort::framebuffer() const {
+  return full_framebuffer_.data();
+}
+#endif
 
 void LvglPort::flushCb(lv_display_t* display, const lv_area_t* area, uint8_t* px_map) {
   if (g_port != nullptr) {

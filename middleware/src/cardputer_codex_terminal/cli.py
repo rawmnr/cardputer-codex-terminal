@@ -96,6 +96,7 @@ async def run_async(args: argparse.Namespace) -> int:
         # Register mDNS service for local discovery
         zc: AsyncZeroconf | None = None
         if HAS_ZEROCONF:
+            from zeroconf import NonUniqueNameException
             zc = AsyncZeroconf(ip_version=IPVersion.V4Only)
             local_ip = "127.0.0.1"
             try:
@@ -106,14 +107,18 @@ async def run_async(args: argparse.Namespace) -> int:
             except Exception:
                 pass
 
+            service_name = f"Cardputer Codex Terminal ({args.port})._cardputer-codex._tcp.local."
             info = ServiceInfo(
                 "_cardputer-codex._tcp.local.",
-                "Cardputer Codex Terminal._cardputer-codex._tcp.local.",
+                service_name,
                 addresses=[socket.inet_aton(local_ip)],
                 port=args.port,
-                server="cardputer-codex.local.",
+                server=f"cardputer-codex-{args.port}.local.",
             )
-            await zc.async_register_service(info)
+            try:
+                await zc.async_register_service(info)
+            except NonUniqueNameException:
+                print(f"Warning: mDNS name {service_name} is already taken, skipping registration.", file=stream)
 
         async def handler(websocket: object, *_: object) -> None:
             await bridge.handle_connection(websocket)

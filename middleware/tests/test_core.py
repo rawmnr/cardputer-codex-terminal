@@ -53,6 +53,13 @@ class MiddlewareAppTests(unittest.TestCase):
                         "content": "mock_usage_update",
                         "kind": "usage",
                         "data": {"threadId": "mock-thread:.:main", "cwd": ".", "usedPercent": 12},
+                        "codex_usage_percent": 12,
+                        "codex_usage_secondary_percent": -1,
+                        "codex_usage_window_minutes": 0,
+                        "codex_usage_secondary_window_minutes": 0,
+                        "codex_usage_resets_at": 0,
+                        "codex_usage_secondary_resets_at": 0,
+                        "codex_usage_reset_line": "Reset data pending",
                     },
                 },
                 {

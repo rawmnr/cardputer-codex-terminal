@@ -518,6 +518,28 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
   }
 
   if (event_type == "codex_usage") {
+    if (payload["codex_usage_percent"].is<int>()) {
+      state.codex_usage_percent = payload["codex_usage_percent"].as<int>();
+    }
+    if (payload["codex_usage_secondary_percent"].is<int>()) {
+      state.codex_usage_secondary_percent = payload["codex_usage_secondary_percent"].as<int>();
+    }
+    if (payload["codex_usage_window_minutes"].is<int>()) {
+      state.codex_usage_window_minutes = payload["codex_usage_window_minutes"].as<int>();
+    }
+    if (payload["codex_usage_secondary_window_minutes"].is<int>()) {
+      state.codex_usage_secondary_window_minutes = payload["codex_usage_secondary_window_minutes"].as<int>();
+    }
+    if (payload["codex_usage_resets_at"].is<uint32_t>()) {
+      state.codex_usage_resets_at = payload["codex_usage_resets_at"].as<uint32_t>();
+    }
+    if (payload["codex_usage_secondary_resets_at"].is<uint32_t>()) {
+      state.codex_usage_secondary_resets_at = payload["codex_usage_secondary_resets_at"].as<uint32_t>();
+    }
+    if (payload["codex_usage_reset_line"].is<const char*>()) {
+      state.codex_usage_reset_line = payload["codex_usage_reset_line"].as<const char*>();
+    }
+
     if (payload["data"].is<JsonObjectConst>()) {
       JsonObjectConst data = payload["data"].as<JsonObjectConst>();
       if (data["usedPercent"].is<int>()) {

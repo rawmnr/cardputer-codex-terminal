@@ -107,27 +107,37 @@ class SessionState:
                 self.last_event = content
         elif event_type == "codex_usage":
             data = payload.get("data", {})
-            rate_limits = data.get("rateLimits", {})
+            rate_limits = data.get("rateLimits")
+            if not isinstance(rate_limits, dict):
+                rate_limits = data
             
-            primary = rate_limits.get("primary", {})
-            self.codex_usage_percent = int(primary.get("usedPercent", -1))
-            self.codex_usage_window_minutes = int(primary.get("windowDurationMins", 0))
-            self.codex_usage_resets_at = int(primary.get("resetsAt", 0))
+            primary = rate_limits.get("primary")
+            if not isinstance(primary, dict):
+                primary = rate_limits if "usedPercent" in rate_limits or "windowDurationMins" in rate_limits else {}
             
-            secondary = rate_limits.get("secondary", {})
-            self.codex_usage_secondary_percent = int(secondary.get("usedPercent", -1))
-            self.codex_usage_secondary_window_minutes = int(secondary.get("windowDurationMins", 0))
-            self.codex_usage_secondary_resets_at = int(secondary.get("resetsAt", 0))
+            self.codex_usage_percent = int(primary.get("usedPercent", primary.get("used_percent", -1)))
+            self.codex_usage_window_minutes = int(primary.get("windowDurationMins", primary.get("window_minutes", 0)))
+            self.codex_usage_resets_at = int(primary.get("resetsAt", primary.get("resets_at", 0)))
+            
+            secondary = rate_limits.get("secondary")
+            if not isinstance(secondary, dict):
+                secondary = {}
+            
+            self.codex_usage_secondary_percent = int(secondary.get("usedPercent", secondary.get("used_percent", -1)))
+            self.codex_usage_secondary_window_minutes = int(secondary.get("windowDurationMins", secondary.get("window_minutes", 0)))
+            self.codex_usage_secondary_resets_at = int(secondary.get("resetsAt", secondary.get("resets_at", 0)))
             
             import time
             now = time.time()
             resets = []
             if self.codex_usage_resets_at > now:
-                m = int((self.codex_usage_resets_at - now) // 60)
-                resets.append(f"{m}m")
+                m = int((self.codex_usage_resets_at - now + 30) // 60)
+                if m > 0:
+                    resets.append(f"{m}m")
             if self.codex_usage_secondary_resets_at > now:
-                h = int((self.codex_usage_secondary_resets_at - now) // 3600)
-                resets.append(f"{h}h")
+                h = int((self.codex_usage_secondary_resets_at - now + 1800) // 3600)
+                if h > 0:
+                    resets.append(f"{h}h")
             
             if resets:
                 self.codex_usage_reset_line = f"Resets in {' / '.join(resets)}"

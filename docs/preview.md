@@ -17,7 +17,7 @@ firmware/src/ui/
 ## Setup
 
 ### 1. Host Compiler
-You need a C++ compiler installed on your host machine (e.g., MSVC on Windows, GCC/Clang on Linux/macOS).
+You need MSYS2 `g++` (MinGW-w64) installed on your Windows host machine to match the PlatformIO `native` build configuration.
 
 ### 2. Build the Preview Binary
 Run the following command in the `firmware/` directory:

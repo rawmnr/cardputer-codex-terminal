@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <iostream>
 
 #ifndef USE_LVGL_UI
 #define USE_LVGL_UI 0
@@ -26,12 +27,9 @@ class LvglScreen {
  public:
   void begin();
   void renderShell(const DeviceState& state, App& app, const String& input_line, const String& footer_hint);
-  void pushKey(lv_key_t key, bool pressed);
+  void pushKey(uint32_t key, bool pressed);
   void tick();
-
-#ifndef ARDUINO
-  const uint16_t* framebuffer() const { return port_.framebuffer(); }
-#endif
+  const uint16_t* framebuffer() const;
 
  private:
   static constexpr size_t kNoSelection = static_cast<size_t>(-1);
@@ -92,7 +90,8 @@ class LvglScreen {
  public:
   void begin() {}
   void renderShell(const DeviceState&, App&, const String&, const String&) {}
-  void pushKey(int, bool) {}
+  void pushKey(uint32_t, bool) {}
   void tick() {}
+  const uint16_t* framebuffer() const { return nullptr; }
 };
 #endif

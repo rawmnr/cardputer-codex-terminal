@@ -128,8 +128,17 @@ const char* LvglScreen::tabLabel(size_t index) {
   return kTabMap[index * 2];
 }
 
+const uint16_t* LvglScreen::framebuffer() const {
+  return port_.framebuffer();
+}
+
 void LvglScreen::begin() {
   port_.begin();
+
+  // Wait for port to be ready
+  for (int i = 0; i < 10 && !port_.ready(); ++i) {
+    port_.tick();
+  }
 
   root_ = lv_screen_active();
   lv_obj_set_style_bg_color(root_, lv_color_hex(0x071521), 0);
@@ -531,8 +540,8 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
   }
 }
 
-void LvglScreen::pushKey(lv_key_t key, bool pressed) {
-  port_.pushKey(key, pressed);
+void LvglScreen::pushKey(uint32_t key, bool pressed) {
+  port_.pushKey(static_cast<lv_key_t>(key), pressed);
 }
 
 void LvglScreen::tick() {
