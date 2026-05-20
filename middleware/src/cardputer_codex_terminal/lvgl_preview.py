@@ -8,6 +8,54 @@ from pathlib import Path
 from typing import Any
 
 
+def _screen_label_to_app_id(screen: str) -> int | None:
+    if screen == "buddy":
+        return 0
+    if screen == "push":
+        return 1
+    if screen == "pager":
+        return 2
+    if screen == "usage":
+        return 3
+    if screen == "bridge":
+        return 4
+    if screen == "settings":
+        return 5
+    return None
+
+
+def _collect_frame_paths(output_prefix: Path) -> list[Path]:
+    frame_paths = list(output_prefix.parent.glob(f"{output_prefix.name}_*.png"))
+    if not frame_paths and output_prefix.exists():
+        frame_paths = [output_prefix]
+
+    def sort_key(path: Path) -> tuple[int, str, str]:
+        stem = path.stem
+        prefix = f"{output_prefix.name}_"
+        if stem.startswith(prefix):
+            remainder = stem[len(prefix) :]
+            step_text, _, label = remainder.partition("_")
+            if step_text.isdigit():
+                return (int(step_text), label, path.name)
+        return (0, path.name, path.name)
+
+    frame_paths.sort(key=sort_key)
+    return frame_paths
+
+
+def _frame_label(output_prefix: Path, frame_path: Path) -> str:
+    stem = frame_path.stem
+    prefix = f"{output_prefix.name}_"
+    if stem.startswith(prefix):
+        remainder = stem[len(prefix) :]
+        step_text, sep, label = remainder.partition("_")
+        if sep and step_text.isdigit() and label:
+            return label
+    if stem == output_prefix.name:
+        return "initial"
+    return stem
+
+
 def run_lvgl_preview(
     workspace_root: Path,
     screen: str = "buddy",
@@ -16,10 +64,9 @@ def run_lvgl_preview(
     binary_path: Path | None = None,
 ) -> dict[str, Any]:
     """
-    Runs the native LVGL preview binary and returns the resulting image as base64.
+    Runs the native LVGL preview binary and returns the rendered frames as base64.
     """
     if binary_path is None:
-        # Try common locations
         candidates = [
             workspace_root / "firmware" / ".pio" / "build" / "preview" / "program.exe",
             workspace_root / "firmware" / "preview.exe",
@@ -36,7 +83,6 @@ def run_lvgl_preview(
             "LVGL preview binary not found. Please build the 'preview' environment in the firmware directory."
         )
 
-    # Prepare the fixture
     fixture_data: dict[str, Any] = {}
     if isinstance(fixture, dict):
         fixture_data = fixture
@@ -44,23 +90,10 @@ def run_lvgl_preview(
         fixture_file = workspace_root / "firmware" / "preview" / "fixtures" / f"{fixture}.json"
         if fixture_file.exists():
             fixture_data = json.loads(fixture_file.read_text(encoding="utf-8"))
-        else:
-            # Fallback to empty fixture if named one is missing
-            fixture_data = {}
-    
-    # Override screen if provided
-    if screen == "buddy":
-        fixture_data["active_app"] = 0
-    elif screen == "push":
-        fixture_data["active_app"] = 1
-    elif screen == "pager":
-        fixture_data["active_app"] = 2
-    elif screen == "usage":
-        fixture_data["active_app"] = 3
-    elif screen == "bridge":
-        fixture_data["active_app"] = 4
-    elif screen == "settings":
-        fixture_data["active_app"] = 5
+
+    app_id = _screen_label_to_app_id(screen)
+    if app_id is not None:
+        fixture_data["active_app"] = app_id
 
     if actions:
         fixture_data["actions"] = actions
@@ -70,40 +103,49 @@ def run_lvgl_preview(
         tmp_fixture_path = Path(tmp_fixture.name)
 
     try:
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_output:
-            tmp_output_path = Path(tmp_output.name)
+        with tempfile.TemporaryDirectory() as tmp_output_dir_name:
+            output_prefix = Path(tmp_output_dir_name) / "preview"
 
-        # Run the preview binary
-        # Command line: preview.exe <fixture_path> <output_path>
-        result = subprocess.run(
-            [str(binary_path), str(tmp_fixture_path), str(tmp_output_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(workspace_root / "firmware"),
-        )
+            result = subprocess.run(
+                [str(binary_path), str(tmp_fixture_path), str(output_prefix)],
+                capture_output=True,
+                text=True,
+                cwd=str(workspace_root / "firmware"),
+            )
 
-        if result.returncode != 0:
-            raise RuntimeError(f"Preview binary failed: {result.stderr or result.stdout}")
+            frame_paths = _collect_frame_paths(output_prefix)
+            if result.returncode != 0 and not frame_paths:
+                raise RuntimeError(f"Preview binary failed: {result.stderr or result.stdout}")
+            if not frame_paths:
+                raise RuntimeError("Preview binary did not generate an output image.")
 
-        if not tmp_output_path.exists():
-            raise RuntimeError("Preview binary did not generate an output image.")
+            frames: list[dict[str, Any]] = []
+            for index, frame_path in enumerate(frame_paths):
+                frame_bytes = frame_path.read_bytes()
+                frames.append(
+                    {
+                        "index": index,
+                        "label": _frame_label(output_prefix, frame_path),
+                        "filename": frame_path.name,
+                        "width": 240,
+                        "height": 135,
+                        "image_b64": base64.b64encode(frame_bytes).decode("utf-8"),
+                    }
+                )
 
-        # Read the image and encode as base64
-        image_bytes = tmp_output_path.read_bytes()
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-
-        return {
-            "image_b64": image_b64,
-            "width": 240,
-            "height": 135,
-            "fixture": fixture_data,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-        }
+            return {
+                "image_b64": frames[-1]["image_b64"],
+                "frame_count": len(frames),
+                "frames": frames,
+                "width": 240,
+                "height": 135,
+                "fixture": fixture_data,
+                "actions": list(actions or []),
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode,
+            }
 
     finally:
-        # Cleanup temporary files
         if tmp_fixture_path.exists():
             tmp_fixture_path.unlink()
-        if 'tmp_output_path' in locals() and tmp_output_path.exists():
-            tmp_output_path.unlink()

@@ -43,7 +43,7 @@ class MiddlewareLink {
   String nextMessageId();
   bool ensureConnection(DeviceState& state);
   void applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload);
-  String buildEnvelope(const String& id, const String& type, const JsonDocument& payload) const;
+  String buildEnvelope(const String& id, const String& type, const ArduinoJson::JsonDocument& payload) const;
 
   String host_;
   String path_;

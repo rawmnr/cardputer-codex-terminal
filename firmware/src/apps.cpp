@@ -334,9 +334,9 @@ void PushToCodexApp::render(Print& out, const DeviceState& state) {
   out.println(ptt_state_label(state.ptt_state));
 
   out.print("Buf   ");
-  out.print(state.ptt_samples_captured);
+  out.print((unsigned long)state.ptt_samples_captured);
   out.print(" / ");
-  out.println(state.ptt_sample_limit);
+  out.println((unsigned long)state.ptt_sample_limit);
 
   out.print("Peak  ");
   out.println(state.ptt_peak_amplitude);
@@ -1380,9 +1380,9 @@ void PushToCodexApp::emitVoicePromptEnvelope(const DeviceState& state) const {
   Serial.print("{\"type\":\"voice_prompt_ready\",\"sample_rate_hz\":");
   Serial.print(state.ptt_sample_rate_hz);
   Serial.print(",\"sample_count\":");
-  Serial.print(state.ptt_samples_captured);
+  Serial.print((unsigned long)state.ptt_samples_captured);
   Serial.print(",\"duration_ms\":");
-  Serial.print((state.ptt_samples_captured * 1000UL) / state.ptt_sample_rate_hz);
+  Serial.print((unsigned long)((state.ptt_samples_captured * 1000UL) / state.ptt_sample_rate_hz));
   Serial.print(",\"peak_amplitude\":");
   Serial.print(state.ptt_peak_amplitude);
   Serial.println("}");

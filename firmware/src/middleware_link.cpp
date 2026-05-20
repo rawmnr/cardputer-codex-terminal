@@ -651,7 +651,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
   }
 }
 
-String MiddlewareLink::buildEnvelope(const String& id, const String& type, const JsonDocument& payload) const {
+String MiddlewareLink::buildEnvelope(const String& id, const String& type, const ArduinoJson::JsonDocument& payload) const {
   JsonDocument doc;
   doc["protocol_version"] = 1;
   doc["id"] = id;
@@ -661,9 +661,29 @@ String MiddlewareLink::buildEnvelope(const String& id, const String& type, const
     doc["auth_token"] = auth_token_;
   }
 
-  String output;
-  serializeJson(doc, output);
-  return output;
+  class StringWriter {
+   public:
+    size_t write(uint8_t c) {
+      output_.push_back(static_cast<char>(c));
+      return 1;
+    }
+
+    size_t write(const uint8_t* buffer, size_t size) {
+      output_.append(reinterpret_cast<const char*>(buffer), size);
+      return size;
+    }
+
+    String take() && {
+      return std::move(output_);
+    }
+
+   private:
+    String output_;
+  };
+
+  StringWriter writer;
+  serializeJson(doc, writer);
+  return std::move(writer).take();
 }
 
 String MiddlewareLink::nextMessageId() {

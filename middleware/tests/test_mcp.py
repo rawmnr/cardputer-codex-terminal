@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from unittest import mock
 import unittest
 
 from cardputer_codex_terminal.config import AppConfig
@@ -46,6 +47,66 @@ class McpServerTests(unittest.TestCase):
                 "cardputer.dictate",
                 "cardputer.preview_lvgl_ui",
             ],
+        )
+    def test_preview_lvgl_ui_returns_multiple_frames(self) -> None:
+        async def scenario() -> dict[str, object]:
+            app = MiddlewareApp(AppConfig(use_mock_codex=True))
+            await app.initialize()
+            server = CardputerMcpServer(app)
+            await server.handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1"},
+                    },
+                }
+            )
+            await server.handle_message({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+            with mock.patch(
+                "cardputer_codex_terminal.mcp.run_lvgl_preview",
+                return_value={
+                    "image_b64": "frame-2",
+                    "frame_count": 3,
+                    "frames": [
+                        {"index": 0, "label": "initial", "filename": "preview_0_initial.png", "width": 240, "height": 135, "image_b64": "frame-0"},
+                        {"index": 1, "label": "down", "filename": "preview_1_down.png", "width": 240, "height": 135, "image_b64": "frame-1"},
+                        {"index": 2, "label": "enter", "filename": "preview_2_enter.png", "width": 240, "height": 135, "image_b64": "frame-2"},
+                    ],
+                    "width": 240,
+                    "height": 135,
+                    "fixture": {"active_app": 0, "actions": ["down", "enter"]},
+                    "actions": ["down", "enter"],
+                    "stdout": "ok",
+                    "stderr": "",
+                },
+            ):
+                return await server.handle_message(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "cardputer.preview_lvgl_ui",
+                            "arguments": {"screen": "buddy", "actions": ["down", "enter"]},
+                        },
+                    }
+                ) or {}
+
+        response = asyncio.run(scenario())
+
+        self.assertEqual(response["result"]["structuredContent"]["frame_count"], 3)
+        self.assertEqual(
+            [frame["label"] for frame in response["result"]["structuredContent"]["frames"]],
+            ["initial", "down", "enter"],
+        )
+        self.assertEqual(
+            [content["type"] for content in response["result"]["content"]],
+            ["text", "image", "image", "image"],
         )
 
     def test_notify_and_show_update_prompt_state(self) -> None:

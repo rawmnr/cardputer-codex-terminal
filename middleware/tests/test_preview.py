@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
 from cardputer_codex_terminal.events import Event, EventType
+from cardputer_codex_terminal.lvgl_preview import run_lvgl_preview
 from cardputer_codex_terminal.preview import DevPreviewMirror
 
 
@@ -77,3 +81,30 @@ class PreviewMirrorTests(unittest.TestCase):
         screen = asyncio.run(scenario())
 
         self.assertEqual(screen, "LIVE SCREEN")
+
+    def test_lvgl_preview_collects_navigation_frames(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            binary_path = workspace / "firmware" / "preview.exe"
+            binary_path.parent.mkdir(parents=True, exist_ok=True)
+            binary_path.write_bytes(b"binary")
+
+            def fake_run(command, capture_output, text, cwd):  # type: ignore[no-untyped-def]
+                output_prefix = Path(command[2])
+                output_prefix.parent.mkdir(parents=True, exist_ok=True)
+                (output_prefix.parent / f"{output_prefix.name}_0_initial.png").write_bytes(b"frame-0")
+                (output_prefix.parent / f"{output_prefix.name}_1_down.png").write_bytes(b"frame-1")
+                (output_prefix.parent / f"{output_prefix.name}_2_enter.png").write_bytes(b"frame-2")
+                return subprocess.CompletedProcess(command, 0, stdout="preview ok", stderr="")
+
+            with mock.patch("cardputer_codex_terminal.lvgl_preview.subprocess.run", side_effect=fake_run):
+                result = run_lvgl_preview(
+                    workspace_root=workspace,
+                    screen="buddy",
+                    actions=["down", "enter"],
+                    binary_path=binary_path,
+                )
+
+        self.assertEqual(result["frame_count"], 3)
+        self.assertEqual([frame["label"] for frame in result["frames"]], ["initial", "down", "enter"])
+        self.assertEqual(result["image_b64"], base64.b64encode(b"frame-2").decode("utf-8"))

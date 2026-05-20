@@ -5,6 +5,10 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <sstream>
+#include <stdarg.h>
+
+#include <ArduinoJson.h>
 
 class Print {
  public:
@@ -14,6 +18,20 @@ class Print {
     while (size--) n += write(*buffer++);
     return n;
   }
+  void print(const std::string& s) { for (char c : s) write(c); }
+  void print(const char* s) { if (s) while (*s) write(*s++); }
+  void print(int n) { print(std::to_string(n)); }
+  void print(unsigned int n) { print(std::to_string(n)); }
+  void print(long n) { print(std::to_string(n)); }
+  void print(unsigned long n) { print(std::to_string(n)); }
+  void print(size_t n) { print((unsigned long)n); }
+  void println(const std::string& s) { print(s); write('\n'); }
+  void println(const char* s) { print(s); write('\n'); }
+  void println(int n) { print(n); write('\n'); }
+  void println(unsigned int n) { print(n); write('\n'); }
+  void println(unsigned long n) { print(n); write('\n'); }
+  void println(size_t n) { println((unsigned long)n); }
+  void println() { write('\n'); }
 };
 
 class String : public std::string {
@@ -43,6 +61,37 @@ class String : public std::string {
     if (to == std::string::npos) return String(substr(from));
     if (to <= from) return String("");
     return String(substr(from, to - from));
+  }
+
+  bool startsWith(const String& prefix) const {
+    return length() >= prefix.length() && compare(0, prefix.length(), prefix) == 0;
+  }
+
+  bool endsWith(const String& suffix) const {
+    return length() >= suffix.length() && compare(length() - suffix.length(), suffix.length(), suffix) == 0;
+  }
+
+  void trim() {
+    size_t first = find_first_not_of(" \t\r\n");
+    if (first == npos) {
+      clear();
+      return;
+    }
+    size_t last = find_last_not_of(" \t\r\n");
+    *this = substr(first, (last - first + 1));
+  }
+
+  int toInt() const {
+    try { return std::stoi(*this); } catch (...) { return 0; }
+  }
+
+  void remove(size_t index, size_t count = npos) {
+    if (index < length()) erase(index, count);
+  }
+
+  int indexOf(char c, size_t from = 0) const {
+    size_t res = find(c, from);
+    return res == npos ? -1 : (int)res;
   }
 
   String operator+(const String& other) const {
@@ -78,6 +127,22 @@ class String : public std::string {
   }
 };
 
+#ifndef StringPrint_h
+#define StringPrint_h
+class StringPrint : public Print {
+ public:
+  std::stringstream ss;
+  size_t write(uint8_t c) override { ss << (char)c; return 1; }
+  std::string str() const { return ss.str(); }
+};
+#endif
+
+class SerialMock : public Print {
+ public:
+  size_t write(uint8_t c) override { std::cout << (char)c; return 1; }
+};
+extern SerialMock Serial;
+
 inline int min(int a, int b) { return std::min(a, b); }
 inline size_t min(size_t a, size_t b) { return std::min(a, b); }
 inline int max(int a, int b) { return std::max(a, b); }
@@ -93,3 +158,132 @@ inline uint32_t millis() {
 inline void delay(uint32_t ms) {
   // no-op for preview
 }
+
+typedef int32_t esp_err_t;
+#define ESP_OK 0
+#define ESP_FAIL -1
+
+#ifndef WiFi_h
+#define WiFi_h
+enum wl_status_t {
+  WL_NO_SHIELD = 255,
+  WL_IDLE_STATUS = 0,
+  WL_NO_SSID_AVAIL = 1,
+  WL_SCAN_COMPLETED = 2,
+  WL_CONNECTED = 3,
+  WL_CONNECT_FAILED = 4,
+  WL_CONNECTION_LOST = 5,
+  WL_DISCONNECTED = 6
+};
+
+class IPAddress {
+ public:
+  String toString() const { return "127.0.0.1"; }
+};
+
+class WiFiClass {
+ public:
+  void begin(const char*, const char*) {}
+  wl_status_t status();
+  IPAddress localIP() { return IPAddress(); }
+  String SSID() { return "MockWiFi"; }
+  void disconnect() {}
+  void disconnect(bool, bool) {}
+  void mode(int) {}
+  void persistent(bool) {}
+  void setHostname(const char*) {}
+  void setAutoReconnect(bool) {}
+  void setSleep(bool) {}
+};
+extern WiFiClass WiFi;
+#define WIFI_STA 1
+#endif
+
+#ifndef WebSocketsClient_h
+#define WebSocketsClient_h
+enum WStype_t {
+  WStype_DISCONNECTED,
+  WStype_CONNECTED,
+  WStype_TEXT,
+  WStype_BIN,
+  WStype_ERROR,
+  WStype_FRAGMENT_TEXT_START,
+  WStype_FRAGMENT_BIN_START,
+  WStype_FRAGMENT,
+  WStype_FRAGMENT_FIN,
+  WStype_PING,
+  WStype_PONG,
+};
+
+class WebSocketsClient {
+ public:
+  void begin(const char*, uint16_t, const char* = "/", const char* = "ws") {}
+  void onEvent(void (*)(WStype_t, uint8_t*, size_t)) {}
+  void setReconnectInterval(uint32_t) {}
+  void loop() {}
+  bool sendTXT(String&) { return true; }
+  bool sendTXT(const char*) { return true; }
+  bool isConnected() { return true; }
+  void enableHeartbeat(uint32_t, uint32_t, uint8_t) {}
+};
+#endif
+
+#ifndef HTTPClient_h
+#define HTTPClient_h
+class HTTPClient {
+ public:
+  void begin(const String&) {}
+  int GET() { return 200; }
+  String getString() { return "{}"; }
+  void end() {}
+};
+class WiFiClient {
+ public:
+  bool connect(const char*, uint16_t) { return true; }
+  void stop() {}
+};
+#endif
+
+#ifndef SD_h
+#define SD_h
+#define FILE_READ 0
+#define FILE_WRITE 1
+#define FILE_APPEND 2
+
+class File : public Print {
+ public:
+  operator bool() const { return false; }
+  size_t write(uint8_t) override { return 0; }
+  bool available() { return false; }
+  String readStringUntil(char) { return ""; }
+  void close() {}
+};
+
+class SDClass {
+ public:
+  template<typename... Args>
+  bool begin(Args...) { return true; }
+  bool exists(const char*) { return false; }
+  File open(const char*, int = FILE_READ) { return File(); }
+  void mkdir(const char*) {}
+};
+extern SDClass SD;
+#endif
+
+#ifndef ESPmDNS_h
+#define ESPmDNS_h
+class MDNSClass {
+ public:
+  bool begin(const char*) { return true; }
+};
+extern MDNSClass MDNS;
+#endif
+
+#ifndef SPI_h
+#define SPI_h
+class SPIClass {
+ public:
+  void begin(int, int, int, int) {}
+};
+extern SPIClass SPI;
+#endif

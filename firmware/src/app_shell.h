@@ -38,6 +38,7 @@ class AppShell {
   bool hasVisibleModal() const;
   UiMode uiMode() const;
   MiddlewareLink& bridge();
+  const uint16_t* framebuffer() const;
 
  private:
   enum class DisplayPowerState {

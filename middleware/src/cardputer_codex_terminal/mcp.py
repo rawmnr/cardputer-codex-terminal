@@ -211,7 +211,7 @@ class CardputerMcpServer:
             {
                 "name": "cardputer.preview_lvgl_ui",
                 "title": "Preview LVGL UI",
-                "description": "Generate a 240x135 PNG preview of a Cardputer LVGL screen using a fixture and optional actions.",
+                "description": "Generate one or more 240x135 PNG previews of a Cardputer LVGL screen using a fixture and optional navigation actions.",
                 "inputSchema": {
                     "type": "object",
                     "additionalProperties": False,
@@ -239,11 +239,27 @@ class CardputerMcpServer:
                     "properties": {
                         "status": {"type": "string"},
                         "image_b64": {"type": "string"},
+                        "frame_count": {"type": "integer"},
+                        "frames": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "index": {"type": "integer"},
+                                    "label": {"type": "string"},
+                                    "filename": {"type": "string"},
+                                    "width": {"type": "integer"},
+                                    "height": {"type": "integer"},
+                                },
+                                "required": ["index", "label", "filename", "width", "height"],
+                            },
+                        },
                         "width": {"type": "integer"},
                         "height": {"type": "integer"},
                         "fixture": {"type": "object"},
                     },
-                    "required": ["status", "image_b64", "width", "height"],
+                    "required": ["status", "image_b64", "frame_count", "frames", "width", "height"],
                 },
             },
         ]
@@ -409,10 +425,9 @@ class CardputerMcpServer:
             actions = arguments.get("actions")
             if not isinstance(actions, list) and actions is not None:
                 raise ValueError("Actions must be an array of strings.")
-            
-            # Workspace root is likely two levels up from this file's directory
+
             workspace_root = Path(__file__).parent.parent.parent.parent.resolve()
-            
+
             try:
                 result = await asyncio.to_thread(
                     run_lvgl_preview,
@@ -421,21 +436,35 @@ class CardputerMcpServer:
                     fixture=fixture,
                     actions=actions,
                 )
+                structured_frames = [
+                    {
+                        "index": frame["index"],
+                        "label": frame["label"],
+                        "filename": frame["filename"],
+                        "width": frame["width"],
+                        "height": frame["height"],
+                    }
+                    for frame in result["frames"]
+                ]
                 structured = {
                     "status": "success",
                     "image_b64": result["image_b64"],
+                    "frame_count": result["frame_count"],
+                    "frames": structured_frames,
                     "width": result["width"],
                     "height": result["height"],
                     "fixture": result["fixture"],
                 }
-                
-                # For MCP image content support
+
                 mcp_result = _tool_result(structured)
-                mcp_result["content"].append({
-                    "type": "image",
-                    "data": result["image_b64"],
-                    "mimeType": "image/png"
-                })
+                for frame in result["frames"]:
+                    mcp_result["content"].append(
+                        {
+                            "type": "image",
+                            "data": frame["image_b64"],
+                            "mimeType": "image/png",
+                        }
+                    )
                 return mcp_result
             except Exception as exc:
                 raise RuntimeError(f"LVGL preview failed: {exc}")

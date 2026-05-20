@@ -1,7 +1,9 @@
 #include "app_shell.h"
 
 #include "device_config.h"
+#ifndef StringPrint_h
 #include "string_print.h"
+#endif
 
 namespace {
 constexpr unsigned long kDisplayDimAfterMs = 30000;
@@ -776,7 +778,7 @@ void AppShell::switchTo(AppId app_id) {
 }
 
 void AppShell::setActiveTab(size_t tab_index) {
-  const AppId app_id = appForTab(tab_index % 5);
+  const AppId app_id = appForTab(tab_index % 6);
   switchTo(app_id);
 }
 
@@ -1017,4 +1019,12 @@ void AppShell::emitDisplaySnapshot() {
     state_.firmware_name,
     state_.network_status_line
   );
+}
+
+const uint16_t* AppShell::framebuffer() const {
+#if USE_LVGL_UI
+  return lvgl_screen_.framebuffer();
+#else
+  return nullptr;
+#endif
 }
