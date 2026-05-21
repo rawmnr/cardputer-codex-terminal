@@ -2,6 +2,7 @@
 #include <M5Cardputer.h>
 
 #include "app_shell.h"
+#include "input_router.h"
 
 #if USE_LVGL_UI
 #include <lvgl.h>
@@ -19,7 +20,6 @@ bool g_space_hold_started = false;
 unsigned long g_space_pressed_at_ms = 0;
 unsigned long g_last_menu_nav_ms = 0;
 constexpr unsigned long kPushToTalkHoldMs = 350;
-constexpr unsigned long kMenuNavRepeatMs = 30;
 
 #if USE_LVGL_UI
 void dispatchAction(UiAction action) {
@@ -30,7 +30,7 @@ void dispatchAction(UiAction action) {
   const bool menu_navigation = g_shell.isAppMenuOpen() && (action == UiAction::Up || action == UiAction::Down);
   if (menu_navigation) {
     const unsigned long now = millis();
-    if (now - g_last_menu_nav_ms < kMenuNavRepeatMs) {
+    if (!shouldAllowMenuNavigation(now, g_last_menu_nav_ms)) {
       return;
     }
     g_last_menu_nav_ms = now;
@@ -44,33 +44,6 @@ void dispatchAction(UiAction action) {
 }
 #endif
 
-bool mapNavigationChar(char ch, bool fn, UiAction& action) {
-  if (fn && ch == ';') {
-    action = UiAction::Up;
-    return true;
-  }
-  if (fn && ch == '.') {
-    action = UiAction::Down;
-    return true;
-  }
-
-  switch (ch) {
-    case 'a':
-    case 'A':
-    case ',':
-    case ';':
-      action = UiAction::Left;
-      return true;
-    case 'd':
-    case 'D':
-    case '.':
-    case '\'':
-      action = UiAction::Right;
-      return true;
-    default:
-      return false;
-  }
-}
 
 void sendTypedChar(char ch) {
   String typed;

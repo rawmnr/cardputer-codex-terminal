@@ -1,9 +1,7 @@
 #include "app_shell.h"
+#include "terminal_snapshot.h"
 
 #include "device_config.h"
-#ifndef StringPrint_h
-#include "string_print.h"
-#endif
 
 namespace {
 constexpr unsigned long kDisplayDimAfterMs = 30000;
@@ -933,93 +931,13 @@ void AppShell::traceDisplay() {
 }
 
 void AppShell::emitDisplaySnapshot() {
-  StringPrint out;
-  out.println(state_.firmware_name);
-  out.print("Net: ");
-  out.println(state_.network_status_line);
-  out.print("App: ");
-  out.println(active_app_ != nullptr ? active_app_->title() : "none");
-  out.print("Menu: ");
-  out.println(state_.menu.app_menu_open ? "open" : "closed");
-  out.print("Mode: ");
-  switch (state_.ui_mode) {
-    case UiMode::Home:
-      out.println("home");
-      break;
-    case UiMode::Menu:
-      out.println("menu");
-      break;
-    case UiMode::Input:
-      out.println("input");
-      break;
-    case UiMode::Modal:
-      out.println("modal");
-      break;
-    case UiMode::Approval:
-      out.println("approval");
-      break;
-    case UiMode::BridgePrompt:
-      out.println("bridge prompt");
-      break;
-  }
-  out.print("Battery: ");
-  out.print(state_.battery_percent);
-  out.print("% / ");
-  out.println(state_.battery_voltage_mv);
-  out.print("Codex: ");
-  switch (state_.codex_state) {
-    case CodexState::Offline:
-      out.println("offline");
-      break;
-    case CodexState::Idle:
-      out.println("idle");
-      break;
-    case CodexState::Busy:
-      out.println("busy");
-      break;
-    case CodexState::WaitingForApproval:
-      out.println("waiting for approval");
-      break;
-  }
-  if (state_.codex_stream_line.length() > 0) {
-    out.print("Stream: ");
-    out.println(state_.codex_stream_line);
-  }
-  if (state_.approval_pending) {
-    out.print("Approval: ");
-    out.println(state_.approval_title.length() > 0 ? state_.approval_title : "(untitled)");
-    if (state_.approval_detail_line.length() > 0) {
-      out.print("Approval detail: ");
-      out.println(state_.approval_detail_line);
-    }
-  }
-  if (state_.bridge_prompt_pending) {
-    out.print("Bridge prompt: ");
-    out.println(state_.bridge_prompt_title.length() > 0 ? state_.bridge_prompt_title : "(untitled)");
-    if (state_.bridge_prompt_detail.length() > 0) {
-      out.print("Bridge detail: ");
-      out.println(state_.bridge_prompt_detail);
-    }
-  }
-  out.println();
-  if (active_app_ != nullptr) {
-    active_app_->render(out, state_);
-  }
-  out.println();
-  if (state_.menu.command_palette_open) {
-    out.print("/ ");
-    out.println(input_line_);
-  } else {
-    out.print("> ");
-    out.println(input_line_);
-  }
-
+  const String snapshot = buildTerminalSnapshot(state_, active_app_, input_line_);
   if (!bridge_.isConnected()) {
     return;
   }
 
   bridge_.sendDisplaySnapshot(
-    out.str(),
+    snapshot,
     state_.status_line,
     active_app_ != nullptr ? active_app_->title() : "",
     input_line_,

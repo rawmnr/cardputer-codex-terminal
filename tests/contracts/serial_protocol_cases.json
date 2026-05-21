@@ -1,0 +1,47 @@
+[
+  {
+    "name": "status_request_snapshot",
+    "envelope": {
+      "protocol_version": 1,
+      "id": "status-1",
+      "type": "status_request",
+      "payload": {
+        "snapshot": true
+      }
+    }
+  },
+  {
+    "name": "text_prompt_with_auth",
+    "envelope": {
+      "protocol_version": 1,
+      "id": "prompt-1",
+      "type": "text_prompt",
+      "payload": {
+        "text": "hi"
+      },
+      "auth_token": "bridge-secret"
+    }
+  },
+  {
+    "name": "utf8_text_prompt",
+    "envelope": {
+      "protocol_version": 1,
+      "id": "utf8-1",
+      "type": "text_prompt",
+      "payload": {
+        "text": "héllo 🌍"
+      }
+    }
+  },
+  {
+    "name": "long_text_prompt",
+    "envelope": {
+      "protocol_version": 1,
+      "id": "long-1",
+      "type": "text_prompt",
+      "payload": {
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  }
+]

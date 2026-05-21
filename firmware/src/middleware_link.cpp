@@ -1,4 +1,5 @@
 #include "middleware_link.h"
+#include "protocol.h"
 
 #include <memory>
 #include <mbedtls/base64.h>
@@ -661,38 +662,7 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
 }
 
 String MiddlewareLink::buildEnvelope(const String& id, const String& type, const JsonVariantConst& payload) const {
-  DynamicJsonDocument doc(kJsonCapacity);
-  doc["protocol_version"] = 1;
-  doc["id"] = id;
-  doc["type"] = type;
-  doc["payload"] = payload;
-  if (auth_token_.length() > 0) {
-    doc["auth_token"] = auth_token_;
-  }
-
-  class StringWriter {
-   public:
-    size_t write(uint8_t c) {
-      output_.push_back(static_cast<char>(c));
-      return 1;
-    }
-
-    size_t write(const uint8_t* buffer, size_t size) {
-      output_.append(reinterpret_cast<const char*>(buffer), size);
-      return size;
-    }
-
-    String take() const {
-      return String(output_.c_str());
-    }
-
-   private:
-    std::string output_;
-  };
-
-  StringWriter writer;
-  serializeJson(doc, writer);
-  return writer.take();
+  return buildCardputerEnvelope(id, type, payload, auth_token_);
 }
 
 String MiddlewareLink::nextMessageId() {

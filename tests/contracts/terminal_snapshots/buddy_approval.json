@@ -1,0 +1,25 @@
+{
+  "name": "buddy_approval",
+  "active_app": "Buddy",
+  "input_line": "",
+  "state": {
+    "firmware_name": "Cardputer Codex Terminal",
+    "network_status_line": "offline",
+    "battery_percent": 85,
+    "battery_voltage_mv": 4000,
+    "codex_state": "WaitingForApproval",
+    "wifi_connected": false,
+    "bridge_status_line": "",
+    "codex_usage_percent": -1,
+    "codex_workspace_path": ".",
+    "codex_branch": "",
+    "codex_thread_id": "",
+    "approval_pending": true,
+    "approval_title": "Delete build artifacts",
+    "approval_detail_line": "rm -rf build",
+    "bridge_prompt_pending": false,
+    "ui_mode": "Approval",
+    "menu_app_menu_open": false
+  },
+  "expected_snapshot": "Cardputer Codex Terminal\nNet: offline\nApp: Codex Buddy\nMenu: closed\nMode: approval\nBattery: 85% / 4000\nCodex: waiting for approval\nApproval: Delete build artifacts\nApproval detail: rm -rf build\n\nWi-Fi   offline\nBridge  idle\nUsage   --\n\nProject .\nBranch  -\nThread  -\n\n! Delete build artifacts\n  rm -rf build\n\n> \n"
+}

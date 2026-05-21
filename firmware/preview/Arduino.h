@@ -18,6 +18,7 @@ class Print {
     while (size--) n += write(*buffer++);
     return n;
   }
+  void print(char c) { write(static_cast<uint8_t>(c)); }
   void print(const std::string& s) { for (char c : s) write(c); }
   void print(const char* s) { if (s) while (*s) write(*s++); }
   void print(int n) { print(std::to_string(n)); }
@@ -25,6 +26,7 @@ class Print {
   void print(long n) { print(std::to_string(n)); }
   void print(unsigned long n) { print(std::to_string(n)); }
   void print(size_t n) { print((unsigned long)n); }
+  void println(char c) { print(c); write('\n'); }
   void println(const std::string& s) { print(s); write('\n'); }
   void println(const char* s) { print(s); write('\n'); }
   void println(int n) { print(n); write('\n'); }

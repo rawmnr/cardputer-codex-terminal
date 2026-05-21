@@ -112,6 +112,7 @@ If running in MCP mode, Codex can interact with your device via:
 
 *   **[Architecture Guide](docs/architecture.md)** — Deep dive into the system design.
 *   **[Middleware Docs](docs/middleware.md)** — API, CLI, and Developer Preview usage.
+*   **[Testing Guide](docs/testing.md)** — Native firmware tests, middleware tests, contract fixtures, and HIL smoke checks.
 *   **[Firmware Docs](docs/firmware.md)** — Hardware, UI, and Build instructions.
 *   **[Security Guide](docs/security.md)** — Authentication and networking details.
 *   **[Contributing](CONTRIBUTING.md)** — How to help improve the project.

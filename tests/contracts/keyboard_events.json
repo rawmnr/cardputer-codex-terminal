@@ -1,0 +1,26 @@
+[
+  {
+    "name": "nav_left_from_a",
+    "word": "a",
+    "fn": false,
+    "expected_action": "Left"
+  },
+  {
+    "name": "nav_right_from_period",
+    "word": ".",
+    "fn": false,
+    "expected_action": "Right"
+  },
+  {
+    "name": "nav_up_from_fn_semicolon",
+    "word": ";",
+    "fn": true,
+    "expected_action": "Up"
+  },
+  {
+    "name": "nav_down_from_fn_period",
+    "word": ".",
+    "fn": true,
+    "expected_action": "Down"
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "name": "buddy_idle",
+  "active_app": "Buddy",
+  "input_line": "",
+  "state": {
+    "firmware_name": "Cardputer Codex Terminal",
+    "network_status_line": "offline",
+    "battery_percent": 85,
+    "battery_voltage_mv": 4000,
+    "codex_state": "Offline",
+    "wifi_connected": false,
+    "bridge_status_line": "",
+    "codex_usage_percent": -1,
+    "codex_workspace_path": ".",
+    "codex_branch": "",
+    "codex_thread_id": "",
+    "approval_pending": false,
+    "bridge_prompt_pending": false,
+    "ui_mode": "Home",
+    "menu_app_menu_open": false
+  },
+  "expected_snapshot": "Cardputer Codex Terminal\nNet: offline\nApp: Codex Buddy\nMenu: closed\nMode: home\nBattery: 85% / 4000\nCodex: offline\n\nWi-Fi   offline\nBridge  idle\nUsage   --\n\nProject .\nBranch  -\nThread  -\n\n> \n"
+}
