@@ -17,6 +17,38 @@ def _event_payload(event: Any) -> tuple[str, dict[str, Any]]:
     if isinstance(event, dict):
         return str(event.get("type", "")), dict(event.get("payload", {}))
     return "unknown", {}
+def _coerce_int(value: Any, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+def _usage_limits(payload: dict[str, Any]) -> dict[str, Any]:
+    usage_keys = ("primary", "secondary", "usedPercent", "windowDurationMins", "windowMinutes", "resetsAt", "resets_at")
+    data = payload.get("data")
+    if isinstance(data, dict):
+        rate_limits = data.get("rateLimits")
+        if isinstance(rate_limits, dict):
+            return rate_limits
+        if any(key in data for key in usage_keys):
+            return data
+        nested_data = data.get("data")
+        if isinstance(nested_data, dict):
+            nested_limits = nested_data.get("rateLimits")
+            if isinstance(nested_limits, dict):
+                return nested_limits
+            if any(key in nested_data for key in usage_keys):
+                return nested_data
+    rate_limits = payload.get("rateLimits")
+    if isinstance(rate_limits, dict):
+        return rate_limits
+    if any(key in payload for key in usage_keys):
+        return payload
+    return {}
 
 
 @dataclass(slots=True)
@@ -106,27 +138,30 @@ class SessionState:
             if content:
                 self.last_event = content
         elif event_type == "codex_usage":
-            data = payload.get("data", {})
-            rate_limits = data.get("rateLimits")
-            if not isinstance(rate_limits, dict):
-                rate_limits = data
-            
+            rate_limits = _usage_limits(payload)
+
             primary = rate_limits.get("primary")
             if not isinstance(primary, dict):
-                primary = rate_limits if "usedPercent" in rate_limits or "windowDurationMins" in rate_limits else {}
-            
-            self.codex_usage_percent = int(primary.get("usedPercent", primary.get("used_percent", -1)))
-            self.codex_usage_window_minutes = int(primary.get("windowDurationMins", primary.get("window_minutes", 0)))
-            self.codex_usage_resets_at = int(primary.get("resetsAt", primary.get("resets_at", 0)))
-            
+                primary = rate_limits if any(key in rate_limits for key in ("usedPercent", "used_percent", "windowDurationMins", "windowMinutes", "window_minutes", "resetsAt", "resets_at")) else {}
+
+            self.codex_usage_percent = _coerce_int(primary.get("usedPercent", primary.get("used_percent")), -1)
+            self.codex_usage_window_minutes = _coerce_int(
+                primary.get("windowDurationMins", primary.get("windowMinutes", primary.get("window_minutes"))),
+                0,
+            )
+            self.codex_usage_resets_at = _coerce_int(primary.get("resetsAt", primary.get("resets_at")), 0)
+
             secondary = rate_limits.get("secondary")
             if not isinstance(secondary, dict):
                 secondary = {}
-            
-            self.codex_usage_secondary_percent = int(secondary.get("usedPercent", secondary.get("used_percent", -1)))
-            self.codex_usage_secondary_window_minutes = int(secondary.get("windowDurationMins", secondary.get("window_minutes", 0)))
-            self.codex_usage_secondary_resets_at = int(secondary.get("resetsAt", secondary.get("resets_at", 0)))
-            
+
+            self.codex_usage_secondary_percent = _coerce_int(secondary.get("usedPercent", secondary.get("used_percent")), -1)
+            self.codex_usage_secondary_window_minutes = _coerce_int(
+                secondary.get("windowDurationMins", secondary.get("windowMinutes", secondary.get("window_minutes"))),
+                0,
+            )
+            self.codex_usage_secondary_resets_at = _coerce_int(secondary.get("resetsAt", secondary.get("resets_at")), 0)
+
             import time
             now = time.time()
             resets = []
@@ -138,7 +173,7 @@ class SessionState:
                 h = int((self.codex_usage_secondary_resets_at - now + 1800) // 3600)
                 if h > 0:
                     resets.append(f"{h}h")
-            
+
             if resets:
                 self.codex_usage_reset_line = f"Resets in {' / '.join(resets)}"
             else:

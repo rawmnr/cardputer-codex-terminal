@@ -1,0 +1,21 @@
+{
+  "active_app": 3,
+  "ui_mode": 0,
+  "codex_state": 2,
+  "wifi_connected": true,
+  "wifi_ssid": "CodexNet",
+  "wifi_ip": "192.168.1.42",
+  "battery_percent": 81,
+  "codex_usage_percent": 99,
+  "codex_usage_secondary_percent": 92,
+  "codex_usage_window_minutes": 300,
+  "codex_usage_secondary_window_minutes": 10080,
+  "codex_usage_resets_at": 0,
+  "codex_usage_secondary_resets_at": 0,
+  "codex_usage_reset_line": "Resets in 4h 51m / 6d 2h 33m",
+  "codex_workspace_path": "cardputer-codex-terminal",
+  "codex_branch": "main",
+  "codex_thread_id": "thread_abc123",
+  "status_line": "Codex usage snapshot",
+  "bridge_status_line": "connected"
+}

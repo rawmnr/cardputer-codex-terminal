@@ -8,7 +8,7 @@ from dataclasses import asdict
 
 from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
-from cardputer_codex_terminal.codex_transport import LocalWebSocketCodexTransport, StdioCodexAppServerTransport
+from cardputer_codex_terminal.codex_transport import CodexReply, LocalWebSocketCodexTransport, StdioCodexAppServerTransport
 from cardputer_codex_terminal.events import EventType
 from cardputer_codex_terminal.messages import CardputerMessage, CardputerMessageType
 from cardputer_codex_terminal.server import CardputerBridgeServer
@@ -72,6 +72,64 @@ class MiddlewareAppTests(unittest.TestCase):
                 },
             ],
         )
+    def test_usage_snapshot_handles_nested_rate_limits(self) -> None:
+        class UsageTransport:
+            async def initialize(self) -> None:
+                return None
+
+            async def start_thread(self, cwd: str, branch: str | None = None) -> str:
+                return "usage-thread:123"
+
+            async def resume_thread(self, thread_id: str) -> str:
+                return thread_id
+
+            async def update_thread_metadata(self, thread_id: str, branch: str | None = None) -> None:
+                return None
+
+            async def submit_approval(self, approval_id: str, approved: bool, note: str | None = None) -> None:
+                return None
+
+            async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None):
+                yield CodexReply(
+                    "usage",
+                    "rate limit used=19% window=300m",
+                    {
+                        "rateLimits": {
+                            "primary": {"usedPercent": 19, "windowDurationMins": 300, "resetsAt": 0},
+                            "secondary": {"usedPercent": 37, "windowDurationMins": 10080, "resetsAt": 0},
+                        }
+                    },
+                )
+                yield CodexReply("completed", "turn_completed", {})
+
+        async def scenario() -> tuple[list[dict], dict[str, object]]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=True,
+                )
+            )
+            app.transport = UsageTransport()
+            await app.initialize()
+            events = await app.handle_text_prompt("Hello Codex")
+            return [event.to_dict() for event in events], app.session.to_dict()
+
+        payloads, session = asyncio.run(scenario())
+
+        self.assertEqual(
+            [event["type"] for event in payloads],
+            [EventType.CODEX_USAGE.value, EventType.CODEX_STATUS.value, EventType.CODEX_STATUS.value],
+        )
+        self.assertEqual(payloads[0]["payload"]["codex_usage_percent"], 19)
+        self.assertEqual(payloads[0]["payload"]["codex_usage_secondary_percent"], 37)
+        self.assertEqual(payloads[0]["payload"]["codex_usage_window_minutes"], 300)
+        self.assertEqual(payloads[0]["payload"]["codex_usage_secondary_window_minutes"], 10080)
+        self.assertEqual(session["codex_usage_percent"], 19)
+        self.assertEqual(session["codex_usage_secondary_percent"], 37)
+        self.assertEqual(session["codex_usage_window_minutes"], 300)
+        self.assertEqual(session["codex_usage_secondary_window_minutes"], 10080)
 
     def test_status_request_includes_session_snapshot(self) -> None:
         async def scenario() -> dict[str, object]:

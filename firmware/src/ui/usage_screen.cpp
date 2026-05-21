@@ -111,7 +111,7 @@ void UsageScreen::sync(const DeviceState& state) {
     return;
   }
 
-  const String primary_title = state.codex_usage_window_minutes == 300 ? "Primary (5h)" : "Primary";
+  const String primary_title = "session";
   String primary_value = state.codex_usage_percent >= 0 ? String(state.codex_usage_percent) + "%" : String("--");
   if (state.codex_usage_window_minutes > 0) {
     primary_value += " / ";
@@ -123,7 +123,7 @@ void UsageScreen::sync(const DeviceState& state) {
   lv_bar_set_value(primary_bar_, state.codex_usage_percent >= 0 ? state.codex_usage_percent : 0, LV_ANIM_OFF);
   setBarColor(primary_bar_, state.codex_usage_percent >= 0 ? state.codex_usage_percent : 0);
 
-  const String secondary_title = state.codex_usage_secondary_window_minutes == 10080 ? "Secondary (weekly)" : "Secondary";
+  const String secondary_title = "weekly";
   String secondary_value = state.codex_usage_secondary_percent >= 0 ? String(state.codex_usage_secondary_percent) + "%" : String("--");
   if (state.codex_usage_secondary_window_minutes > 0) {
     secondary_value += " / ";

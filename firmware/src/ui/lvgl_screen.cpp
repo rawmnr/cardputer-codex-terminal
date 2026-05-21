@@ -128,9 +128,15 @@ const char* LvglScreen::tabLabel(size_t index) {
   return kTabMap[index * 2];
 }
 
+#if !defined(ARDUINO) || defined(NATIVE_BUILD)
 const uint16_t* LvglScreen::framebuffer() const {
   return port_.framebuffer();
 }
+#else
+const uint16_t* LvglScreen::framebuffer() const {
+  return nullptr;
+}
+#endif
 
 void LvglScreen::begin() {
   port_.begin();

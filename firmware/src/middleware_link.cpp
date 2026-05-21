@@ -5,6 +5,11 @@
 #include <ESPmDNS.h>
 
 #include "device_config.h"
+#include <string>
+namespace {
+constexpr size_t kJsonCapacity = 2048;
+constexpr size_t kInboundJsonSlack = 512;
+}  // namespace
 
 MiddlewareLink* MiddlewareLink::instance_ = nullptr;
 
@@ -55,27 +60,27 @@ void MiddlewareLink::tick(DeviceState& state) {
 }
 
 bool MiddlewareLink::sendTextPrompt(const String& text) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["text"] = text;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "text_prompt", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "text_prompt", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendProjectSelect(const String& workspace_path) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["workspace_path"] = workspace_path;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "project_select", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "project_select", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendBranchSelect(const String& branch) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["branch"] = branch;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "branch_select", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "branch_select", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendThreadSelect(const String& thread_id) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["thread_id"] = thread_id;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "thread_select", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "thread_select", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz) {
@@ -101,58 +106,58 @@ bool MiddlewareLink::sendAudioChunk(size_t chunk_id, const int16_t* samples, siz
   encoded[encoded_length] = '\0';
   String pcm_b64(reinterpret_cast<const char*>(encoded.get()));
   
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["chunk_id"] = chunk_id;
   payload["pcm_b64"] = pcm_b64;
   payload["sample_rate_hz"] = sample_rate_hz;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "audio_chunk", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "audio_chunk", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample_count, int peak_amplitude) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["sample_rate_hz"] = sample_rate_hz;
   payload["sample_count"] = sample_count;
   payload["peak_amplitude"] = peak_amplitude;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "voice_prompt_ready", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "voice_prompt_ready", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendApprovalResponse(bool approved) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["approved"] = approved;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "approval_response", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "approval_response", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendBridgeNotification(const String& title, const String& detail) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["title"] = title;
   payload["detail"] = detail;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_notification", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_notification", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendBridgeQuestion(const String& title, const String& detail, const std::array<String, 3>& options, size_t option_count) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["title"] = title;
   payload["detail"] = detail;
   JsonArray options_arr = payload["options"].to<JsonArray>();
   for (size_t i = 0; i < option_count && i < options.size(); ++i) {
     options_arr.add(options[i]);
   }
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_question", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_question", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendBridgeConfirmation(const String& title, const String& detail) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["title"] = title;
   payload["detail"] = detail;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_confirmation", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_confirmation", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendBridgeResponse(bool accepted, size_t selected_index, const String& note) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["accepted"] = accepted;
   payload["selected_index"] = selected_index;
   payload["note"] = note;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_response", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "bridge_response", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendDisplaySnapshot(
@@ -163,25 +168,25 @@ bool MiddlewareLink::sendDisplaySnapshot(
   const String& firmware_name,
   const String& network_status_line
 ) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["screen_text"] = screen_text;
   payload["status_line"] = status_line;
   payload["active_app"] = active_app;
   payload["input_line"] = input_line;
   payload["firmware_name"] = firmware_name;
   payload["network_status_line"] = network_status_line;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "display_snapshot", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "display_snapshot", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendInterrupt(const String& thread_id) {
-  JsonDocument payload;
+  DynamicJsonDocument payload(kJsonCapacity);
   payload["thread_id"] = thread_id;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "interrupt", payload));
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "interrupt", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendStatusRequest() {
-  JsonDocument payload;
-  return sendCardputerMessage(buildEnvelope(nextMessageId(), "status_request", payload));
+  DynamicJsonDocument payload(kJsonCapacity);
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "status_request", payload.as<JsonVariantConst>()));
 }
 
 void MiddlewareLink::handleWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -206,7 +211,11 @@ void MiddlewareLink::onWebSocketEvent(WStype_t type, uint8_t* payload, size_t le
       append_activity_event(*state_, "Middleware bridge disconnected");
       break;
     case WStype_TEXT: {
-      JsonDocument doc;
+      size_t capacity = length + kInboundJsonSlack;
+      if (capacity < kJsonCapacity) {
+        capacity = kJsonCapacity;
+      }
+      DynamicJsonDocument doc(capacity);
       const DeserializationError error = deserializeJson(doc, payload, length);
       if (error) {
         state_->bridge_status_line = String("Bridge JSON error: ") + error.c_str();
@@ -651,8 +660,8 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
   }
 }
 
-String MiddlewareLink::buildEnvelope(const String& id, const String& type, const ArduinoJson::JsonDocument& payload) const {
-  JsonDocument doc;
+String MiddlewareLink::buildEnvelope(const String& id, const String& type, const JsonVariantConst& payload) const {
+  DynamicJsonDocument doc(kJsonCapacity);
   doc["protocol_version"] = 1;
   doc["id"] = id;
   doc["type"] = type;
@@ -673,17 +682,17 @@ String MiddlewareLink::buildEnvelope(const String& id, const String& type, const
       return size;
     }
 
-    String take() && {
-      return std::move(output_);
+    String take() const {
+      return String(output_.c_str());
     }
 
    private:
-    String output_;
+    std::string output_;
   };
 
   StringWriter writer;
   serializeJson(doc, writer);
-  return std::move(writer).take();
+  return writer.take();
 }
 
 String MiddlewareLink::nextMessageId() {
