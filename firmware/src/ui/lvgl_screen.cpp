@@ -140,13 +140,23 @@ const uint16_t* LvglScreen::framebuffer() const {
 
 void LvglScreen::begin() {
   port_.begin();
+  if (!port_.ready()) {
+    return;
+  }
 
   // Wait for port to be ready
   for (int i = 0; i < 10 && !port_.ready(); ++i) {
     port_.tick();
   }
 
+  if (!port_.ready()) {
+    return;
+  }
+
   root_ = lv_screen_active();
+  if (root_ == nullptr) {
+    return;
+  }
   lv_obj_set_style_bg_color(root_, lv_color_hex(0x071521), 0);
   lv_obj_set_style_bg_opa(root_, LV_OPA_COVER, 0);
   lv_obj_clear_flag(root_, LV_OBJ_FLAG_SCROLLABLE);

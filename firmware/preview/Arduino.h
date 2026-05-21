@@ -223,7 +223,7 @@ class WebSocketsClient {
   void loop() {}
   bool sendTXT(String&) { return true; }
   bool sendTXT(const char*) { return true; }
-  bool isConnected() { return true; }
+  bool isConnected() { return false; }
   void enableHeartbeat(uint32_t, uint32_t, uint8_t) {}
 };
 #endif

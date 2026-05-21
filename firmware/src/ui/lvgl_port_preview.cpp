@@ -7,28 +7,53 @@ LvglPort* g_port = nullptr;
 }
 
 void LvglPort::begin() {
-  lv_init();
+  display_ = nullptr;
+  group_ = nullptr;
+  keypad_ = nullptr;
+  key_head_ = 0;
+  key_tail_ = 0;
+  buffer_.fill(lv_color_black());
+  full_framebuffer_.fill(0);
 
+  static bool lvgl_initialized = false;
+  if (!lvgl_initialized) {
+    lv_init();
+    lvgl_initialized = true;
+  }
 
   g_port = this;
   last_tick_ms_ = millis();
 
   display_ = lv_display_create(kScreenWidth, kScreenHeight);
+  if (display_ == nullptr) {
+    return;
+  }
+
   lv_display_set_color_format(display_, LV_COLOR_FORMAT_RGB565);
   lv_display_set_buffers(display_, buffer_.data(), nullptr, sizeof(buffer_), LV_DISPLAY_RENDER_MODE_PARTIAL);
   lv_display_set_flush_cb(display_, flushCb);
   lv_display_set_default(display_);
 
   group_ = lv_group_create();
+  if (group_ == nullptr) {
+    return;
+  }
   lv_group_set_default(group_);
 
   keypad_ = lv_indev_create();
+  if (keypad_ == nullptr) {
+    return;
+  }
   lv_indev_set_type(keypad_, LV_INDEV_TYPE_KEYPAD);
   lv_indev_set_read_cb(keypad_, readCb);
   lv_indev_set_group(keypad_, group_);
 }
 
 void LvglPort::tick() {
+  if (!ready()) {
+    return;
+  }
+
   uint32_t now = millis();
   lv_tick_inc(now - last_tick_ms_);
   last_tick_ms_ = now;
@@ -56,10 +81,12 @@ const uint16_t* LvglPort::framebuffer() const {
 #endif
 
 void LvglPort::flushCb(lv_display_t* display, const lv_area_t* area, uint8_t* px_map) {
-  if (g_port != nullptr) {
+  if (g_port != nullptr && area != nullptr && px_map != nullptr) {
     g_port->flushArea(area, px_map);
   }
-  lv_display_flush_ready(display);
+  if (display != nullptr) {
+    lv_display_flush_ready(display);
+  }
 }
 
 void LvglPort::readCb(lv_indev_t* indev, lv_indev_data_t* data) {

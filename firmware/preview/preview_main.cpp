@@ -14,7 +14,6 @@
 #include "lvgl_screen.h"
 #include "apps.h"
 #include "app_shell.h"
-
 namespace {
 uint32_t keyFromName(const std::string& name) {
   if (name == "up") return LV_KEY_UP;

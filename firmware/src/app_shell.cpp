@@ -72,6 +72,10 @@ void clear_bridge_prompt(DeviceState& state) {
 }  // namespace
 
 void AppShell::begin() {
+  active_app_ = nullptr;
+  display_brightness_ = 0xFF;
+  display_power_state_ = DisplayPowerState::LowPower;
+  last_display_trace_ = "";
   state_.firmware_name = "cardputer-codex-terminal";
   state_.active_app = AppId::Buddy;
   state_.ui_mode = UiMode::Home;
@@ -731,10 +735,13 @@ void AppShell::applyDisplayBrightness(uint8_t brightness, DisplayPowerState stat
   M5Cardputer.Display.setBrightness(brightness);
 
 #if USE_LVGL_UI
-  lv_display_trigger_activity(nullptr);
-  lv_obj_t* screen = lv_screen_active();
-  if (screen != nullptr) {
-    lv_obj_invalidate(screen);
+  lv_display_t* display = lv_display_get_default();
+  if (display != nullptr) {
+    lv_display_trigger_activity(display);
+    lv_obj_t* screen = lv_screen_active();
+    if (screen != nullptr) {
+      lv_obj_invalidate(screen);
+    }
   }
 #endif
 }
