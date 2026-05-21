@@ -65,7 +65,10 @@ The phase also adds the shared widget foundation for the app screens, including 
 - Global navigation: `Ctrl-M` opens the app menu, `Fn+; / Fn+.` move selection, `Tab` opens the menu or advances LVGL focus, `Enter` select/approve, `Del` back/reject.
 - Contextual footer hints replace the old shell-first help as the primary on-device guide.
 - Command palette remains available through `/`, but it is now the debug layer rather than the default flow.
-- Approval screen: requested action, accept/reject.
+- Runs and Approvals now live in the main menu, with compact list/detail views on the 240x135 display.
+- Run detail can switch to compact diff and test sub-screens for decision making.
+- Approval inbox shows multiple pending approvals and uses a double-confirm gesture for dangerous actions.
+
 - Pager screen: compose prompts, browse active/recent Codex sessions, and inspect recent events.
 
 ## Current Firmware Bridge Behavior
@@ -74,10 +77,17 @@ The phase also adds the shared widget foundation for the app screens, including 
 - push-to-talk audio chunks are streamed while recording;
 - release sends a voice prompt ready signal to trigger transcription on Windows;
 - streamed Codex deltas, usage, and approval requests are rendered in the app views;
-- the Pager app consumes the middleware session index and renders COMPOSE, INBOX, and DETAIL views from that Python-owned model;
+- The Pager app consumes the middleware session index and renders COMPOSE, INBOX, and DETAIL views from that Python-owned model;
+- The Runs app consumes the middleware `run_list` and `run_detail` snapshots, while Approvals consumes `approval_inbox`.
+- The Runs detail screen shows branch, mode, step, diff, tests, and merge readiness.
 - reply selection stays on the Cardputer, but the session history and event stream stay in middleware;
-- the MCP bridge app can show notifications, questions, confirmations, and selection state;
-- the Cardputer can accept or reject pending prompts with physical keys;
+
+- The Approvals screen lists run, action, and danger level, and rejects remain immediate with `Del`.
+
+- The MCP bridge app can show notifications, questions, confirmations, and selection state;
+- The Cardputer can accept or reject pending prompts with physical keys;
+
+
 - the top-level menu bar is menu-first, while slash commands remain available as the debug path;
 - `UiAction` sits between physical keyboard input and app behavior so apps receive navigation, select, back, and push-to-talk events instead of raw keycodes;
 - Cardputer bridge envelopes now include a request `id`, and middleware sends back an `ack` before the semantic response;

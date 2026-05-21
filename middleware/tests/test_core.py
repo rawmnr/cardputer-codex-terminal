@@ -10,7 +10,11 @@ from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
 from cardputer_codex_terminal.codex_transport import CodexReply, LocalWebSocketCodexTransport, StdioCodexAppServerTransport
 from cardputer_codex_terminal.events import EventType
+from cardputer_codex_terminal.runs import ApprovalRequest
 from cardputer_codex_terminal.messages import CardputerMessage, CardputerMessageType
+
+
+
 from cardputer_codex_terminal.server import CardputerBridgeServer
 
 
@@ -156,6 +160,30 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertEqual(active_session["status"], "done")
         self.assertGreaterEqual(len(active_session["events"]), 1)
         self.assertEqual(active_session["session_id"], "session-000001")
+    def test_run_command_rejects_matching_run_approval(self) -> None:
+        async def scenario() -> tuple[list[dict], dict[str, object]]:
+            app = MiddlewareApp(
+                AppConfig(
+                    host="127.0.0.1",
+                    port=8765,
+                    codex_ws_url="ws://127.0.0.1:9000",
+                    use_mock_codex=True,
+                )
+            )
+            await app.initialize()
+            run = app.run_index.current()
+            assert run is not None
+            run.pending_approval = ApprovalRequest(approval_id="approval-1", title="Allow write access", detail="Need approval.")
+            events = await app.handle_text_prompt("/run reject run-000001 approval-1")
+            return [event.to_dict() for event in events], run.to_dict()
+
+        events, run = asyncio.run(scenario())
+
+        self.assertEqual(events, [{"type": EventType.APPROVAL_RESPONSE.value, "payload": {"approval_id": "approval-1", "approved": False, "note": "Rejected on Cardputer"}}])
+        self.assertIsNone(run["pending_approval"])
+        self.assertEqual(run["status"], "running")
+        self.assertEqual(run["last_event"], "approval recorded")
+
 
     def test_voice_prompt_buffer_transcribes_to_prompt_flow(self) -> None:
         async def scenario() -> tuple[list[dict], dict[str, object]]:
@@ -205,6 +233,7 @@ class MiddlewareAppTests(unittest.TestCase):
         self.assertEqual(events[2]["type"], EventType.CODEX_STATUS.value)
         self.assertEqual(events[-1]["type"], EventType.CODEX_STATUS.value)
         self.assertEqual(state, {"buffered_chunks": 0, "buffered_samples": 0})
+
 
     def test_project_and_branch_selection_update_session_and_thread(self) -> None:
         class FakeWebSocket:

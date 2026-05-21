@@ -19,6 +19,15 @@ def _event_payload(event: Any) -> tuple[str, dict[str, Any]]:
         return str(event.get("type", "")), dict(event.get("payload", {}))
     return "unknown", {}
 
+def _coerce_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 
 class RunRole(StrEnum):
     MAIN = "main"
@@ -123,6 +132,7 @@ class AgentRun:
     badge_mode: str = "SAFE"
     worktree_exists: bool = True
     staleness_reason: str = ""
+    merge_ready: bool = False
 
     state_epoch: int = 0
 
@@ -162,6 +172,27 @@ class AgentRun:
             self.session_id = session_id or None
         self.state_epoch += 1
 
+    def _apply_diff_summary(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            return
+        self.diff_summary = DiffSummary(
+            files_changed=_coerce_int(data.get("files_changed") or data.get("files")),
+            insertions=_coerce_int(data.get("insertions") or data.get("ins")),
+            deletions=_coerce_int(data.get("deletions") or data.get("del")),
+            summary=str(data.get("summary") or data.get("sum") or data.get("text") or data.get("content") or ""),
+        )
+
+    def _apply_test_summary(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            return
+        self.test_summary = TestSummary(
+            tests_run=_coerce_int(data.get("tests_run") or data.get("run") or data.get("tests")),
+            passed=_coerce_int(data.get("passed") or data.get("pass")),
+            failed=_coerce_int(data.get("failed") or data.get("fail")),
+            skipped=_coerce_int(data.get("skipped") or data.get("skip")),
+            summary=str(data.get("summary") or data.get("sum") or data.get("text") or data.get("content") or ""),
+        )
+
     def record_event(self, event: Any) -> None:
         self.state_epoch += 1
         event_type, payload = _event_payload(event)
@@ -171,6 +202,12 @@ class AgentRun:
 
         kind = str(payload.get("kind") or "")
         content = str(payload.get("content") or payload.get("text") or payload.get("message") or "")
+        diff_summary = payload.get("diff_summary") or payload.get("diff")
+        if diff_summary is not None:
+            self._apply_diff_summary(diff_summary)
+        test_summary = payload.get("test_summary") or payload.get("test")
+        if test_summary is not None:
+            self._apply_test_summary(test_summary)
 
         if event_type == "text_prompt":
             self.status = RunStatus.RUNNING
@@ -230,6 +267,10 @@ class AgentRun:
                 return
             elif kind.startswith("bridge_"):
                 return
+            elif kind in {"run_stopped", "stopped"}:
+                self.status = RunStatus.PAUSED
+            elif kind in {"run_marked_for_merge", "merge_ready"}:
+                self.merge_ready = True
             if content:
                 self.last_event = content
             elif kind:
@@ -263,6 +304,7 @@ class AgentRun:
             "badge_mode": self.badge_mode,
             "worktree_exists": self.worktree_exists,
             "staleness_reason": self.staleness_reason,
+            "merge_ready": self.merge_ready,
             "state_epoch": self.state_epoch,
         }
 
@@ -284,6 +326,7 @@ class AgentRun:
             "badge_mode": self.badge_mode,
             "worktree_exists": self.worktree_exists,
             "staleness_reason": self.staleness_reason,
+            "merge_ready": self.merge_ready,
             "state_epoch": self.state_epoch,
         }
 
@@ -304,6 +347,7 @@ class AgentRun:
             badge_mode=str(data.get("badge_mode") or "SAFE"),
             worktree_exists=bool(data.get("worktree_exists", True)),
             staleness_reason=str(data.get("staleness_reason") or ""),
+            merge_ready=bool(data.get("merge_ready", False)),
             state_epoch=int(data.get("state_epoch") or 0),
         )
         diff_summary = data.get("diff_summary")
@@ -420,6 +464,12 @@ class RunIndex:
     def find_by_session_id(self, session_id: str) -> AgentRun | None:
         for run in self.ordered_runs():
             if run.session_id == session_id:
+                return run
+        return None
+
+    def find_by_approval_id(self, approval_id: str) -> AgentRun | None:
+        for run in self.ordered_runs():
+            if run.pending_approval is not None and run.pending_approval.approval_id == approval_id:
                 return run
         return None
 

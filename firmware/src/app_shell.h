@@ -68,6 +68,8 @@ class AppShell {
   String last_display_trace_;
   BuddyApp buddy_app_;
   PushToCodexApp push_to_codex_app_;
+  RunsApp runs_app_;
+  ApprovalsApp approvals_app_;
   PagerApp pager_app_;
   UsageApp usage_app_;
   McpBridgeApp mcp_bridge_app_;

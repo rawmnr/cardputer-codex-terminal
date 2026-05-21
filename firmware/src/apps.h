@@ -140,6 +140,60 @@ class McpBridgeApp final : public App {
   MiddlewareLink* bridge_ = nullptr;
 };
 
+class RunsApp final : public App {
+ public:
+  const char* title() const override;
+  void onEnter(DeviceState& state) override;
+  void onExit(DeviceState& state) override;
+  void onCommand(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
+  void setBridge(MiddlewareLink* bridge);
+  void tick(DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
+
+ private:
+  static constexpr size_t kVisibleRows = 4;
+  void requestRunList(DeviceState& state);
+  void requestRunDetail(DeviceState& state, const String& run_id);
+  void showList(DeviceState& state, const String& message);
+  void showDetail(DeviceState& state, const String& message);
+  void showActions(DeviceState& state, const String& message);
+  void showDiff(DeviceState& state, const String& message);
+  void showTests(DeviceState& state, const String& message);
+  const RunSummaryView* selectedRun(const DeviceState& state) const;
+  size_t selectedRunIndex(const DeviceState& state) const;
+  void syncSelectionFromState(DeviceState& state);
+  void syncActionsFromDetail(DeviceState& state);
+  bool runAction(DeviceState& state, const String& action_id);
+
+  MiddlewareLink* bridge_ = nullptr;
+};
+
+class ApprovalsApp final : public App {
+ public:
+  const char* title() const override;
+  void onEnter(DeviceState& state) override;
+  void onExit(DeviceState& state) override;
+  void onCommand(const String& command, DeviceState& state) override;
+  void onAction(UiAction action, DeviceState& state) override;
+  void setBridge(MiddlewareLink* bridge);
+  void tick(DeviceState& state) override;
+  void render(Print& out, const DeviceState& state) override;
+
+ private:
+  static constexpr size_t kVisibleRows = 4;
+  void requestInbox(DeviceState& state);
+  void showInbox(DeviceState& state, const String& message);
+  void showDetail(DeviceState& state, const String& message);
+  const ApprovalInboxItem* selectedApproval(const DeviceState& state) const;
+  size_t selectedApprovalIndex(const DeviceState& state) const;
+  void syncSelectionFromState(DeviceState& state);
+  bool respond(DeviceState& state, bool approved);
+
+  bool detail_armed_ = false;
+  MiddlewareLink* bridge_ = nullptr;
+};
+
 class SettingsApp final : public App {
  public:
   const char* title() const override;

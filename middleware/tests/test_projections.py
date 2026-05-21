@@ -1,5 +1,5 @@
 import unittest
-from cardputer_codex_terminal.runs import RunIndex, RunRole, RunMode, RunStatus, DiffSummary, TestSummary
+from cardputer_codex_terminal.runs import RunIndex, RunRole, RunMode, RunStatus, DiffSummary, TestSummary, ApprovalRequest
 from cardputer_codex_terminal.session import SessionState
 from cardputer_codex_terminal.projections import CardputerProjection
 
@@ -34,31 +34,41 @@ class TestProjections(unittest.TestCase):
             current_step="Implementing feature X",
             last_event="File written"
         )
+        run.thread_id = "thread-123"
+        run.pending_approval = ApprovalRequest(approval_id="app-7", title="Allow write?", detail="danger", danger=True)
         run.diff_summary = DiffSummary(files_changed=2, insertions=10, deletions=5, summary="feat: X")
         run.test_summary = TestSummary(tests_run=5, passed=4, failed=1, summary="5 tests, 1 fail")
         run.danger_summary = "SAFE"
         run.badge_mode = "SAFE"
+        run.merge_ready = True
 
         proj = self.projection.build_run_detail(run.run_id)
         self.assertEqual(proj["type"], "run_detail")
         payload = proj["payload"]
         self.assertEqual(payload["id"], run.run_id)
         self.assertEqual(payload["step"], "Implementing feature X")
+        self.assertEqual(payload["thread_id"], "thread-123")
+        self.assertTrue(payload["merge_ready"])
+        self.assertIn({"id": "approve_once", "label": "Approve once"}, payload["actions"])
+        self.assertEqual(payload["approval"]["id"], "app-7")
         self.assertEqual(payload["diff"]["files"], 2)
         self.assertEqual(payload["test"]["run"], 5)
         self.assertEqual(payload["danger"], "SAFE")
 
     def test_build_approval_inbox(self):
         run1 = self.run_index.create_run(role=RunRole.WORKER)
-        # We need to use record_event or touch to set pending_approval properly, or just set it
-        from cardputer_codex_terminal.runs import ApprovalRequest
-        run1.pending_approval = ApprovalRequest(approval_id="app-1", title="Allow write?", detail="detail")
-        
+        run1.pending_approval = ApprovalRequest(approval_id="app-1", title="Allow write?", detail="detail", danger=True)
+        run1.current_step = "BLE"
+
         run2 = self.run_index.create_run(role=RunRole.TESTER)
-        
+        run2.pending_approval = ApprovalRequest(approval_id="app-2", title="Read only?", detail="detail", danger=False)
+
         proj = self.projection.build_approval_inbox()
-        self.assertEqual(len(proj["payload"]["approvals"]), 1)
-        self.assertEqual(proj["payload"]["approvals"][0]["id"], "app-1")
+        approvals = proj["payload"]["approvals"]
+        self.assertEqual(len(approvals), 2)
+        self.assertEqual(approvals[0]["id"], "app-1")
+        self.assertEqual(approvals[0]["danger_level"], "high")
+        self.assertEqual(approvals[1]["id"], "app-2")
 
     def test_build_status_snapshot(self):
         run = self.run_index.create_run(role=RunRole.MAIN)

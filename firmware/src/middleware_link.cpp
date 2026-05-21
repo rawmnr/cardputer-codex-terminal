@@ -122,10 +122,41 @@ bool MiddlewareLink::sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "voice_prompt_ready", payload.as<JsonVariantConst>()));
 }
 
-bool MiddlewareLink::sendApprovalResponse(bool approved) {
+bool MiddlewareLink::sendApprovalResponse(bool approved, const String& approval_id) {
   DynamicJsonDocument payload(kJsonCapacity);
   payload["approved"] = approved;
+  if (approval_id.length() > 0) {
+    payload["approval_id"] = approval_id;
+  }
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "approval_response", payload.as<JsonVariantConst>()));
+}
+
+bool MiddlewareLink::sendRunAction(const String& action, const String& run_id, const String& approval_id) {
+  String command = "/run ";
+  command += action;
+  command += ' ';
+  command += run_id;
+  if (approval_id.length() > 0) {
+    command += ' ';
+    command += approval_id;
+  }
+  return sendTextPrompt(command);
+}
+
+bool MiddlewareLink::sendRunListRequest() {
+  DynamicJsonDocument payload(kJsonCapacity);
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "run_list_request", payload.as<JsonVariantConst>()));
+}
+
+bool MiddlewareLink::sendRunDetailRequest(const String& run_id) {
+  DynamicJsonDocument payload(kJsonCapacity);
+  payload["run_id"] = run_id;
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "run_detail_request", payload.as<JsonVariantConst>()));
+}
+
+bool MiddlewareLink::sendApprovalInboxRequest() {
+  DynamicJsonDocument payload(kJsonCapacity);
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "approval_inbox_request", payload.as<JsonVariantConst>()));
 }
 
 bool MiddlewareLink::sendBridgeNotification(const String& title, const String& detail) {
@@ -401,6 +432,137 @@ void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_
       return;
     }
 
+  if (event_type == "run_list") {
+    state.runs.active_run_id = payload["active_run_id"] | state.runs.active_run_id;
+    state.runs.run_count = 0;
+    JsonArrayConst runs = payload["runs"];
+    if (!runs.isNull()) {
+      size_t i = 0;
+      for (JsonVariantConst run_variant : runs) {
+        if (i >= state.runs.runs.size()) {
+          break;
+        }
+        if (!run_variant.is<JsonObjectConst>()) {
+          continue;
+        }
+        JsonObjectConst run = run_variant.as<JsonObjectConst>();
+        RunSummaryView& view = state.runs.runs[i];
+        view.run_id = run["id"] | run["run_id"] | "";
+        view.title = run["title"] | "";
+        view.branch = run["branch"] | "";
+        view.mode = run["mode"] | "";
+        view.status = run["status"] | "";
+        view.last_event = run["last"] | "";
+        view.thread_id = run["thread_id"] | "";
+        view.approval_id = run["approval_id"] | "";
+        view.approval_title = run["approval_title"] | "";
+        view.danger_level = run["danger_level"] | "normal";
+        view.merge_ready = run["merge_ready"] | false;
+        view.worktree_exists = String(run["wt"] | "ok") != "missing";
+        ++i;
+      }
+      state.runs.run_count = i;
+    }
+    state.status_line = content.length() > 0 ? content : "Runs updated";
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  if (event_type == "run_detail") {
+    state.runs.detail.run_id = payload["id"] | "";
+    state.runs.detail.role = payload["role"] | "";
+    state.runs.detail.mode = payload["mode"] | "";
+    state.runs.detail.status = payload["status"] | "";
+    state.runs.detail.branch = payload["branch"] | "";
+    state.runs.detail.step = payload["step"] | "";
+    state.runs.detail.last_event = payload["last"] | "";
+    state.runs.detail.thread_id = payload["thread_id"] | "";
+    state.runs.detail.session_id = payload["session_id"] | "";
+    state.runs.detail.workspace_path = payload["workspace_path"] | "";
+    state.runs.detail.danger = payload["danger"] | "";
+    state.runs.detail.badge = payload["badge"] | "";
+    state.runs.detail.stale = payload["stale"] | "";
+    state.runs.detail.merge_ready = payload["merge_ready"] | false;
+    state.runs.detail.worktree_exists = payload["wt"] | true;
+    state.runs.detail.approval_pending = false;
+    JsonObjectConst approval = payload["approval"];
+    if (!approval.isNull()) {
+      state.runs.detail.approval_id = approval["id"] | "";
+      state.runs.detail.approval_title = approval["title"] | "";
+      state.runs.detail.approval_detail = approval["detail"] | "";
+      state.runs.detail.approval_danger = approval["danger_level"] | "";
+      state.runs.detail.approval_pending = state.runs.detail.approval_id.length() > 0;
+    } else {
+      state.runs.detail.approval_id = "";
+      state.runs.detail.approval_title = "";
+      state.runs.detail.approval_detail = "";
+      state.runs.detail.approval_danger = "";
+    }
+    if (payload["diff"].is<JsonObjectConst>()) {
+      JsonObjectConst diff = payload["diff"];
+      state.runs.detail.diff_files = diff["files"] | 0;
+      state.runs.detail.diff_insertions = diff["ins"] | 0;
+      state.runs.detail.diff_deletions = diff["del"] | 0;
+      state.runs.detail.diff_summary = diff["sum"] | "";
+    } else {
+      state.runs.detail.diff_files = 0;
+      state.runs.detail.diff_insertions = 0;
+      state.runs.detail.diff_deletions = 0;
+      state.runs.detail.diff_summary = "";
+    }
+    if (payload["test"].is<JsonObjectConst>()) {
+      JsonObjectConst test = payload["test"];
+      state.runs.detail.test_run = test["run"] | 0;
+      state.runs.detail.test_passed = test["pass"] | 0;
+      state.runs.detail.test_failed = test["fail"] | 0;
+      state.runs.detail.test_skipped = test["skip"] | 0;
+      state.runs.detail.test_summary = test["sum"] | "";
+    } else {
+      state.runs.detail.test_run = 0;
+      state.runs.detail.test_passed = 0;
+      state.runs.detail.test_failed = 0;
+      state.runs.detail.test_skipped = 0;
+      state.runs.detail.test_summary = "";
+    }
+    state.runs.selected_run_id = state.runs.detail.run_id;
+    state.runs.screen = RunsScreen::Detail;
+    state.status_line = content.length() > 0 ? content : "Run detail updated";
+    append_activity_event(state, state.status_line);
+    return;
+  }
+
+  if (event_type == "approval_inbox") {
+    state.approvals.approval_count = 0;
+    JsonArrayConst approvals = payload["approvals"];
+    if (!approvals.isNull()) {
+      size_t i = 0;
+      for (JsonVariantConst approval_variant : approvals) {
+        if (i >= state.approvals.approvals.size()) {
+          break;
+        }
+        if (!approval_variant.is<JsonObjectConst>()) {
+          continue;
+        }
+        JsonObjectConst approval = approval_variant.as<JsonObjectConst>();
+        ApprovalInboxItem& view = state.approvals.approvals[i];
+        view.run_id = approval["run_id"] | "";
+        view.run_title = approval["run_title"] | approval["title"] | "";
+        view.approval_id = approval["id"] | approval["approval_id"] | "";
+        view.title = approval["title"] | "";
+        view.detail = approval["detail"] | "";
+        view.danger_level = approval["danger_level"] | ((approval["danger"] | false) ? "high" : "normal");
+        view.mode = approval["mode"] | "";
+        view.status = approval["status"] | "";
+        view.branch = approval["branch"] | "";
+        view.thread_id = approval["thread_id"] | "";
+        ++i;
+      }
+      state.approvals.approval_count = i;
+    }
+    state.status_line = content.length() > 0 ? content : "Approvals updated";
+    append_activity_event(state, state.status_line);
+    return;
+  }
     if (kind == "bridge_notification") {
       state.bridge_prompt_kind = BridgePromptKind::Notification;
       state.bridge_prompt_pending = false;

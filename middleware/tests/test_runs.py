@@ -7,7 +7,7 @@ from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
 from cardputer_codex_terminal.events import Event, EventType
 from cardputer_codex_terminal.messages import CardputerMessage, CardputerMessageType
-from cardputer_codex_terminal.runs import AgentRun, RunIndex, RunStatus
+from cardputer_codex_terminal.runs import AgentRun, ApprovalRequest, RunIndex, RunStatus
 
 
 class RunModelTests(unittest.TestCase):
@@ -27,6 +27,10 @@ class RunModelTests(unittest.TestCase):
         self.assertEqual(index.find_by_thread_id("thr_123"), run)
         self.assertEqual(index.to_dict()["active_run_id"], run.run_id)
         self.assertEqual(index.to_dict()["runs"][run.run_id]["session_id"], "session-000001")
+        run.pending_approval = ApprovalRequest(approval_id="approval-2", title="Allow merge", detail="danger")
+        self.assertEqual(index.find_by_approval_id("approval-2"), run)
+
+
 
     def test_agent_run_status_transitions_from_events(self) -> None:
         run = AgentRun("run-000001")
@@ -61,9 +65,26 @@ class RunModelTests(unittest.TestCase):
         self.assertEqual(run.status, RunStatus.DONE)
         self.assertEqual(run.last_event, "turn completed")
 
+        run.record_event(
+            Event(
+                EventType.CODEX_STATUS,
+                {
+                    "kind": "run_marked_for_merge",
+                    "content": "Marked run for merge",
+                    "diff_summary": {"files_changed": 2, "insertions": 10, "deletions": 5, "summary": "feat: X"},
+                    "test_summary": {"tests_run": 5, "passed": 4, "failed": 1, "skipped": 0, "summary": "5 tests, 1 fail"},
+                },
+            )
+        )
+        self.assertTrue(run.merge_ready)
+        self.assertIsNotNone(run.diff_summary)
+        self.assertEqual(run.diff_summary.files_changed, 2)
+        self.assertIsNotNone(run.test_summary)
+        self.assertEqual(run.test_summary.failed, 1)
         run.record_event(Event(EventType.ERROR, {"content": "boom"}))
         self.assertEqual(run.status, RunStatus.FAILED)
         self.assertEqual(run.last_event, "boom")
+
 
 
 class RunIntegrationTests(unittest.TestCase):

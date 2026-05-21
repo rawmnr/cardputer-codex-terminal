@@ -20,7 +20,11 @@ class MiddlewareLink {
   bool sendThreadSelect(const String& thread_id);
   bool sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz);
   bool sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample_count, int peak_amplitude);
-  bool sendApprovalResponse(bool approved);
+  bool sendApprovalResponse(bool approved, const String& approval_id = "");
+  bool sendRunAction(const String& action, const String& run_id, const String& approval_id = "");
+  bool sendRunListRequest();
+  bool sendRunDetailRequest(const String& run_id);
+  bool sendApprovalInboxRequest();
   bool sendBridgeNotification(const String& title, const String& detail);
   bool sendBridgeQuestion(const String& title, const String& detail, const std::array<String, 3>& options, size_t option_count);
   bool sendBridgeConfirmation(const String& title, const String& detail);

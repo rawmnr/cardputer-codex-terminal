@@ -2,7 +2,7 @@
 
 #if USE_LVGL_UI
 namespace {
-constexpr size_t kTabCount = 6;
+constexpr size_t kTabCount = 8;
 
 const char* codex_label(CodexState state) {
   switch (state) {
@@ -42,6 +42,10 @@ const char* active_app_label(AppId id) {
       return "Codex Buddy";
     case AppId::PushToCodex:
       return "Push to Codex";
+    case AppId::Runs:
+      return "Runs";
+    case AppId::Approvals:
+      return "Approvals";
     case AppId::Pager:
       return "Codex Pager";
     case AppId::Usage:
@@ -68,6 +72,8 @@ LvglAppScreen* screenForApp(
     AppId app_id,
     BuddyScreen& buddy_screen,
     PushScreen& push_screen,
+    RunsDashboardScreen& runs_screen,
+    ApprovalsInboxScreen& approvals_screen,
     PagerAppScreen& pager_screen,
     UsageScreen& usage_screen,
     BridgeScreen& bridge_screen,
@@ -77,6 +83,10 @@ LvglAppScreen* screenForApp(
       return &buddy_screen;
     case AppId::PushToCodex:
       return &push_screen;
+    case AppId::Runs:
+      return &runs_screen;
+    case AppId::Approvals:
+      return &approvals_screen;
     case AppId::Pager:
       return &pager_screen;
     case AppId::Usage:
@@ -91,7 +101,7 @@ LvglAppScreen* screenForApp(
 }  // namespace
 
 const char* const LvglScreen::kTabMap[] = {
-  "Codex Buddy", "\n", "Push to Codex", "\n", "Codex Pager", "\n", "Codex Usage", "\n", "MCP Bridge", "\n", "Settings", nullptr,
+  "Codex Buddy", "\n", "Push to Codex", "\n", "Runs", "\n", "Approvals", "\n", "Codex Pager", "\n", "Codex Usage", "\n", "MCP Bridge", "\n", "Settings", nullptr,
 };
 
 void LvglScreen::setLabelText(lv_obj_t* obj, String& cache, const String& value) {
@@ -109,14 +119,18 @@ size_t LvglScreen::tabIndexForApp(AppId app_id) {
       return 0;
     case AppId::PushToCodex:
       return 1;
-    case AppId::Pager:
+    case AppId::Runs:
       return 2;
-    case AppId::Usage:
+    case AppId::Approvals:
       return 3;
-    case AppId::McpBridge:
+    case AppId::Pager:
       return 4;
-    case AppId::Settings:
+    case AppId::Usage:
       return 5;
+    case AppId::McpBridge:
+      return 6;
+    case AppId::Settings:
+      return 7;
   }
   return 0;
 }
@@ -354,6 +368,8 @@ void LvglScreen::syncContentScreen(const DeviceState& state) {
                                     ? screenForApp(state.active_app,
                                                    buddy_screen_,
                                                    push_screen_,
+                                                   runs_screen_,
+                                                   approvals_screen_,
                                                    pager_screen_,
                                                    usage_screen_,
                                                    bridge_screen_,
@@ -447,7 +463,7 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
             : modal_.kind() == ModalKind::Notification ? "Notification"
             : "Modal";
   } else if (content_open) {
-    active = "Buddy dashboard";
+    active = state.active_app == AppId::Runs ? "Runs dashboard" : state.active_app == AppId::Approvals ? "Approvals inbox" : "Buddy dashboard";
   } else if (ptt_open) {
     active = String("Recording: ") + (state.ptt_state == PushToTalkState::Ready ? "Ready"
                                          : state.ptt_state == PushToTalkState::Recording ? "Live"
@@ -518,7 +534,7 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
     footer = String("Space: record  Enter: send  Del: cancel");
   }
   if (content_open) {
-    footer = String("Buddy dashboard");
+    footer = state.active_app == AppId::Runs ? String("Runs dashboard") : state.active_app == AppId::Approvals ? String("Approvals inbox") : String("Buddy dashboard");
   }
   setLabelText(footer_, last_footer_, footer);
 
@@ -545,7 +561,7 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
             : "idle";
     setLabelText(focus_, last_focus_, label);
   } else if (content_open) {
-    setLabelText(focus_, last_focus_, "Focus: dashboard");
+    setLabelText(focus_, last_focus_, state.active_app == AppId::Runs ? "Focus: Runs" : state.active_app == AppId::Approvals ? "Focus: Approvals" : "Focus: dashboard");
   } else if (state.menu.app_menu_open) {
     const char* focus_text = tabLabel(focus_index);
     String label = String("Focus: ") + focus_text;

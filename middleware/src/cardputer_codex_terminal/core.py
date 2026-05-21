@@ -390,16 +390,20 @@ class MiddlewareApp:
 
     async def handle_approval_response(self, approved: bool, approval_id: str | None = None, note: str | None = None) -> Event:
         pending_id = approval_id or self.session.pending_approval_id
+        target_run = self.run_index.find_by_approval_id(pending_id) if pending_id else None
+        if target_run is None:
+            target_run = self.run_index.current()
         if pending_id is None:
             event = Event(EventType.ERROR, {"content": "No approval is pending."})
-            self._notify([event])
+            self._notify([event], run_id=target_run.run_id if target_run else None)
             return event
 
         await self.transport.submit_approval(pending_id, approved, note=note)
-        self.session.pending_approval_id = None
-        self.session.pending_approval_title = None
-        self.session.pending_approval_detail = None
-        self.session.pending_approval_timeout_seconds = None
+        if pending_id == self.session.pending_approval_id:
+            self.session.pending_approval_id = None
+            self.session.pending_approval_title = None
+            self.session.pending_approval_detail = None
+            self.session.pending_approval_timeout_seconds = None
         event = Event(
             EventType.APPROVAL_RESPONSE,
             {
@@ -408,7 +412,7 @@ class MiddlewareApp:
                 "note": note,
             },
         )
-        self._notify([event])
+        self._notify([event], run_id=target_run.run_id if target_run else None)
         return event
 
     async def _ensure_thread(self) -> None:
@@ -554,6 +558,29 @@ class MiddlewareApp:
                     role=RunRole.TESTER,
                 )
                 return [Event(EventType.CODEX_STATUS, {"kind": "run_started", "content": f"Started run {run.run_id} in {name} ({mode_str})"})]
+
+            if len(parts) >= 3 and parts[1] in {"approve", "reject", "stop", "merge", "mark-for-merge", "mark_for_merge"}:
+                action = parts[1]
+                run_id = parts[2]
+                run = self.run_index.runs.get(run_id)
+                if run is None:
+                    return [Event(EventType.ERROR, {"content": f"Run {run_id} not found"})]
+                if action in {"approve", "reject"}:
+                    approval_id = parts[3] if len(parts) > 3 else (run.pending_approval.approval_id if run.pending_approval else "")
+                    note = "Approve once" if action == "approve" else "Rejected on Cardputer"
+                    return [await self.handle_approval_response(action == "approve", approval_id=approval_id or None, note=note)]
+                if action == "stop":
+                    if not run.thread_id:
+                        return [Event(EventType.ERROR, {"content": f"Run {run_id} has no thread to stop"})]
+                    await self.transport.interrupt_turn(run.thread_id)
+                    event = Event(EventType.CODEX_STATUS, {"kind": "run_stopped", "content": f"Stopped run {run_id}", "run_id": run_id})
+                    self._notify([event], run_id=run_id)
+                    return [event]
+                if action in {"merge", "mark-for-merge", "mark_for_merge"}:
+                    run.merge_ready = True
+                    event = Event(EventType.CODEX_STATUS, {"kind": "run_marked_for_merge", "content": f"Marked run {run_id} for merge", "run_id": run_id})
+                    self._notify([event], run_id=run_id)
+                    return [event]
         if cmd == "/mode":
             # /mode <safe|yolo|review>
             if len(parts) == 2:
@@ -778,14 +805,15 @@ class MiddlewareApp:
         self._notify([event])
         return [event]
 
-    def _notify(self, events: list[Event]) -> None:
+    def _notify(self, events: list[Event], run_id: str | None = None) -> None:
         self.session_index.record(events)
         if not any(event.payload.get("kind") == "runs_cleanup" for event in events):
-            self.run_index.record(events, run_id=self.session.run_id)
+            target_run_id = run_id if run_id is not None else self.session.run_id
+            self.run_index.record(events, run_id=target_run_id)
         self._update_run_ui()
 
         metadata = {
-            "run_id": self.session.run_id,
+            "run_id": run_id if run_id is not None else self.session.run_id,
             "session_id": self.session.session_id,
         }
         for event in events:

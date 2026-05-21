@@ -22,6 +22,10 @@ String tab_label(AppId app_id) {
       return "Buddy";
     case AppId::PushToCodex:
       return "Push";
+    case AppId::Runs:
+      return "Runs";
+    case AppId::Approvals:
+      return "Approvals";
     case AppId::Pager:
       return "Pager";
     case AppId::Usage:
@@ -40,6 +44,10 @@ const char* menu_label(AppId app_id) {
       return "Codex Buddy";
     case AppId::PushToCodex:
       return "Push to Codex";
+    case AppId::Runs:
+      return "Runs";
+    case AppId::Approvals:
+      return "Approvals";
     case AppId::Pager:
       return "Codex Pager";
     case AppId::Usage:
@@ -112,6 +120,18 @@ void AppShell::begin() {
   state_.pager.selected_session_id = "";
   state_.pager.interrupt_supported = false;
   state_.pager_screen = PagerScreen::Inbox;
+  state_.runs.run_count = 0;
+  state_.runs.active_run_id = "";
+  state_.runs.selected_run_id = "";
+  state_.runs.selected_index = 0;
+  state_.runs.scroll_offset = 0;
+  state_.runs.screen = RunsScreen::List;
+  state_.approvals.approval_count = 0;
+  state_.approvals.active_run_id = "";
+  state_.approvals.selected_approval_id = "";
+  state_.approvals.selected_index = 0;
+  state_.approvals.scroll_offset = 0;
+  state_.approvals.screen = ApprovalsScreen::Inbox;
   append_activity_event(state_, "Booted and waiting for middleware");
 
   input_line_ = "";
@@ -163,6 +183,8 @@ void AppShell::begin() {
 #endif
   applyDisplayBrightness(kDisplayActiveBrightness, DisplayPowerState::Active);
   push_to_codex_app_.setBridge(&bridge_);
+  runs_app_.setBridge(&bridge_);
+  approvals_app_.setBridge(&bridge_);
   pager_app_.setBridge(&bridge_);
   mcp_bridge_app_.setBridge(&bridge_);
   switchTo(AppId::Buddy);
@@ -184,7 +206,7 @@ void AppShell::handleCommand(const String& command) {
     Serial.println("  Hold Space         push-to-talk");
     Serial.println("  /                  command palette");
     Serial.println("Advanced commands:");
-    Serial.println("  /app buddy|push|pager|usage|mcp|settings");
+    Serial.println("  /app buddy|push|runs|approvals|pager|usage|mcp|settings");
     Serial.println("  /wifi on|off|reload");
     Serial.println("  /codex idle|busy|approval|offline");
     Serial.println("  /workspace <path>");
@@ -207,6 +229,10 @@ void AppShell::handleCommand(const String& command) {
       switchTo(AppId::Buddy);
     } else if (value == "push") {
       switchTo(AppId::PushToCodex);
+    } else if (value == "runs") {
+      switchTo(AppId::Runs);
+    } else if (value == "approvals") {
+      switchTo(AppId::Approvals);
     } else if (value == "pager") {
       switchTo(AppId::Pager);
     } else if (value == "usage") {
@@ -568,13 +594,13 @@ void AppShell::handleAction(UiAction action) {
 
   if (state_.menu.app_menu_open) {
     if (action == UiAction::Up) {
-      state_.menu.app_menu_selected = state_.menu.app_menu_selected == 0 ? 5 : state_.menu.app_menu_selected - 1;
+      state_.menu.app_menu_selected = state_.menu.app_menu_selected == 0 ? 7 : state_.menu.app_menu_selected - 1;
       render();
       return;
     }
 
     if (action == UiAction::Down) {
-      state_.menu.app_menu_selected = (state_.menu.app_menu_selected + 1) % 6;
+      state_.menu.app_menu_selected = (state_.menu.app_menu_selected + 1) % 8;
       render();
       return;
     }
@@ -603,7 +629,19 @@ void AppShell::handleAction(UiAction action) {
 
   if (active_app_ != nullptr) {
     if (state_.active_app == AppId::Buddy && action == UiAction::Select) {
-      setActiveTab(tabIndexForApp(AppId::Pager));
+      setActiveTab(tabIndexForApp(AppId::Runs));
+      render();
+      return;
+    }
+
+    if (state_.active_app == AppId::Runs && action == UiAction::Back && state_.runs.screen == RunsScreen::List) {
+      setActiveTab(tabIndexForApp(AppId::Buddy));
+      render();
+      return;
+    }
+
+    if (state_.active_app == AppId::Approvals && action == UiAction::Back && state_.approvals.screen == ApprovalsScreen::Inbox) {
+      setActiveTab(tabIndexForApp(AppId::Buddy));
       render();
       return;
     }
@@ -762,6 +800,12 @@ void AppShell::switchTo(AppId app_id) {
     case AppId::PushToCodex:
       active_app_ = &push_to_codex_app_;
       break;
+    case AppId::Runs:
+      active_app_ = &runs_app_;
+      break;
+    case AppId::Approvals:
+      active_app_ = &approvals_app_;
+      break;
     case AppId::Pager:
       active_app_ = &pager_app_;
       break;
@@ -783,7 +827,7 @@ void AppShell::switchTo(AppId app_id) {
 }
 
 void AppShell::setActiveTab(size_t tab_index) {
-  const AppId app_id = appForTab(tab_index % 6);
+  const AppId app_id = appForTab(tab_index % 8);
   switchTo(app_id);
 }
 
@@ -793,31 +837,39 @@ size_t AppShell::tabIndexForApp(AppId app_id) const {
       return 0;
     case AppId::PushToCodex:
       return 1;
-    case AppId::Pager:
+    case AppId::Runs:
       return 2;
-    case AppId::Usage:
+    case AppId::Approvals:
       return 3;
-    case AppId::McpBridge:
+    case AppId::Pager:
       return 4;
-    case AppId::Settings:
+    case AppId::Usage:
       return 5;
+    case AppId::McpBridge:
+      return 6;
+    case AppId::Settings:
+      return 7;
   }
   return 0;
 }
 
 AppId AppShell::appForTab(size_t tab_index) const {
-  switch (tab_index % 6) {
+  switch (tab_index % 8) {
     case 0:
       return AppId::Buddy;
     case 1:
       return AppId::PushToCodex;
     case 2:
-      return AppId::Pager;
+      return AppId::Runs;
     case 3:
-      return AppId::Usage;
+      return AppId::Approvals;
     case 4:
-      return AppId::McpBridge;
+      return AppId::Pager;
     case 5:
+      return AppId::Usage;
+    case 6:
+      return AppId::McpBridge;
+    case 7:
       return AppId::Settings;
   }
   return AppId::Buddy;
@@ -842,9 +894,31 @@ String AppShell::footerHint() const {
 
   switch (state_.active_app) {
     case AppId::Buddy:
-      return "Ctrl-M Menu  Enter Open Pager  / Cmd";
+      return "Ctrl-M Menu  Enter Open Runs  / Cmd";
     case AppId::PushToCodex:
       return "Enter Send  Space Hold Talk  Del Back";
+    case AppId::Runs:
+      switch (state_.runs.screen) {
+        case RunsScreen::List:
+          return "Fn+;/. Move  Enter Detail  Del Back";
+        case RunsScreen::Detail:
+          return "Fn+;/. Browse  Enter Actions  Del Back";
+        case RunsScreen::Actions:
+          return "Fn+;/. Action  Enter Run  Del Back";
+        case RunsScreen::Diff:
+          return "Del Back  Enter Detail";
+        case RunsScreen::Tests:
+          return "Del Back  Enter Detail";
+      }
+      break;
+    case AppId::Approvals:
+      switch (state_.approvals.screen) {
+        case ApprovalsScreen::Inbox:
+          return "Fn+;/. Move  Enter Detail  Del Back";
+        case ApprovalsScreen::Detail:
+          return "Enter Approve  Del Reject";
+      }
+      break;
     case AppId::Pager:
       switch (state_.pager_screen) {
         case PagerScreen::Compose:

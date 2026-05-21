@@ -6,6 +6,8 @@
 enum class AppId {
   Buddy,
   PushToCodex,
+  Runs,
+  Approvals,
   Pager,
   Usage,
   McpBridge,
@@ -49,6 +51,19 @@ enum class PagerScreen {
   Detail,
 };
 
+enum class RunsScreen {
+  List,
+  Detail,
+  Actions,
+  Diff,
+  Tests,
+};
+
+enum class ApprovalsScreen {
+  Inbox,
+  Detail,
+};
+
 struct MenuState {
   size_t active_tab = 0;
   size_t app_menu_selected = 0;
@@ -78,6 +93,67 @@ struct PagerSessionSummary {
   size_t event_count = 0;
 };
 
+struct RunSummaryView {
+  String run_id;
+  String title;
+  String branch;
+  String mode;
+  String status;
+  String last_event;
+  String thread_id;
+  String approval_id;
+  String approval_title;
+  String danger_level;
+  bool merge_ready = false;
+  bool worktree_exists = true;
+};
+
+struct RunDetailView {
+  String run_id;
+  String role;
+  String title;
+  String thread_id;
+  String session_id;
+  String workspace_path;
+  String branch;
+  String mode;
+  String status;
+  String step;
+  String last_event;
+  String diff_summary;
+  String test_summary;
+  String danger;
+  String badge;
+  String stale;
+  String approval_id;
+  String approval_title;
+  String approval_detail;
+  String approval_danger;
+  bool approval_pending = false;
+  bool merge_ready = false;
+  bool worktree_exists = true;
+  int diff_files = 0;
+  int diff_insertions = 0;
+  int diff_deletions = 0;
+  int test_run = 0;
+  int test_passed = 0;
+  int test_failed = 0;
+  int test_skipped = 0;
+};
+
+struct ApprovalInboxItem {
+  String run_id;
+  String run_title;
+  String approval_id;
+  String title;
+  String detail;
+  String danger_level;
+  String mode;
+  String status;
+  String branch;
+  String thread_id;
+};
+
 struct PagerViewState {
   static constexpr size_t kMaxSessions = 6;
 
@@ -86,6 +162,34 @@ struct PagerViewState {
   String active_session_id;
   String selected_session_id;
   bool interrupt_supported = false;
+};
+
+struct RunsViewState {
+  static constexpr size_t kMaxRuns = 6;
+
+  std::array<RunSummaryView, kMaxRuns> runs{};
+  size_t run_count = 0;
+  String active_run_id;
+  String selected_run_id;
+  size_t selected_index = 0;
+  size_t scroll_offset = 0;
+  RunsScreen screen = RunsScreen::List;
+  RunDetailView detail;
+  std::array<String, 6> actions{};
+  size_t action_count = 0;
+  size_t selected_action_index = 0;
+};
+
+struct ApprovalInboxState {
+  static constexpr size_t kMaxApprovals = 6;
+
+  std::array<ApprovalInboxItem, kMaxApprovals> approvals{};
+  size_t approval_count = 0;
+  String active_run_id;
+  String selected_approval_id;
+  size_t selected_index = 0;
+  size_t scroll_offset = 0;
+  ApprovalsScreen screen = ApprovalsScreen::Inbox;
 };
 
 struct DeviceState {
@@ -134,6 +238,8 @@ struct DeviceState {
   String codex_usage_detail_line;
   PagerViewState pager;
   PagerScreen pager_screen = PagerScreen::Inbox;
+  RunsViewState runs;
+  ApprovalInboxState approvals;
   size_t ptt_samples_captured = 0;
   size_t ptt_sample_limit = 0;
   uint32_t ptt_sample_rate_hz = 16000;

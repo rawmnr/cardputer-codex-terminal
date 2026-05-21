@@ -14,6 +14,8 @@
 #include "device_state.h"
 #include "buddy_screen.h"
 #include "bridge_screen.h"
+#include "runs_screen.h"
+#include "approvals_screen.h"
 #include "pager_screen.h"
 #include "push_screen.h"
 #include "settings_screen.h"
@@ -50,6 +52,8 @@ class LvglScreen {
   PttWidget ptt_;
   BuddyScreen buddy_screen_;
   PushScreen push_screen_;
+  RunsDashboardScreen runs_screen_;
+  ApprovalsInboxScreen approvals_screen_;
   PagerAppScreen pager_screen_;
   UsageScreen usage_screen_;
   BridgeScreen bridge_screen_;
