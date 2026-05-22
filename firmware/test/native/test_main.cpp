@@ -38,8 +38,29 @@ int g_failures = 0;
     }                                                                                     \
   } while (false)
 
+std::filesystem::path fixtureRoot() {
+  std::error_code ec;
+  std::filesystem::path current = std::filesystem::current_path(ec);
+  if (ec) {
+    return std::filesystem::path("tests/contracts");
+  }
+
+  for (int depth = 0; depth < 6; ++depth) {
+    const std::filesystem::path candidate = current / "tests" / "contracts";
+    if (std::filesystem::exists(candidate, ec) && !ec) {
+      return candidate;
+    }
+    if (!current.has_parent_path()) {
+      break;
+    }
+    current = current.parent_path();
+  }
+
+  return std::filesystem::path("tests/contracts");
+}
+
 std::filesystem::path fixturePath(const std::string& relative) {
-  return std::filesystem::path("../tests/contracts") / relative;
+  return fixtureRoot() / relative;
 }
 
 std::string readFile(const std::filesystem::path& path) {
