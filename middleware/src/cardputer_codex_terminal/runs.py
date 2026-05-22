@@ -259,8 +259,10 @@ class AgentRun:
                 self.status = RunStatus.DONE
             elif kind in {"failed", "turn/failed", "error"}:
                 self.status = RunStatus.FAILED
-            elif kind in {"status", "turn/started", "turn/start/accepted", "thread/status/changed"}:
+            elif kind in {"status", "turn/started", "turn/start/accepted", "thread/status/changed", "run_started", "run_resumed", "resume_run"}:
                 self.status = RunStatus.RUNNING
+            elif kind in {"run_paused", "pause_run"}:
+                self.status = RunStatus.PAUSED
             elif kind == "voice_prompt_transcribed":
                 self.status = RunStatus.RUNNING
             elif kind == "session_status":
@@ -269,7 +271,7 @@ class AgentRun:
                 return
             elif kind in {"run_stopped", "stopped"}:
                 self.status = RunStatus.PAUSED
-            elif kind in {"run_marked_for_merge", "merge_ready"}:
+            elif kind in {"run_marked_for_merge", "merge_ready", "mark_ready_for_merge"}:
                 self.merge_ready = True
             if content:
                 self.last_event = content

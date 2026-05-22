@@ -43,6 +43,9 @@ class CodexTransport(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def interrupt_turn(self, thread_id: str) -> None:
+        raise NotImplementedError
+    @abstractmethod
     async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:
         raise NotImplementedError
 
@@ -62,6 +65,9 @@ class MockCodexTransport(CodexTransport):
         return None
 
     async def submit_approval(self, approval_id: str, approved: bool, note: str | None = None) -> None:
+        return None
+
+    async def interrupt_turn(self, thread_id: str) -> None:
         return None
 
     async def start_turn(self, prompt: str, thread_id: str | None = None, cwd: str | None = None) -> AsyncIterator[CodexReply]:

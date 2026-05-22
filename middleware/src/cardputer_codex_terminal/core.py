@@ -2,22 +2,23 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
-from .config import AppConfig
+from .bus import EventBus
 from .codex_transport import CodexTransport, LocalWebSocketCodexTransport, MockCodexTransport, StdioCodexAppServerTransport
+from .commands import OrchestrationCommandRouter
+from .config import AppConfig
 from .events import Event, EventType
 from .messages import CardputerMessage, CardputerMessageType
+from .persistence import RunPersistenceStore
+from .policies import ApprovalPolicyManager
+from .projections import CardputerProjection
 from .router import CardputerRouter
 from .runs import AgentRun, RunIndex, RunMode, RunRole
 from .session import SessionIndex, SessionState
-from .policies import ApprovalPolicyManager
-from .bus import EventBus
-from .projections import CardputerProjection
-from .persistence import RunPersistenceStore
+from .supervisor import CodexProcessSupervisor
 from .voice import FasterWhisperVoiceTranscriber, MockVoiceTranscriber, VoicePromptBuffer, VoiceTranscriber
-
-from pathlib import Path
 from .worktree import WorktreeManager
 
 @dataclass(slots=True)
@@ -28,6 +29,8 @@ class MiddlewareApp:
     session_index: SessionIndex = field(default_factory=SessionIndex)
     run_index: RunIndex = field(default_factory=RunIndex)
     worktree_manager: WorktreeManager = field(init=False)
+    supervisor: CodexProcessSupervisor = field(init=False)
+    command_router: OrchestrationCommandRouter = field(init=False)
     policy_manager: ApprovalPolicyManager = field(default_factory=ApprovalPolicyManager)
     session: SessionState = field(init=False)
     voice_buffer: VoicePromptBuffer = field(default_factory=VoicePromptBuffer)
@@ -51,10 +54,16 @@ class MiddlewareApp:
             self.transport = LocalWebSocketCodexTransport(self.config.codex_ws_url)
         else:
             self.transport = StdioCodexAppServerTransport(list(self.config.codex_command), cwd=self.config.workspace_path)
+        self.supervisor = CodexProcessSupervisor(
+            self.transport,
+            tuple(self.config.codex_command),
+            self.config.workspace_path,
+        )
         self.worktree_manager = WorktreeManager(Path(self.config.workspace_path))
         self.persistence = RunPersistenceStore(self.config.state_path)
         self.run_index, self._persistence_report = self.persistence.load(self.worktree_manager)
         self.projection = CardputerProjection(self.run_index)
+        self.command_router = OrchestrationCommandRouter(self)
         self.session = self.session_index.ensure_active(
             workspace_path=self.config.workspace_path,
             branch=self.config.branch,
@@ -98,6 +107,11 @@ class MiddlewareApp:
 
     async def initialize(self) -> None:
         await self.transport.initialize()
+    async def close(self) -> None:
+        await self.supervisor.close()
+        close = getattr(self.transport, "close", None)
+        if callable(close):
+            await close()
 
     async def select_workspace(self, workspace_path: str) -> Event:
         self.session.workspace_path = workspace_path
@@ -424,7 +438,8 @@ class MiddlewareApp:
 
     async def handle_text_prompt(self, text: str) -> list[Event]:
         events = await self._collect_text_prompt_events(text)
-        self._notify(events)
+        if not text.startswith("/"):
+            self._notify(events)
         return events
 
     async def _collect_text_prompt_events(self, text: str) -> list[Event]:
@@ -493,117 +508,7 @@ class MiddlewareApp:
         return events
 
     async def _handle_command(self, text: str) -> list[Event]:
-        parts = text.strip().split()
-        if not parts:
-            return [Event(EventType.ERROR, {"content": "Empty command"})]
-
-        cmd = parts[0]
-
-        if cmd == "/worktrees":
-            wts = self.worktree_manager.list_worktrees()
-            lines = [f"{wt.path.name} ({wt.branch})" for wt in wts]
-            content = "Worktrees:\n" + "\n".join(lines) if lines else "No worktrees found."
-            return [Event(EventType.CODEX_STATUS, {"kind": "worktree_list", "content": content})]
-
-        if cmd == "/worktree":
-            if len(parts) == 5 and parts[1] == "create" and parts[3] == "from":
-                name, branch = parts[2], parts[4]
-                try:
-                    path = self.worktree_manager.create_worktree(branch, name)
-                    return [Event(EventType.CODEX_STATUS, {"kind": "worktree_created", "content": f"Created worktree {name} from {branch} at {path}"})]
-                except WorktreeError as e:
-                    return [Event(EventType.ERROR, {"content": str(e)})]
-
-            if len(parts) == 3 and parts[1] == "remove":
-                name = parts[2]
-                try:
-                    worktree_path = self.worktree_manager.get_worktree_by_name(name)
-                    if not worktree_path:
-                        return [Event(EventType.ERROR, {"content": f"Worktree {name} not found"})]
-                    self.worktree_manager.remove_worktree(worktree_path)
-                    return [Event(EventType.CODEX_STATUS, {"kind": "worktree_removed", "content": f"Removed worktree {name}"})]
-                except WorktreeError as e:
-                    return [Event(EventType.ERROR, {"content": str(e)})]
-
-        if cmd == "/runs" and len(parts) == 2 and parts[1] == "cleanup":
-            report = self.persistence.cleanup_orphans(self.run_index)
-            self.persistence.save(self.run_index)
-            content = f"Cleanup removed {report.removed_runs} orphan run(s)."
-            return [Event(EventType.CODEX_STATUS, {"kind": "runs_cleanup", "content": content, "removed": report.removed_runs})]
-
-        if cmd == "/run":
-            # /run worker <name> <mode>
-            if len(parts) == 4 and parts[1] == "worker":
-                name, mode_str = parts[2], parts[3]
-                worktree_path = self.worktree_manager.get_worktree_by_name(name)
-                if not worktree_path:
-                    return [Event(EventType.ERROR, {"content": f"Worktree {name} not found"})]
-
-                mode = RunMode.YOLO_WORKTREE if mode_str == "yolo" else RunMode.SAFE
-
-                # Check protection if YOLO
-                if mode == RunMode.YOLO_WORKTREE:
-                    # We need to know the branch of this worktree
-                    # Let's use the manager to get the branch
-                    # I'll add a method to WorktreeManager for this.
-                    wt_info = next((wt for wt in self.worktree_manager.list_worktrees() if wt.path == worktree_path), None)
-                    if wt_info and self.worktree_manager.is_protected(wt_info.branch):
-                        return [Event(EventType.ERROR, {"content": f"Cannot run YOLO on protected branch {wt_info.branch}"})]
-
-                run = self.run_index.create_run(
-                    workspace_path=str(worktree_path),
-                    worktree_path=str(worktree_path),
-                    mode=mode,
-                    session_id=self.session.session_id,
-                    role=RunRole.TESTER,
-                )
-                return [Event(EventType.CODEX_STATUS, {"kind": "run_started", "content": f"Started run {run.run_id} in {name} ({mode_str})"})]
-
-            if len(parts) >= 3 and parts[1] in {"approve", "reject", "stop", "merge", "mark-for-merge", "mark_for_merge"}:
-                action = parts[1]
-                run_id = parts[2]
-                run = self.run_index.runs.get(run_id)
-                if run is None:
-                    return [Event(EventType.ERROR, {"content": f"Run {run_id} not found"})]
-                if action in {"approve", "reject"}:
-                    approval_id = parts[3] if len(parts) > 3 else (run.pending_approval.approval_id if run.pending_approval else "")
-                    note = "Approve once" if action == "approve" else "Rejected on Cardputer"
-                    return [await self.handle_approval_response(action == "approve", approval_id=approval_id or None, note=note)]
-                if action == "stop":
-                    if not run.thread_id:
-                        return [Event(EventType.ERROR, {"content": f"Run {run_id} has no thread to stop"})]
-                    await self.transport.interrupt_turn(run.thread_id)
-                    event = Event(EventType.CODEX_STATUS, {"kind": "run_stopped", "content": f"Stopped run {run_id}", "run_id": run_id})
-                    self._notify([event], run_id=run_id)
-                    return [event]
-                if action in {"merge", "mark-for-merge", "mark_for_merge"}:
-                    run.merge_ready = True
-                    event = Event(EventType.CODEX_STATUS, {"kind": "run_marked_for_merge", "content": f"Marked run {run_id} for merge", "run_id": run_id})
-                    self._notify([event], run_id=run_id)
-                    return [event]
-        if cmd == "/mode":
-            # /mode <safe|yolo|review>
-            if len(parts) == 2:
-                mode_str = parts[1].lower()
-                new_mode = RunMode.SAFE
-                if mode_str == "yolo":
-                    new_mode = RunMode.YOLO_WORKTREE
-                elif mode_str == "review":
-                    new_mode = RunMode.REVIEW_ONLY
-
-                run = self.run_index.current()
-                if run:
-                    # Check protection if YOLO
-                    if new_mode == RunMode.YOLO_WORKTREE:
-                        if self.worktree_manager.is_protected(run.branch or run.base_branch):
-                            return [Event(EventType.ERROR, {"content": f"Cannot enable YOLO on protected branch {run.branch or run.base_branch}"})]
-
-                    run.mode = new_mode
-                    self._update_run_ui(run)
-                    return [Event(EventType.CODEX_STATUS, {"kind": "mode_changed", "content": f"Mode changed to {new_mode.value}"})]
-
-
-        return [Event(EventType.ERROR, {"content": f"Unknown command: {text}"})]
+        return await self.command_router.handle_text(text)
     async def handle_cardputer_message(self, message: CardputerMessage) -> list[Event]:
         routed = self.router.route(message)
 
@@ -794,8 +699,17 @@ class MiddlewareApp:
 
         if message.type == CardputerMessageType.INTERRUPT:
             thread_id = message.payload.get("thread_id") or self.session.thread_id
+            run = self.run_index.find_by_thread_id(str(thread_id)) if thread_id else None
+            if run is not None:
+                handle = self.supervisor.get_handle(run.run_id)
+                await self.supervisor.interrupt(run.run_id)
+                if handle is None and thread_id:
+                    await self.transport.interrupt_turn(str(thread_id))
+                event = Event(EventType.CODEX_STATUS, {"kind": "status", "content": "interrupt sent", "threadId": thread_id, "run_id": run.run_id})
+                self._notify([event], run_id=run.run_id)
+                return [event]
             if thread_id:
-                await self.transport.interrupt_turn(thread_id)
+                await self.transport.interrupt_turn(str(thread_id))
                 event = Event(EventType.CODEX_STATUS, {"kind": "status", "content": "interrupt sent", "threadId": thread_id})
                 self._notify([event])
                 return [event]
@@ -805,9 +719,9 @@ class MiddlewareApp:
         self._notify([event])
         return [event]
 
-    def _notify(self, events: list[Event], run_id: str | None = None) -> None:
+    def _notify(self, events: list[Event], run_id: str | None = None, *, record_in_run_index: bool = True) -> None:
         self.session_index.record(events)
-        if not any(event.payload.get("kind") == "runs_cleanup" for event in events):
+        if record_in_run_index:
             target_run_id = run_id if run_id is not None else self.session.run_id
             self.run_index.record(events, run_id=target_run_id)
         self._update_run_ui()

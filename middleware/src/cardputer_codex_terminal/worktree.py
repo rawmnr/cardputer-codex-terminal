@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import re
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import NamedTuple
+
+from .runs import AgentRun, DiffSummary, TestSummary
 
 
 class WorktreeInfo(NamedTuple):
@@ -24,76 +26,63 @@ class WorktreeManager:
     def _run_git(self, args: list[str], cwd: Path | None = None) -> str:
         try:
             result = subprocess.run(
-                ["git"] + args,
+                ["git", *args],
                 cwd=cwd or self.repo_path,
                 capture_output=True,
                 text=True,
                 check=True,
             )
             return result.stdout.strip()
-        except subprocess.CalledProcessError as e:
-            raise WorktreeError(f"Git error: {e.stderr.strip() or e.stdout.strip()}") from e
+        except subprocess.CalledProcessError as exc:
+            raise WorktreeError(f"Git error: {exc.stderr.strip() or exc.stdout.strip()}") from exc
+
+    def normalize_branch_name(self, branch: str) -> str:
+        value = branch.strip()
+        for prefix in ("refs/heads/", "refs/remotes/", "origin/"):
+            if value.startswith(prefix):
+                value = value[len(prefix) :]
+        return value
 
     def list_worktrees(self) -> list[WorktreeInfo]:
         output = self._run_git(["worktree", "list", "--porcelain"])
-        worktrees = []
-        current_path = None
-        current_commit = None
-        current_branch = None
-
-        for line in output.splitlines():
-            if line.startswith("worktree "):
-                path = Path(line[len("worktree "):].strip())
-                worktrees.append(WorktreeInfo(path, current_commit or "", current_branch or ""))
-                current_path = path
-                current_commit = None
-                current_branch = None
-            elif line.startswith("commit "):
-                current_commit = line[len("commit "):].strip()
-            elif line.startswith("branch "):
-                current_branch = line[len("branch "):].strip()
-        
-        # The porcelain output puts worktree line FIRST, then commit/branch.
-        # I need to parse it as blocks.
-        
-        # Let's refine the parsing logic.
         return self._parse_porcelain(output)
 
     def _parse_porcelain(self, output: str) -> list[WorktreeInfo]:
-        worktrees = []
-        blocks = output.split("\n\n") if output else []
-        for block in blocks:
+        worktrees: list[WorktreeInfo] = []
+        for block in output.split("\n\n") if output else []:
             if not block.strip():
                 continue
-            lines = block.splitlines()
-            path = None
-            commit = None
-            branch = None
-            for line in lines:
+            path = ""
+            commit = ""
+            branch = ""
+            for line in block.splitlines():
                 if line.startswith("worktree "):
-                    path = Path(line[len("worktree "):].strip())
+                    path = line[len("worktree ") :].strip()
                 elif line.startswith("commit "):
-                    commit = line[len("commit "):].strip()
+                    commit = line[len("commit ") :].strip()
                 elif line.startswith("branch "):
-                    branch = line[len("branch "):].strip()
+                    branch = self.normalize_branch_name(line[len("branch ") :].strip())
             if path:
-                worktrees.append(WorktreeInfo(path, commit or "", branch or ""))
+                worktrees.append(WorktreeInfo(Path(path), commit, branch))
         return worktrees
 
+    def get_worktree_info_by_name(self, name: str) -> WorktreeInfo | None:
+        for worktree in self.list_worktrees():
+            if worktree.path.name == name:
+                return worktree
+        return None
+
+    def get_worktree_info_by_path(self, path: Path) -> WorktreeInfo | None:
+        for worktree in self.list_worktrees():
+            if worktree.path == path:
+                return worktree
+        return None
+
     def create_worktree(self, branch: str, name: str) -> Path:
-        # Worktrees are usually created as folders next to the main repo or in a specific place.
-        # We'll create them in a 'worktrees' folder inside the repo path's parent or similar.
-        # For simplicity, we'll put them in <repo_path>/../worktrees/<name>
         worktree_root = self.repo_path.parent / "worktrees"
         worktree_path = worktree_root / name
-        
         if worktree_path.exists():
             raise WorktreeError(f"Worktree path {worktree_path} already exists")
-
-        # Create worktree from branch. If branch doesn't exist, it might fail.
-        # We can use 'git worktree add -b <new_branch> <path> <base_branch>'
-        # But the requirement says "create worktree from base branch".
-        # If we want a new branch for the run:
         new_branch = f"run-{name}"
         self._run_git(["worktree", "add", "-b", new_branch, str(worktree_path), branch])
         return worktree_path
@@ -102,10 +91,79 @@ class WorktreeManager:
         self._run_git(["worktree", "remove", str(path)])
 
     def is_protected(self, branch: str) -> bool:
-        return branch in self.protected_branches
+        return self.normalize_branch_name(branch) in self.protected_branches
 
     def get_worktree_by_name(self, name: str) -> Path | None:
-        for wt in self.list_worktrees():
-            if wt.path.name == name:
-                return wt.path
-        return None
+        info = self.get_worktree_info_by_name(name)
+        return info.path if info is not None else None
+
+    def collect_diff(self, path: Path, base_ref: str | None = None) -> DiffSummary:
+        args = ["-C", str(path), "diff"]
+        if base_ref:
+            args.append(base_ref)
+        shortstat = self._run_git([*args, "--shortstat"], cwd=self.repo_path)
+        names = self._run_git([*args, "--name-only"], cwd=self.repo_path)
+        files = [line for line in names.splitlines() if line.strip()]
+        files_changed = len(files)
+        insertions = 0
+        deletions = 0
+        if shortstat:
+            insertions_match = re.search(r"(\d+) insertions?\(\+\)", shortstat)
+            deletions_match = re.search(r"(\d+) deletions?\(-\)", shortstat)
+            files_match = re.search(r"(\d+) files? changed", shortstat)
+            if insertions_match:
+                insertions = int(insertions_match.group(1))
+            if deletions_match:
+                deletions = int(deletions_match.group(1))
+            if files_match:
+                files_changed = int(files_match.group(1))
+        summary_bits = [bit for bit in [shortstat, ", ".join(files[:5])] if bit]
+        summary = "; ".join(summary_bits)
+        return DiffSummary(files_changed=files_changed, insertions=insertions, deletions=deletions, summary=summary)
+
+    def run_tests(self, path: Path, command: list[str] | None = None) -> TestSummary:
+        if command is None:
+            if not (path / "pyproject.toml").exists() or not (path / "tests").exists():
+                return TestSummary(summary="No test command configured for this worktree.")
+            command = ["uv", "run", "python", "-m", "unittest", "discover", "-s", "tests", "-v"]
+        result = subprocess.run(command, cwd=path, capture_output=True, text=True, check=False)
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+        combined = "\n".join(part for part in [stdout, stderr] if part)
+        tests_run = 0
+        failed = 0
+        skipped = 0
+        run_match = re.search(r"Ran (\d+) tests?", combined)
+        if run_match:
+            tests_run = int(run_match.group(1))
+        skip_match = re.search(r"skipped=(\d+)", combined)
+        if skip_match:
+            skipped = int(skip_match.group(1))
+        fail_match = re.search(r"FAILED \(([^)]+)\)", combined)
+        if fail_match:
+            failure_counts = re.findall(r"(failures|errors)=([0-9]+)", fail_match.group(1))
+            failed = sum(int(count) for _, count in failure_counts)
+        elif result.returncode != 0:
+            failed = 1 if tests_run == 0 else max(1, failed)
+        passed = max(0, tests_run - failed - skipped)
+        summary = combined.splitlines()[-1] if combined else "Tests completed."
+        return TestSummary(tests_run=tests_run, passed=passed, failed=failed, skipped=skipped, summary=summary)
+
+    def generate_merge_report(self, run: AgentRun) -> str:
+        branch = self.normalize_branch_name(run.branch or run.base_branch)
+        worktree = run.worktree_path or run.workspace_path
+        diff = run.diff_summary.summary if run.diff_summary is not None else "No diff collected"
+        tests = run.test_summary.summary if run.test_summary is not None else "No tests collected"
+        merge_ready = "yes" if run.merge_ready else "no"
+        lines = [
+            f"Run: {run.run_id}",
+            f"Branch: {branch}",
+            f"Worktree: {worktree}",
+            f"Mode: {run.mode.value}",
+            f"Status: {run.status.value}",
+            f"Merge ready: {merge_ready}",
+            f"Diff: {diff}",
+            f"Tests: {tests}",
+            f"Last event: {run.last_event or 'n/a'}",
+        ]
+        return "\n".join(lines)

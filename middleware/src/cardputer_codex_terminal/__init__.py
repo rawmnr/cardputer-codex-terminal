@@ -3,6 +3,7 @@
 from .config import AppConfig
 from .runs import AgentRun, RunIndex, RunMode, RunRole, RunStatus
 from .core import MiddlewareApp
+from .supervisor import CodexHandle, CodexProcessSupervisor
 
 __all__ = [
     "AppConfig",
@@ -12,4 +13,6 @@ __all__ = [
     "RunMode",
     "RunRole",
     "RunStatus",
+    "CodexHandle",
+    "CodexProcessSupervisor",
 ]

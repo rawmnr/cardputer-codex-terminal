@@ -19,6 +19,8 @@ Build a mobile physical interface for OpenAI Codex, based on the M5Stack Cardput
    - PCM audio reception.
    - Speech-to-text transcription.
    - JSON-RPC client for `codex app-server`.
+   - Small orchestration router for `/worktree` and `/run` commands.
+   - Codex process supervisor that can isolate YOLO worktree runs in dedicated processes.
    - stdio MCP server for Codex human-in-the-loop tools.
    - Python-owned session and run indexes plus recent-event history for the Pager browser.
    - Routing of Codex events back to the Cardputer display.
@@ -55,6 +57,11 @@ Codex approval request -> middleware -> Cardputer alert -> user keypress -> midd
 
 ```text
 Codex session and run events -> middleware SessionIndex + RunIndex -> Cardputer pager inbox/detail -> reply, approval, or session browse actions
+```
+### Run Orchestration
+
+```text
+Cardputer run action -> middleware orchestration router -> worktree/diff/test helpers + Codex process supervisor -> run detail snapshot
 ```
 
 ### Local Bridge Prompt

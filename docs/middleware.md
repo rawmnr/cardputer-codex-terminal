@@ -21,10 +21,7 @@ The middleware also owns the Codex session index and a parallel `RunIndex`; `sta
 The browser preview surfaces the same session index and run list as a Central Console with session list, event stream, composer, approvals, live screen snapshot, and workspace file browser.
 It now also projects `run_list`, `run_detail`, and `approval_inbox` snapshots so the Cardputer can browse multiple runs, inspect compact diff/test summaries, and route approvals back to the correct run.
 
-
-
-
-The middleware also exposes a Codex-facing MCP server mode over stdio. In that mode, Codex can launch the middleware directly and invoke physical-human tools instead of going through the app-server bridge first.
+The middleware also owns a small orchestration router and a Codex process supervisor. Worker runs in `YOLO_WORKTREE` mode get a dedicated `codex app-server` process rooted at the worktree; safe and review runs can keep using the shared transport.
 
 ## Responsibilities
 
@@ -38,10 +35,10 @@ The middleware also exposes a Codex-facing MCP server mode over stdio. In that m
 - Handle approval requests.
 - Maintain a `SessionIndex` in Python with `SessionState` records for active and recent Codex threads.
 - Maintain a `RunIndex` in Python with `AgentRun` records for active and recent execution runs.
+- Route `/worktree`, `/run approve|reject|stop|merge|pause|resume|diff|tests|report`, and `/mode` commands.
+- Track `DiffSummary` and `TestSummary` on each run when the backend provides them.
 - Return `session_index`, `active_session_id`, `active_run_id`, and per-session/run history in `session_status` payloads.
 - Expose MCP tools for notifications, questions, confirmations, and display-only text.
-- Accept `/run approve|reject|stop|merge` commands so the Cardputer can act on a specific run and approval.
-- Track `DiffSummary` and `TestSummary` on each run when the backend provides them.
 
 
 The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.

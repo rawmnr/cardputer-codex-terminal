@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
-from .runs import AgentRun, RunIndex, DiffSummary, TestSummary, RunStatus
+
+from .runs import AgentRun, DiffSummary, RunIndex, RunStatus, TestSummary
 from .session import SessionState
 
 
@@ -70,7 +71,7 @@ class CardputerProjection:
                 "wt": run.worktree_exists,
                 "stale": _trim(run.staleness_reason, 24),
                 "merge_ready": run.merge_ready,
-                "approval": self._project_approval(run),
+                "approval": self._project_approval(run) if run.pending_approval is not None else None,
                 "actions": self._project_run_actions(run),
             },
         }
@@ -135,16 +136,21 @@ class CardputerProjection:
             actions.append({"id": "approve_once", "label": "Approve once"})
             actions.append({"id": "reject", "label": "Reject"})
             actions.append({"id": "stop", "label": "Stop"})
-        elif run.status in {RunStatus.RUNNING, RunStatus.PAUSED}:
-            actions.append({"id": "stop", "label": "Stop"})
-        if run.diff_summary is not None:
-            actions.append({"id": "show_diff", "label": "Show diff"})
-        if run.test_summary is not None:
-            actions.append({"id": "show_tests", "label": "Show tests"})
+        else:
+            if run.status == RunStatus.RUNNING:
+                actions.append({"id": "pause_run", "label": "Pause"})
+                actions.append({"id": "stop", "label": "Stop"})
+            elif run.status == RunStatus.PAUSED:
+                actions.append({"id": "resume_run", "label": "Resume"})
+                actions.append({"id": "stop", "label": "Stop"})
+        if run.worktree_path:
+            actions.append({"id": "collect_diff", "label": "Diff"})
+            actions.append({"id": "run_tests", "label": "Tests"})
+            actions.append({"id": "generate_merge_report", "label": "Report"})
         if run.thread_id:
-            actions.append({"id": "open_voice_reply", "label": "Open voice reply"})
+            actions.append({"id": "open_voice_reply", "label": "Voice reply"})
         if run.status in {RunStatus.DONE, RunStatus.FAILED}:
-            actions.append({"id": "mark_for_merge", "label": "Mark for merge"})
+            actions.append({"id": "mark_for_merge", "label": "Mark merge"})
         return actions
 
     def _project_approval(self, run: AgentRun) -> dict[str, Any]:

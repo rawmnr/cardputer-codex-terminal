@@ -145,7 +145,7 @@ async def run_async(args: argparse.Namespace) -> int:
                 await zc.async_close()
             if preview is not None:
                 preview.close()
-        return 0
+            await app.close()
 
     if args.prompt:
         events = await app.handle_cardputer_message(
@@ -159,8 +159,10 @@ async def run_async(args: argparse.Namespace) -> int:
             await asyncio.Future()
         finally:
             preview.close()
+            await app.close()
         return 0
 
+    await app.close()
     return 0
 
 

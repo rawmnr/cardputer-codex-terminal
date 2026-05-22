@@ -14,6 +14,8 @@
 - Do not expose Codex directly to the Internet.
 - Prefer loopback between the middleware and Codex.
 - Treat Codex app-server WebSocket transport as local-development-only unless it has an explicit authenticated boundary in front of it.
+- Keep `YOLO_WORKTREE` runs isolated in a dedicated process rooted at the worktree; do not reuse the shared backend for those runs.
+- Reject YOLO on protected branches in middleware before starting a worker.
 - Do not run the Cardputer bridge on a non-loopback interface without `bridge_token`.
 - Treat the Codex-facing MCP server mode as a local trusted-process surface; launch it only from trusted projects or a shell you control.
 - Use the overlay VPN for remote access.

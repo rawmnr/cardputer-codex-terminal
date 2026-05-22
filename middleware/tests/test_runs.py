@@ -81,6 +81,11 @@ class RunModelTests(unittest.TestCase):
         self.assertEqual(run.diff_summary.files_changed, 2)
         self.assertIsNotNone(run.test_summary)
         self.assertEqual(run.test_summary.failed, 1)
+        run.record_event(Event(EventType.CODEX_STATUS, {"kind": "run_paused", "content": "Paused run"}))
+        self.assertEqual(run.status, RunStatus.PAUSED)
+
+        run.record_event(Event(EventType.CODEX_STATUS, {"kind": "run_resumed", "content": "Resumed run"}))
+        self.assertEqual(run.status, RunStatus.RUNNING)
         run.record_event(Event(EventType.ERROR, {"content": "boom"}))
         self.assertEqual(run.status, RunStatus.FAILED)
         self.assertEqual(run.last_event, "boom")

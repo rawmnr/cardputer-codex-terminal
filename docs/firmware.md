@@ -77,10 +77,10 @@ The phase also adds the shared widget foundation for the app screens, including 
 - push-to-talk audio chunks are streamed while recording;
 - release sends a voice prompt ready signal to trigger transcription on Windows;
 - streamed Codex deltas, usage, and approval requests are rendered in the app views;
-- The Pager app consumes the middleware session index and renders COMPOSE, INBOX, and DETAIL views from that Python-owned model;
-- The Runs app consumes the middleware `run_list` and `run_detail` snapshots, while Approvals consumes `approval_inbox`.
-- The Runs detail screen shows branch, mode, step, diff, tests, and merge readiness.
-- reply selection stays on the Cardputer, but the session history and event stream stay in middleware;
+The Pager app consumes the middleware session index and renders COMPOSE, INBOX, and DETAIL views from that Python-owned model;
+The Runs app consumes the middleware `run_list` and `run_detail` snapshots, while Approvals consumes `approval_inbox`.
+The Runs detail screen still shows branch, mode, step, diff, tests, and merge readiness, and now forwards `pause_run`, `resume_run`, `collect_diff`, `run_tests`, `generate_merge_report`, and `mark_for_merge` back to middleware through `/run` actions.
+reply selection stays on the Cardputer, but the session history and event stream stay in middleware;
 
 - The Approvals screen lists run, action, and danger level, and rejects remain immediate with `Del`.
 

@@ -201,6 +201,9 @@ bool RunsApp::runAction(DeviceState& state, const String& action_id) {
   if (action_id == "mark_for_merge") {
     return bridge_ != nullptr && d.run_id.length() > 0 && bridge_->sendRunAction("mark_for_merge", d.run_id);
   }
+  if (action_id == "pause_run" || action_id == "resume_run" || action_id == "collect_diff" || action_id == "run_tests" || action_id == "generate_merge_report") {
+    return bridge_ != nullptr && d.run_id.length() > 0 && bridge_->sendRunAction(action_id, d.run_id);
+  }
   return false;
 }
 
