@@ -10,7 +10,7 @@ from websockets.exceptions import ConnectionClosed
 from .bus import EventFilter
 from .core import MiddlewareApp
 from .events import Event, EventType
-from .messages import CardputerMessage
+from .messages import CardputerMessage, CardputerMessageType
 
 _DISCONNECT_EXCEPTIONS = (
     ConnectionClosed,
@@ -122,12 +122,27 @@ class CardputerBridgeServer:
                 return [self._ack(request_id_str, False)]
             raise
 
+        if message.type == CardputerMessageType.HELLO:
+            return [
+                json.dumps(
+                    {
+                        "type": "hello_ack",
+                        "payload": {
+                            "server": "cardputer-codex-middleware",
+                            "version": "0.2.0",
+                            "features": ["multi_run", "worktree_manager", "safe_mode", "yolo_worktree", "mcp", "websocket_audio"],
+                        },
+                        "id": f"ack-{message.id}",
+                    },
+                    ensure_ascii=False,
+                )
+            ]
+
         expected_token = self.app.config.bridge_token
         if expected_token is not None and message.auth_token != expected_token:
             return [
                 self._ack(message.id, False),
             ]
-
         try:
             events = await self.app.handle_cardputer_message(message)
         except Exception:

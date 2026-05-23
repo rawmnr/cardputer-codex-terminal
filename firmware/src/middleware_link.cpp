@@ -289,22 +289,32 @@ void MiddlewareLink::handleWebSocketEvent(WStype_t type, uint8_t* payload, size_
 }
 
 void MiddlewareLink::onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
-  if (state_ == nullptr) {
-    return;
-  }
-
   switch (type) {
     case WStype_CONNECTED:
-      state_->bridge_status_line = "Middleware connected";
-      append_activity_event(*state_, "Middleware bridge connected");
-      sendStatusRequest();
+      started_ = true;
+      {
+        StaticJsonDocument<256> hello_payload;
+        hello_payload["device"] = "m5stack-cardputer";
+        hello_payload["firmware"] = "0.2.0";
+        JsonArray caps = hello_payload.createNestedArray("capabilities");
+        caps.add("display_240x135");
+        caps.add("keyboard");
+        caps.add("mic_pcm16");
+        caps.add("approval");
+        caps.add("bridge_response");
+        caps.add("ble_control");
+
+        String msg = buildEnvelope(nextMessageId(), "hello", hello_hello_payload.as<JsonVariant>());
+        client_.sendTXT(msg);
+      }
       break;
     case WStype_DISCONNECTED:
-      state_->bridge_status_line = "Middleware disconnected";
-      append_activity_event(*state_, "Middleware bridge disconnected");
+      started_ = false;
       break;
     case WStype_TEXT:
-      handleIncomingJson(*state_, payload, length);
+      if (state_ != nullptr) {
+        handleIncomingJson(*state_, payload, length);
+      }
       break;
     default:
       break;
@@ -613,6 +623,13 @@ bool MiddlewareLink::sendBleCardputerMessage(const String& message) {
 #endif
 
 void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload) {
+  if (event_type == "hello_ack") {
+    state.bridge_status_line = "Bridge " + payload["version"].as<String>();
+    // Handshake complete
+    sendStatusRequest();
+    return;
+  }
+
   if (payload.containsKey("state_epoch")) {
     uint32_t incoming_epoch = payload["state_epoch"];
     if (incoming_epoch <= state.state_epoch && incoming_epoch != 0) {

@@ -14,7 +14,7 @@ class MessageTests(unittest.TestCase):
 
         self.assertEqual(parsed.type, CardputerMessageType.TEXT_PROMPT)
         self.assertEqual(parsed.payload, {"text": "hello"})
-        self.assertEqual(parsed.protocol_version, 1)
+        self.assertEqual(parsed.protocol_version, 2)
         self.assertEqual(parsed.id, message.id)
 
     def test_message_round_trip_keeps_protocol_version(self) -> None:
@@ -49,7 +49,7 @@ class MessageTests(unittest.TestCase):
                 parsed = CardputerMessage.from_dict(json.loads(raw))
                 self.assertEqual(parsed.type, message.type)
                 self.assertEqual(parsed.payload, message.payload)
-                self.assertEqual(parsed.protocol_version, 1)
+                self.assertEqual(parsed.protocol_version, 2)
                 self.assertEqual(parsed.id, message.id)
                 self.assertEqual(parsed.auth_token, message.auth_token)
 

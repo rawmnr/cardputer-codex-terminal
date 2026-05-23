@@ -6,10 +6,12 @@ from itertools import count
 from typing import Any
 
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 
 
 class CardputerMessageType(StrEnum):
+    HELLO = "hello"
+    HELLO_ACK = "hello_ack"
     TEXT_PROMPT = "text_prompt"
     AUDIO_CHUNK = "audio_chunk"
     VOICE_PROMPT_READY = "voice_prompt_ready"
@@ -55,10 +57,10 @@ class CardputerMessage:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CardputerMessage":
-        protocol_version = data.get("protocol_version", PROTOCOL_VERSION)
+        protocol_version = data.get("protocol_version", 1)
         if not isinstance(protocol_version, int):
             raise ValueError("Protocol version must be an integer.")
-        if protocol_version != PROTOCOL_VERSION:
+        if protocol_version > PROTOCOL_VERSION:
             raise ValueError(f"Unsupported protocol version: {protocol_version}")
 
         if "id" not in data:
