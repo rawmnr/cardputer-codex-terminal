@@ -87,6 +87,10 @@ class String : public std::string {
     try { return std::stoi(*this); } catch (...) { return 0; }
   }
 
+  void toLowerCase() {
+    std::transform(begin(), end(), begin(), ::tolower);
+  }
+
   void remove(size_t index, size_t count = npos) {
     if (index < length()) erase(index, count);
   }

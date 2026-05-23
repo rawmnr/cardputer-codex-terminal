@@ -13,6 +13,9 @@ if os.path.isdir(mingw_bin):
         RANLIB=os.path.join(mingw_bin, "ranlib.exe"),
     )
 
+
+    # Static link MinGW runtime to avoid DLL dependencies
+    env.Append(LINKFLAGS=["-static-libgcc", "-static-libstdc++", "-static"])
     # Add mingw to path for sub-processes.
     env.PrependENVPath("PATH", mingw_bin)
     env.PrependENVPath("PATH", r"C:\tools\msys64\usr\bin")
