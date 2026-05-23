@@ -735,13 +735,14 @@ class DevPreviewServer:
       <section class="panel composer">
         <div class="composer-row">
           <span class="badge" id="composer-mode">Compose</span>
-          <span class="hint" id="composer-hint">Enter sends a new prompt into the active session.</span>
+          <span class="hint" id="composer-hint">...</span>
         </div>
-        <textarea id="composer-input" placeholder="Type a prompt or reply for the selected Codex session..."></textarea>
+        <textarea id="composer-input" placeholder="Type a prompt..." style="color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; width:100%; height:80px; margin-top:10px; margin-bottom:10px;"></textarea>
         <div class="composer-row">
-          <button class="button" id="send-prompt">Send Prompt</button>
-          <button class="button ghost" id="send-reply">Reply in Thread</button>
+          <button class="button" id="send-prompt">Send</button>
+          <button class="button ghost" id="send-reply">Reply</button>
           <button class="button ghost" id="refresh-state">Refresh</button>
+          <div class="hint" style="margin-left: auto;">Hold Space for PTT</div>
         </div>
       </section>
     </section>
@@ -768,7 +769,7 @@ class DevPreviewServer:
       <section class="panel">
         <h2>Workspace Files</h2>
         <div class="file-list-wrap">
-          <div class="hint">Browse mirrored artifacts and workspace files. Click a pill to inspect its contents.</div>
+          <div class="hint">Workspace files.</div>
           <div class="file-list scroll" id="files"></div>
           <div class="file-preview" id="file-preview">Select a file to preview it here.</div>
         </div>
@@ -1062,6 +1063,22 @@ class DevPreviewServer:
         event.preventDefault();
         const text = byId("composer-input").value;
         await send({{ type: "text_prompt", payload: {{ text }} }});
+      }}
+    }});
+
+    let pttActive = false;
+    window.addEventListener("keydown", async (event) => {{
+      if (event.code === "Space" && !pttActive && document.activeElement !== byId("composer-input")) {{
+        pttActive = true;
+        console.log("PTT Start");
+      }}
+    }});
+
+    window.addEventListener("keyup", async (event) => {{
+      if (event.code === "Space" && pttActive) {{
+        pttActive = false;
+        console.log("PTT End");
+        await send({{ type: "voice_prompt_ready", payload: {{ sample_rate_hz: 16000 }} }});
       }}
     }});
 
