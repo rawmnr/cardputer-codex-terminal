@@ -80,3 +80,15 @@ Codex MCP tool call -> Windows middleware -> Cardputer prompt or notification ->
 - Treat the firmware as a binary deliverable first; source layout should always compile to a M5 Launcher-compatible `.bin`.
 - For development, prefer the browser preview and mirrored files under `.cardputer-dev/` before flashing the firmware.
 - The firmware should publish `display_snapshot` events so the preview can track the real on-device screen text when hardware is connected.
+
+## Glossary
+
+| Term | Definition |
+| :--- | :--- |
+| **Codex** | The AI agent (usually `codex-app-server`) running on your host. |
+| **Middleware** | The Python supervisor (`cardputer-codex-middleware`) that routes device traffic. |
+| **Firmware** | The C++ code running on the Cardputer. |
+| **App-Server** | The agentic process managing thread state and tool execution. |
+| **MCP** | Model Context Protocol — the standard for AI agents to use local tools. |
+| **Pager** | A UI mode for browsing long-running task results and history. |
+| **Epoch Sync** | The state-synchronization model used to update the device UI. |

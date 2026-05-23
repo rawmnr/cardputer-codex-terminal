@@ -1,8 +1,6 @@
-# Windows Middleware
+# Middleware CLI Reference
 
-## Role
-
-The middleware acts as the bridge between the Cardputer and Codex. It compensates for the microcontroller's limits and isolates the Codex protocol from the firmware.
+The `cardputer-codex-middleware` is the heart of the system. It bridges your physical Cardputer to your agentic supervisor.
 
 The Python package in `middleware/` is managed with `uv`:
 
@@ -41,16 +39,48 @@ The middleware also owns a small orchestration router and a Codex process superv
 - Expose MCP tools for notifications, questions, confirmations, and display-only text.
 
 
-The middleware CLI supports a `--serve` mode that listens for versioned Cardputer messages over WebSocket and turns them into middleware events.
-It refuses non-loopback `--serve` listeners unless `--bridge-token` is provided.
+## CLI Usage
 
-The MCP mode is separate:
+### Core Options
 
-```bash
-uv run cardputer-codex-middleware --mcp
-```
+| Flag | Description |
+| :--- | :--- |
+| `--serve` | Start the WebSocket/BLE bridge listener. |
+| `--real-codex` | Connect to your actual `codex app-server` via `stdio`. |
+| `--mcp` | Run as an MCP server for human-in-the-loop desktop tools. |
+| `--preview` | Start the local browser Central Console at `127.0.0.1:8787`. |
+| `--bridge-transport` | Select `wifi`, `ble`, or `hybrid` (default `wifi`). |
 
-That mode serves the MCP tools over stdio and keeps the Cardputer bridge listener available on the normal host/port.
+---
+
+## Connectivity & Transports
+
+### Wi-Fi (WebSocket)
+Default transport. Low latency, high bandwidth for voice and snapshots.
+
+### Bluetooth Low Energy (BLE)
+For local, low-power connectivity.
+1. Run: `uv run cardputer-codex-middleware --serve --bridge-transport ble`
+2. The middleware scans for `CardputerCodex_` devices.
+3. **Note:** Requires `bleak` installed (`uv sync`).
+
+### Hybrid Mode
+Simultaneous Wi-Fi and BLE listeners:
+`uv run cardputer-codex-middleware --serve --bridge-transport hybrid`
+
+---
+
+## Codex Integration
+
+### Supervisor Mode
+When running with `--real-codex`, the middleware manages the `codex` process lifecycle. It routes prompts to the agent and relays streaming deltas back to the hardware.
+
+### MCP Mode
+Exposes the Cardputer as a set of physical tools for your desktop agent:
+- `cardputer.notify(title, body)`
+- `cardputer.ask(question, options)`
+- `cardputer.confirm(title)`
+
 
 Codex can point its MCP config at that command:
 

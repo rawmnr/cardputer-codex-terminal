@@ -8,7 +8,7 @@ The Cardputer must reach a remote Windows machine running Codex, even behind NAT
 
 | Option | Advantage | Limitation |
 | --- | --- | --- |
-| Port forwarding | Simple in theory | Exposes the host, fragile with CGNAT |
+| Port forwarding | Direct | Exposes the host, fragile with CGNAT |
 | Reverse tunnel | Fast for prototyping | Depends on a third party, adds latency, free tier limits |
 | Overlay VPN | Stable and secure | More complex embedded integration |
 

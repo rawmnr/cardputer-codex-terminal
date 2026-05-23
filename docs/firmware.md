@@ -109,9 +109,30 @@ reply selection stays on the Cardputer, but the session history and event stream
 - `Space` hold: push-to-talk recording in Push to Codex.
 - `/`: open the command palette / debug shell.
 
+## Connectivity & Transports (Devs)
+
+### Wi-Fi Configuration
+Edit `/cardputer-codex/config.ini` on the SD card:
+```ini
+wifi_ssid=YourSSID
+wifi_password=YourPassword
+bridge_transport=wifi
+```
+
+### BLE Configuration
+To use Bluetooth instead of Wi-Fi:
+1. Set `bridge_transport=ble` in `config.ini`.
+2. Set `ble_enabled=true`.
+3. The device will advertise as `CardputerCodex` (configurable via `ble_name`).
+
+### Hybrid Mode
+To listen for both Wi-Fi and BLE connections:
+`bridge_transport=hybrid`
+
+---
+
 ## Constraints
 
-- The 240 x 135 display requires strict wrapping.
 - Scrolling must avoid flicker.
 - The firmware should not carry complex Codex logic.
 - Secrets must be stored and displayed carefully.
