@@ -138,11 +138,35 @@ class CardputerBridgeServer:
                 )
             ]
 
+        # Device security check
+        # For now, we assume all devices with correct bridge_token are allowed
+        # Future: implement device-id pairing and DB of trusted_devices
+
         expected_token = self.app.config.bridge_token
         if expected_token is not None and message.auth_token != expected_token:
             return [
                 self._ack(message.id, False),
             ]
+
+        # Temporary device policy (simulated pairing)
+        simulated_device_policy = {
+            "allowed_actions": ["status", "approve", "reject", "interrupt", "voice_prompt", "ping", "hello"],
+            "denied_actions": ["change_policy", "enable_yolo_global"]
+        }
+
+        # Device RBAC check
+        # Device RBAC check
+        request_info = {"action": message.type.value, "title": message.payload.get("title", "")}
+
+        # Handle cases where app doesn't have policy_manager (e.g. some tests)
+        policy_manager = getattr(self.app, "policy_manager", None)
+        if policy_manager is not None:
+            denied, reason = policy_manager.evaluate_request_for_device(simulated_device_policy, request_info)
+            if denied is False:
+                 return [
+                    self._ack(message.id, False),
+                    json.dumps({"type": "error", "payload": {"message": reason}}, ensure_ascii=False)
+                ]
         try:
             events = await self.app.handle_cardputer_message(message)
         except Exception:
