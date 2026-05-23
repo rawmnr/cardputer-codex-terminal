@@ -264,7 +264,50 @@ void PushToCodexApp::onSubmit(const String& command, DeviceState& state) {
 void PushToCodexApp::onAction(UiAction action, DeviceState& state) {
   if (action == UiAction::Select && draft_.length() > 0) {
     onSubmit(draft_, state);
-  } else if (action == UiAction::Back && draft_.length() == 0) {
+    return;
+  }
+
+  if (action == UiAction::Up) {
+    if (state.voice_intent == "ask") state.voice_intent = "continue";
+    else if (state.voice_intent == "implement") state.voice_intent = "ask";
+    else if (state.voice_intent == "review") state.voice_intent = "implement";
+    else if (state.voice_intent == "fix_tests") state.voice_intent = "review";
+    else if (state.voice_intent == "explain_diff") state.voice_intent = "fix_tests";
+    else if (state.voice_intent == "continue") state.voice_intent = "explain_diff";
+
+    if (bridge_ != nullptr) {
+       bridge_->sendVoicePromptIntent(state.voice_intent, state.voice_target);
+    }
+    return;
+  }
+
+  if (action == UiAction::Down) {
+    if (state.voice_intent == "ask") state.voice_intent = "implement";
+    else if (state.voice_intent == "implement") state.voice_intent = "review";
+    else if (state.voice_intent == "review") state.voice_intent = "fix_tests";
+    else if (state.voice_intent == "fix_tests") state.voice_intent = "explain_diff";
+    else if (state.voice_intent == "explain_diff") state.voice_intent = "continue";
+    else if (state.voice_intent == "continue") state.voice_intent = "ask";
+
+    if (bridge_ != nullptr) {
+       bridge_->sendVoicePromptIntent(state.voice_intent, state.voice_target);
+    }
+    return;
+  }
+
+  if (action == UiAction::None) {
+    if (state.voice_target == "active_run") state.voice_target = "new_safe_run";
+    else if (state.voice_target == "new_safe_run") state.voice_target = "new_yolo_worktree";
+    else if (state.voice_target == "new_yolo_worktree") state.voice_target = "main_orchestrator";
+    else if (state.voice_target == "main_orchestrator") state.voice_target = "active_run";
+
+    if (bridge_ != nullptr) {
+       bridge_->sendVoicePromptIntent(state.voice_intent, state.voice_target);
+    }
+    return;
+  }
+
+  if (action == UiAction::Back && draft_.length() == 0) {
     state.status_line = "Push prompt cleared";
   }
 }

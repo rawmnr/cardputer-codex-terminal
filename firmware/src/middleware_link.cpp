@@ -127,6 +127,13 @@ bool MiddlewareLink::sendTextPrompt(const String& text) {
   return sendCardputerMessage(buildEnvelope(nextMessageId(), "text_prompt", payload.as<JsonVariantConst>()));
 }
 
+bool MiddlewareLink::sendVoicePromptIntent(const String& intent, const String& target) {
+  DynamicJsonDocument payload(kJsonCapacity);
+  payload["intent"] = intent;
+  payload["target"] = target;
+  return sendCardputerMessage(buildEnvelope(nextMessageId(), "voice_prompt_intent", payload.as<JsonVariantConst>()));
+}
+
 bool MiddlewareLink::sendProjectSelect(const String& workspace_path) {
   DynamicJsonDocument payload(kJsonCapacity);
   payload["workspace_path"] = workspace_path;
@@ -304,7 +311,7 @@ void MiddlewareLink::onWebSocketEvent(WStype_t type, uint8_t* payload, size_t le
         caps.add("bridge_response");
         caps.add("ble_control");
 
-        String msg = buildEnvelope(nextMessageId(), "hello", hello_hello_payload.as<JsonVariant>());
+        String msg = buildEnvelope(nextMessageId(), "hello", hello_payload.as<JsonVariant>());
         client_.sendTXT(msg);
       }
       break;

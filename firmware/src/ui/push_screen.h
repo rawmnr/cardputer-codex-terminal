@@ -23,8 +23,12 @@ class PushScreen final : public LvglAppScreen {
 
   lv_obj_t* root_ = nullptr;
   PttWidget ptt_;
+  lv_obj_t* intent_label_ = nullptr;
+  lv_obj_t* target_label_ = nullptr;
   lv_obj_t* status_ = nullptr;
   lv_obj_t* detail_ = nullptr;
+  String last_intent_;
+  String last_target_;
   String last_status_;
   String last_detail_;
 };

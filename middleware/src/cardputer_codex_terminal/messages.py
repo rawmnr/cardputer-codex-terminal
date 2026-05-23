@@ -9,10 +9,27 @@ from typing import Any
 PROTOCOL_VERSION = 2
 
 
+class VoiceIntent(StrEnum):
+    ASK = "ask"
+    IMPLEMENT = "implement"
+    REVIEW = "review"
+    FIX_TESTS = "fix_tests"
+    EXPLAIN_DIFF = "explain_diff"
+    CONTINUE = "continue"
+
+
+class VoiceTarget(StrEnum):
+    ACTIVE_RUN = "active_run"
+    NEW_SAFE_RUN = "new_safe_run"
+    NEW_YOLO_WORKTREE = "new_yolo_worktree"
+    MAIN_ORCHESTRATOR = "main_orchestrator"
+
+
 class CardputerMessageType(StrEnum):
     HELLO = "hello"
     HELLO_ACK = "hello_ack"
     TEXT_PROMPT = "text_prompt"
+    VOICE_PROMPT_INTENT = "voice_prompt_intent"
     AUDIO_CHUNK = "audio_chunk"
     VOICE_PROMPT_READY = "voice_prompt_ready"
     APPROVAL_RESPONSE = "approval_response"

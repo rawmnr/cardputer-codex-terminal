@@ -26,6 +26,18 @@ void PushScreen::attach(lv_obj_t* parent, lv_group_t* group) {
   lv_obj_align(status_, LV_ALIGN_TOP_LEFT, 0, 0);
   lv_label_set_long_mode(status_, LV_LABEL_LONG_CLIP);
 
+  intent_label_ = lv_label_create(root_);
+  lv_obj_set_width(intent_label_, 224);
+  lv_obj_set_style_text_color(intent_label_, lv_color_hex(0xFFCC00), 0);
+  lv_obj_align(intent_label_, LV_ALIGN_TOP_LEFT, 0, 16);
+  lv_label_set_long_mode(intent_label_, LV_LABEL_LONG_CLIP);
+
+  target_label_ = lv_label_create(root_);
+  lv_obj_set_width(target_label_, 224);
+  lv_obj_set_style_text_color(target_label_, lv_color_hex(0x00FFCC), 0);
+  lv_obj_align(target_label_, LV_ALIGN_TOP_LEFT, 0, 32);
+  lv_label_set_long_mode(target_label_, LV_LABEL_LONG_CLIP);
+
   detail_ = lv_label_create(root_);
   lv_obj_set_width(detail_, 224);
   lv_obj_set_style_text_color(detail_, lv_color_hex(0x9FB0BF), 0);
@@ -39,8 +51,12 @@ void PushScreen::detach() {
     root_ = nullptr;
   }
   status_ = nullptr;
+  intent_label_ = nullptr;
+  target_label_ = nullptr;
   detail_ = nullptr;
   last_status_ = "";
+  last_intent_ = "";
+  last_target_ = "";
   last_detail_ = "";
 }
 
@@ -52,6 +68,9 @@ void PushScreen::sync(const DeviceState& state) {
   ptt_.sync(state, true, false);
   const String status = state.ptt_detail_line.length() > 0 ? state.ptt_detail_line : String("Hold SPACE to record");
   setLabelText(status_, last_status_, status);
+
+  setLabelText(intent_label_, last_intent_, String("Intent: ") + state.voice_intent);
+  setLabelText(target_label_, last_target_, String("Target: ") + state.voice_target);
 
   String detail = String("Samples ");
   detail += state.ptt_samples_captured;

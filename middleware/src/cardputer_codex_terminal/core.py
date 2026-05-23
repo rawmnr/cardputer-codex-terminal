@@ -374,8 +374,17 @@ class MiddlewareApp:
             return [event]
 
         transcript = await self.voice_buffer.transcribe(self.transcriber)
+
+        # Wrap transcript in a structured prompt based on intent
+        structured_prompt = f"Intent: {self.session.voice_intent}\nTarget: {self.session.voice_target}\nPrompt: {transcript}"
+
         events = [Event(EventType.CODEX_STATUS, {"kind": "voice_prompt_transcribed", "content": transcript})]
-        events.extend(await self._collect_text_prompt_events(transcript))
+        events.extend(await self._collect_text_prompt_events(structured_prompt))
+
+        # Reset intent/target for next prompt
+        self.session.voice_intent = "ask"
+        self.session.voice_target = "active_run"
+
         self._notify(events)
         return events
 
@@ -526,9 +535,13 @@ class MiddlewareApp:
                 )
             ]
 
+        if message.type == CardputerMessageType.VOICE_PROMPT_INTENT:
+            self.session.voice_intent = message.payload.get("intent", "ask")
+            self.session.voice_target = message.payload.get("target", "active_run")
+            return [Event(EventType.CODEX_STATUS, {"kind": "voice_intent_updated", "intent": self.session.voice_intent, "target": self.session.voice_target})]
+
         if message.type == CardputerMessageType.VOICE_PROMPT_READY:
             return await self.finalize_voice_prompt(int(message.payload.get("sample_rate_hz", 16000)))
-
         if message.type == CardputerMessageType.BRANCH_SELECT:
             return [await self.select_branch(str(message.payload.get("branch", "")))]
 

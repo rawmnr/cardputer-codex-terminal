@@ -249,6 +249,8 @@ struct DeviceState {
   size_t ptt_samples_captured = 0;
   size_t ptt_sample_limit = 0;
   uint32_t ptt_sample_rate_hz = 16000;
+  String voice_intent = "ask";
+  String voice_target = "active_run";
   String ptt_detail_line;
   unsigned long last_interaction_ms = 0;
   std::array<String, kActivityLogSize> activity_log{};

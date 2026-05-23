@@ -21,6 +21,7 @@ class MiddlewareLink {
   bool sendBranchSelect(const String& branch);
   bool sendThreadSelect(const String& thread_id);
   bool sendAudioChunk(size_t chunk_id, const int16_t* samples, size_t sample_count, uint32_t sample_rate_hz);
+  bool sendVoicePromptIntent(const String& intent, const String& target);
   bool sendVoicePromptReady(uint32_t sample_rate_hz, size_t sample_count, int peak_amplitude);
   bool sendApprovalResponse(bool approved, const String& approval_id = "");
   bool sendRunAction(const String& action, const String& run_id, const String& approval_id = "");
