@@ -32,6 +32,7 @@ BLE_FORWARD_KINDS = {
     "bridge_question",
     "bridge_confirmation",
     "bridge_response",
+    "voice_intent_updated",
     "status",
     "status_snapshot",
     "router",

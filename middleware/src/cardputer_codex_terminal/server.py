@@ -130,7 +130,7 @@ class CardputerBridgeServer:
                         "payload": {
                             "server": "cardputer-codex-middleware",
                             "version": "0.2.0",
-                            "features": ["multi_run", "worktree_manager", "safe_mode", "yolo_worktree", "mcp", "websocket_audio"],
+                            "features": ["multi_run", "worktree_manager", "safe_mode", "yolo_worktree", "mcp", "websocket_audio", "ble_control"],
                         },
                         "id": f"ack-{message.id}",
                     },
