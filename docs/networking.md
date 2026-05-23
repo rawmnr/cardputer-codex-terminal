@@ -1,39 +1,35 @@
-# Remote Networking
+# Networking & Security
 
-## Need
+The Cardputer connects to the Supervisor (Middleware) via Wi-Fi or BLE. For remote access, an overlay VPN is recommended.
 
-The Cardputer must reach a remote Windows machine running Codex, even behind NAT or a home firewall.
 
 ## Options
 
-| Option | Advantage | Limitation |
-| --- | --- | --- |
-| Port forwarding | Direct | Exposes the host, fragile with CGNAT |
-| Reverse tunnel | Fast for prototyping | Depends on a third party, adds latency, free tier limits |
-| Overlay VPN | Stable and secure | More complex embedded integration |
+| Option | Advantage | Complexity |
+| :--- | :--- | :--- |
+| **Port Forwarding** | Direct, low latency | High (security risk, NAT issues) |
+| **Reverse Tunnel** | Easy setup | Medium (latency, 3rd party dependency) |
+| **Overlay VPN** | Secure, stable | High (requires ESP32 client support) |
+
 
 ## Target Direction
 
-Use a Tailscale-style overlay VPN with ESP32-compatible embedded integration, for example MicroLink.
+Use a Tailscale-style overlay VPN with ESP32-compatible embedded integration (e.g., MicroLink).
 
-Until overlay VPN provisioning is complete, the bridge should still be protected with a shared `bridge_token` so the Windows middleware is not left open on the network.
+Until automated, protect the Supervisor bridge with a shared secret:
+1. Set `bridge_token` in `/cardputer-codex/config.ini` on the SD card.
+2. Match the token in the Middleware CLI: `--bridge-token <secret>`.
+
 
 ## Topology
 
 ```text
-Cardputer -> Wi-Fi -> overlay VPN -> Windows tailnet private IP -> Python middleware
+Cardputer --(Encrypted)--> Wi-Fi/VPN --(bridge_token)--> Supervisor (Middleware)
 ```
 
-## Decisions To Validate
 
-- Selected embedded VPN library.
-- Authentication key provisioning strategy.
-- Secret rotation and revocation.
-- Degraded mode without VPN for local development.
 
-## Current Bridge Provisioning
+- **Provisioning**: Middleware bridge requires a shared `bridge_token` when exposed beyond loopback.
+- **Rotation**: Update `config.ini` and restart the Supervisor process.
+- **Revocation**: Clear the token from the Supervisor and update device config.
 
-- Configure the middleware with a shared `bridge_token`.
-- Embed the same token in the Cardputer firmware build.
-- Rotate by changing both sides together.
-- Revoke by clearing the token on the middleware and reflashing the firmware without it or with a new secret.
