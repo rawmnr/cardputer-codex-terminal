@@ -29,15 +29,15 @@ def _collect_frame_paths(output_prefix: Path) -> list[Path]:
     if not frame_paths and output_prefix.exists():
         frame_paths = [output_prefix]
 
-    def sort_key(path: Path) -> tuple[int, str, str]:
+    def sort_key(path: Path) -> tuple[int, str]:
         stem = path.stem
         prefix = f"{output_prefix.name}_"
         if stem.startswith(prefix):
             remainder = stem[len(prefix) :]
-            step_text, _, label = remainder.partition("_")
+            step_text, _, _ = remainder.partition("_")
             if step_text.isdigit():
-                return (int(step_text), label, path.name)
-        return (0, path.name, path.name)
+                return (int(step_text), path.name)
+        return (-1, path.name)
 
     frame_paths.sort(key=sort_key)
     return frame_paths

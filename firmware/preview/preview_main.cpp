@@ -28,6 +28,8 @@ uint32_t keyFromName(const std::string& name) {
   if (name == "tab") return LV_KEY_NEXT;
   if (name == "prev") return LV_KEY_PREV;
   if (name == "del") return LV_KEY_DEL;
+  if (name == "space") return ' ';
+  if (name == "ctrl+m") return LV_KEY_ENTER;
   if (name.length() == 1) return name[0];
   return 0;
 }

@@ -38,6 +38,37 @@ class CardputerMcpServer:
     def tool_definitions(self) -> list[dict[str, Any]]:
         return [
             {
+                "name": "cardputer.preview_lvgl_ui",
+                "title": "Preview Cardputer UI",
+                "description": "Run the native LVGL preview loop to iterate on UI changes visually without hardware.",
+                "inputSchema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "screen": {
+                            "type": "string",
+                            "enum": ["buddy", "push", "pager", "usage", "bridge", "settings"],
+                        },
+                        "fixture": {"type": "string", "description": "State fixture name (e.g. 'buddy_online_busy')"},
+                        "actions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Key actions to replay (e.g. ['down', 'enter', 'tab'])"
+                        }
+                    },
+                    "required": ["screen"]
+                },
+                "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {"type": "string"},
+                        "image_b64": {"type": "string"},
+                        "width": {"type": "integer"},
+                        "height": {"type": "integer"}
+                    }
+                }
+            },
+            {
                 "name": "cardputer.notify",
                 "title": "Notify Cardputer",
                 "description": "Show a notification on the physical Cardputer without waiting for a response.",
@@ -457,14 +488,14 @@ class CardputerMcpServer:
                 }
 
                 mcp_result = _tool_result(structured)
-                for frame in result["frames"]:
-                    mcp_result["content"].append(
-                        {
-                            "type": "image",
-                            "data": frame["image_b64"],
-                            "mimeType": "image/png",
-                        }
-                    )
+                # Also include the final frame as an explicit image content for vision clients
+                mcp_result["content"].append(
+                    {
+                        "type": "image",
+                        "data": result["image_b64"],
+                        "mimeType": "image/png",
+                    }
+                )
                 return mcp_result
             except Exception as exc:
                 raise RuntimeError(f"LVGL preview failed: {exc}")
