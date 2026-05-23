@@ -65,6 +65,8 @@ class SessionState:
     pending_approval_title: str | None = None
     pending_approval_detail: str | None = None
     pending_approval_timeout_seconds: int | None = None
+    voice_intent: str = "ask"
+    voice_target: str = "active_run"
     bridge_prompt_kind: str | None = None
     bridge_prompt_title: str | None = None
     bridge_prompt_detail: str | None = None
@@ -230,6 +232,8 @@ class SessionState:
             "pending_approval_title": self.pending_approval_title,
             "pending_approval_detail": self.pending_approval_detail,
             "pending_approval_timeout_seconds": self.pending_approval_timeout_seconds,
+            "voice_intent": self.voice_intent,
+            "voice_target": self.voice_target,
             "bridge_prompt_kind": self.bridge_prompt_kind,
             "bridge_prompt_title": self.bridge_prompt_title,
             "bridge_prompt_detail": self.bridge_prompt_detail,
