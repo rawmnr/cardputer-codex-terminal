@@ -20,6 +20,7 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(args.thread_id)
         self.assertFalse(args.real_codex)
         self.assertFalse(args.serve)
+        self.assertEqual(args.bridge_transport, "wifi")
         self.assertFalse(args.preview)
         self.assertEqual(args.preview_host, "127.0.0.1")
         self.assertEqual(args.preview_port, 8787)
@@ -36,6 +37,7 @@ class CliTests(unittest.TestCase):
 
     def test_parser_accepts_mcp_mode(self) -> None:
         parser = build_parser()
-        args = parser.parse_args(["--mcp"])
+        args = parser.parse_args(["--mcp", "--bridge-transport", "hybrid"])
 
         self.assertTrue(args.mcp)
+        self.assertEqual(args.bridge_transport, "hybrid")

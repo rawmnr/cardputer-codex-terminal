@@ -202,6 +202,12 @@ struct DeviceState {
   CodexState codex_state = CodexState::Offline;
   PushToTalkState ptt_state = PushToTalkState::Idle;
   bool wifi_connected = false;
+  bool ble_enabled = false;
+  bool ble_advertising = false;
+  bool ble_connected = false;
+  String ble_name = "CardputerCodex";
+  String ble_status_line = "BLE disabled";
+  String active_transport = "wifi";
   int battery_percent = 0;
   int battery_voltage_mv = 0;
   int ptt_peak_amplitude = 0;

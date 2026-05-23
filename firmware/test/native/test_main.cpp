@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 
 #include "apps.h"
+#include "network_manager.h"
 #include "fakes/fake_clock.h"
 #include "fakes/fake_display.h"
 #include "fakes/fake_keyboard.h"
@@ -192,6 +193,12 @@ DeviceState buildState(JsonObjectConst state_json) {
   state.bridge_prompt_pending = state_json["bridge_prompt_pending"] | false;
   state.ui_mode = parseUiMode(state_json["ui_mode"] | "Home");
   state.menu.app_menu_open = state_json["menu_app_menu_open"] | false;
+  state.ble_enabled = state_json["ble_enabled"] | false;
+  state.ble_advertising = state_json["ble_advertising"] | false;
+  state.ble_connected = state_json["ble_connected"] | false;
+  state.ble_name = state_json["ble_name"] | "";
+  state.ble_status_line = state_json["ble_status_line"] | "";
+  state.active_transport = state_json["active_transport"] | "";
   return state;
 }
 
@@ -321,6 +328,7 @@ bool test_protocol_edge_cases() {
   payload["text"] = String("héllo 🌍");
   payload["note"] = long_text;
   const String envelope = buildCardputerEnvelope("edge-1", "text_prompt", payload.as<JsonVariantConst>());
+  EXPECT_TRUE(!contains(envelope, "\n"));
 
   DynamicJsonDocument parsed = parseJson(envelope.c_str());
   if (g_failures > 0) {
@@ -334,11 +342,44 @@ bool test_protocol_edge_cases() {
   EXPECT_TRUE(!parsed.containsKey("auth_token"));
 
   const String with_auth = buildCardputerEnvelope("edge-2", "text_prompt", payload.as<JsonVariantConst>(), "token");
+  EXPECT_TRUE(!contains(with_auth, "\n"));
   DynamicJsonDocument parsed_auth = parseJson(with_auth.c_str());
   if (g_failures > 0) {
     return false;
   }
   EXPECT_EQ(parsed_auth["auth_token"].as<String>(), String("token"));
+  return g_failures == 0;
+}
+
+bool test_ble_state_surface() {
+  DynamicJsonDocument doc(256);
+  doc["ble_enabled"] = true;
+  doc["ble_advertising"] = true;
+  doc["ble_connected"] = true;
+  doc["ble_name"] = "CardputerCodex_123ABC";
+  doc["ble_status_line"] = "BLE bridge connected";
+  doc["active_transport"] = "hybrid";
+
+  DeviceState state = buildState(doc.as<JsonObjectConst>());
+
+  EXPECT_TRUE(state.ble_enabled);
+  EXPECT_TRUE(state.ble_advertising);
+  EXPECT_TRUE(state.ble_connected);
+  EXPECT_EQ(state.ble_name, String("CardputerCodex_123ABC"));
+  EXPECT_EQ(state.ble_status_line, String("BLE bridge connected"));
+  EXPECT_EQ(state.active_transport, String("hybrid"));
+
+  return g_failures == 0;
+}
+
+bool test_runtime_network_config_surface() {
+  RuntimeNetworkConfig config;
+
+  EXPECT_EQ(config.bridge_transport, String("hybrid"));
+  EXPECT_TRUE(config.ble_enabled);
+  EXPECT_EQ(config.ble_name, String("CardputerCodex"));
+  EXPECT_TRUE(config.ble_control_only);
+
   return g_failures == 0;
 }
 
@@ -540,6 +581,10 @@ int main() {
     test_protocol_contracts();
     std::cout << "running protocol edge cases\n";
     test_protocol_edge_cases();
+    std::cout << "running BLE state surface\n";
+    test_ble_state_surface();
+    std::cout << "running runtime network config surface\n";
+    test_runtime_network_config_surface();
     std::cout << "running keyboard contracts\n";
     test_keyboard_contracts();
     std::cout << "running buddy app flows\n";

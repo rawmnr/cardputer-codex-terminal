@@ -5,12 +5,57 @@
 #include <mbedtls/base64.h>
 #include <ESPmDNS.h>
 
+#if !defined(NATIVE_BUILD)
+#include <NimBLEDevice.h>
+#endif
 #include "device_config.h"
 #include <string>
 namespace {
 constexpr size_t kJsonCapacity = 2048;
 constexpr size_t kInboundJsonSlack = 512;
+constexpr size_t kBleChunkSize = 20;
+constexpr size_t kBleMaxLineLength = 1024;
+constexpr char kBleServiceUuid[] = "a5cd0001-c0de-4abe-9c1a-4d5e6f7a8b90";
+constexpr char kBleRxUuid[] = "a5cd0002-c0de-4abe-9c1a-4d5e6f7a8b90";
+constexpr char kBleTxUuid[] = "a5cd0003-c0de-4abe-9c1a-4d5e6f7a8b90";
 }  // namespace
+#if !defined(NATIVE_BUILD)
+class MiddlewareBleServerCallbacks final : public NimBLEServerCallbacks {
+ public:
+  void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
+    (void)server;
+    (void)connInfo;
+    if (MiddlewareLink::instance_ != nullptr) {
+      MiddlewareLink::instance_->onBleConnected();
+    }
+  }
+
+  void onDisconnect(NimBLEServer* server, NimBLEConnInfo& connInfo, int reason) override {
+    (void)server;
+    (void)connInfo;
+    (void)reason;
+    if (MiddlewareLink::instance_ != nullptr) {
+      MiddlewareLink::instance_->onBleDisconnected();
+    }
+    NimBLEDevice::getAdvertising()->start();
+  }
+};
+
+class MiddlewareBleRxCallbacks final : public NimBLECharacteristicCallbacks {
+ public:
+  void onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& connInfo) override {
+    (void)connInfo;
+    if (MiddlewareLink::instance_ == nullptr) {
+      return;
+    }
+    const std::string value = characteristic->getValue();
+    MiddlewareLink::instance_->onBleIncomingChunk(
+      reinterpret_cast<const uint8_t*>(value.data()),
+      value.length()
+    );
+  }
+};
+#endif
 
 MiddlewareLink* MiddlewareLink::instance_ = nullptr;
 
@@ -47,17 +92,33 @@ bool MiddlewareLink::isConnected() {
 
 void MiddlewareLink::tick(DeviceState& state) {
   state_ = &state;
+  ensureBleTransport(state);
+
   if (!configured_) {
-    state.bridge_status_line = "Middleware bridge disabled";
+    if (!ble_started_) {
+      state.bridge_status_line = "Middleware bridge disabled";
+    }
+    drainBleInbound(state);
+    if (ble_status_request_pending_ && ble_connected_) {
+      if (sendStatusRequest()) {
+        ble_status_request_pending_ = false;
+      }
+    }
     return;
   }
 
   if (!ensureConnection(state)) {
     client_.loop();
-    return;
+  } else {
+    client_.loop();
   }
 
-  client_.loop();
+  drainBleInbound(state);
+  if (ble_status_request_pending_ && ble_connected_) {
+    if (sendStatusRequest()) {
+      ble_status_request_pending_ = false;
+    }
+  }
 }
 
 bool MiddlewareLink::sendTextPrompt(const String& text) {
@@ -242,49 +303,84 @@ void MiddlewareLink::onWebSocketEvent(WStype_t type, uint8_t* payload, size_t le
       state_->bridge_status_line = "Middleware disconnected";
       append_activity_event(*state_, "Middleware bridge disconnected");
       break;
-    case WStype_TEXT: {
-      size_t capacity = length + kInboundJsonSlack;
-      if (capacity < kJsonCapacity) {
-        capacity = kJsonCapacity;
-      }
-      DynamicJsonDocument doc(capacity);
-      const DeserializationError error = deserializeJson(doc, payload, length);
-      if (error) {
-        state_->bridge_status_line = String("Bridge JSON error: ") + error.c_str();
-        append_activity_event(*state_, state_->bridge_status_line);
-        return;
-      }
-
-      const String event_type = doc["type"] | "";
-      const String message_id = doc["id"] | "";
-      JsonObjectConst payload_variant = doc["payload"];
-      if (payload_variant.isNull()) {
-        state_->bridge_status_line = "Bridge payload malformed";
-        append_activity_event(*state_, state_->bridge_status_line);
-        return;
-      }
-
-      if (event_type == "ack") {
-        const bool ok = payload_variant["ok"] | false;
-        state_->bridge_status_line = String("Ack ") + message_id + (ok ? " ok" : " failed");
-        append_activity_event(*state_, state_->bridge_status_line);
-        return;
-      }
-
-      applyIncomingEvent(*state_, event_type, payload_variant);
+    case WStype_TEXT:
+      handleIncomingJson(*state_, payload, length);
       break;
-    }
     default:
       break;
   }
 }
+void MiddlewareLink::handleIncomingJson(DeviceState& state, const uint8_t* payload, size_t length) {
+  size_t capacity = length + kInboundJsonSlack;
+  if (capacity < kJsonCapacity) {
+    capacity = kJsonCapacity;
+  }
+
+  DynamicJsonDocument doc(capacity);
+  const DeserializationError error = deserializeJson(doc, payload, length);
+  if (error) {
+    state.bridge_status_line = String("Bridge JSON error: ") + error.c_str();
+    append_activity_event(state, state.bridge_status_line);
+    return;
+  }
+
+  const String event_type = doc["type"] | "";
+  const String message_id = doc["id"] | "";
+  JsonObjectConst payload_variant = doc["payload"];
+  if (payload_variant.isNull()) {
+    state.bridge_status_line = "Bridge payload malformed";
+    append_activity_event(state, state.bridge_status_line);
+    return;
+  }
+
+  if (event_type == "ack") {
+    const bool ok = payload_variant["ok"] | false;
+    state.bridge_status_line = String("Ack ") + message_id + (ok ? " ok" : " failed");
+    append_activity_event(state, state.bridge_status_line);
+    return;
+  }
+
+  applyIncomingEvent(state, event_type, payload_variant);
+}
 
 bool MiddlewareLink::sendCardputerMessage(const String& message) {
-  if (!client_.isConnected()) {
+  const String transport = state_ != nullptr && state_->active_transport.length() > 0 ? state_->active_transport : String("wifi");
+  const bool ble_allowed = state_ != nullptr &&
+                           state_->ble_enabled &&
+                           (transport == "ble" || transport == "hybrid") &&
+                           isBleControlMessage(message);
+  bool sent = false;
+
+  if (transport == "ble") {
+    if (ble_allowed && ble_connected_) {
+      sent = sendBleCardputerMessage(message);
+      if (sent) {
+        return true;
+      }
+    }
+
+    if (client_.isConnected()) {
+      String mutable_message = message;
+      return client_.sendTXT(mutable_message);
+    }
+
     return false;
   }
-  String mutable_message = message;
-  return client_.sendTXT(mutable_message);
+
+  if (transport == "hybrid" && ble_allowed && ble_connected_) {
+    sent = sendBleCardputerMessage(message) || sent;
+  }
+
+  if (client_.isConnected()) {
+    String mutable_message = message;
+    sent = client_.sendTXT(mutable_message) || sent;
+  }
+
+  if (!sent && ble_allowed && ble_connected_) {
+    sent = sendBleCardputerMessage(message);
+  }
+
+  return sent;
 }
 
 bool MiddlewareLink::ensureConnection(DeviceState& state) {
@@ -300,6 +396,221 @@ bool MiddlewareLink::ensureConnection(DeviceState& state) {
   started_ = true;
   return client_.isConnected();
 }
+#if !defined(NATIVE_BUILD)
+String MiddlewareLink::buildBleAdvertisedName(const DeviceState& state) const {
+  const String base_name = state.ble_name.length() > 0 ? state.ble_name : String("CardputerCodex");
+  char suffix[7];
+  snprintf(suffix, sizeof(suffix), "%06llX", static_cast<unsigned long long>(ESP.getEfuseMac() & 0xFFFFFFULL));
+  return base_name + "_" + suffix;
+}
+
+bool MiddlewareLink::isBleControlMessage(const String& message) const {
+  if (message.length() == 0 || message.length() > kBleMaxLineLength) {
+    return false;
+  }
+
+  DynamicJsonDocument doc(512);
+  if (deserializeJson(doc, message) != DeserializationError::Ok) {
+    return false;
+  }
+
+  const String type = doc["type"] | "";
+  return type == "status_request" ||
+         type == "interrupt" ||
+         type == "bridge_notification" ||
+         type == "bridge_question" ||
+         type == "bridge_confirmation" ||
+         type == "bridge_response" ||
+         type == "approval_response" ||
+         type == "ping";
+}
+
+void MiddlewareLink::ensureBleTransport(DeviceState& state) {
+  const bool transport_uses_ble = state.active_transport == "ble" || state.active_transport == "hybrid";
+  if (!state.ble_enabled || !transport_uses_ble || ble_started_) {
+    return;
+  }
+
+  NimBLEUUID service_uuid(kBleServiceUuid);
+  NimBLEUUID rx_uuid(kBleRxUuid);
+  NimBLEUUID tx_uuid(kBleTxUuid);
+  ble_device_name_ = buildBleAdvertisedName(state);
+  NimBLEDevice::init(ble_device_name_.c_str());
+  ble_server_ = NimBLEDevice::createServer();
+  ble_server_->setCallbacks(new MiddlewareBleServerCallbacks());
+  NimBLEService* service = ble_server_->createService(service_uuid);
+  ble_rx_characteristic_ = service->createCharacteristic(
+    rx_uuid,
+    NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
+  );
+  ble_rx_characteristic_->setCallbacks(new MiddlewareBleRxCallbacks());
+  ble_tx_characteristic_ = service->createCharacteristic(tx_uuid, NIMBLE_PROPERTY::NOTIFY);
+  service->start();
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  advertising->addServiceUUID(service_uuid);
+  advertising->setName(ble_device_name_.c_str());
+  advertising->start();
+
+  ble_started_ = true;
+  ble_connected_ = false;
+  ble_status_request_pending_ = false;
+  ble_rx_buffer_ = "";
+  ble_inbound_head_ = 0;
+  ble_inbound_count_ = 0;
+  state.ble_advertising = true;
+  state.ble_connected = false;
+  state.ble_status_line = String("BLE advertising as ") + ble_device_name_;
+  state.bridge_status_line = state.ble_status_line;
+  append_activity_event(state, state.ble_status_line);
+}
+
+void MiddlewareLink::drainBleInbound(DeviceState& state) {
+  String line;
+  while (dequeueBleLine(line)) {
+    handleIncomingJson(state, reinterpret_cast<const uint8_t*>(line.c_str()), line.length());
+  }
+}
+
+void MiddlewareLink::onBleIncomingChunk(const uint8_t* data, size_t length) {
+  if (state_ == nullptr || data == nullptr || length == 0) {
+    return;
+  }
+
+  std::string chunk(reinterpret_cast<const char*>(data), length);
+  ble_rx_buffer_ += chunk.c_str();
+  while (true) {
+    const int newline = ble_rx_buffer_.indexOf('\n');
+    if (newline < 0) {
+      break;
+    }
+
+    String line = ble_rx_buffer_.substring(0, newline);
+    ble_rx_buffer_.remove(0, newline + 1);
+    line.trim();
+    if (line.length() == 0) {
+      continue;
+    }
+
+    enqueueBleLine(line);
+  }
+
+  if (ble_rx_buffer_.length() > kBleMaxLineLength) {
+    ble_rx_buffer_ = "";
+    state_->ble_status_line = "BLE input overflow";
+    state_->bridge_status_line = state_->ble_status_line;
+    append_activity_event(*state_, state_->ble_status_line);
+  }
+}
+
+void MiddlewareLink::onBleConnected() {
+  ble_connected_ = true;
+  ble_status_request_pending_ = true;
+  NimBLEDevice::getAdvertising()->stop();
+  if (state_ != nullptr) {
+    state_->ble_connected = true;
+    state_->ble_advertising = false;
+    state_->ble_status_line = String("BLE connected: ") + ble_device_name_;
+    state_->bridge_status_line = state_->ble_status_line;
+    append_activity_event(*state_, state_->ble_status_line);
+  }
+}
+
+void MiddlewareLink::onBleDisconnected() {
+  ble_connected_ = false;
+  ble_rx_buffer_ = "";
+  if (state_ != nullptr) {
+    state_->ble_connected = false;
+    state_->ble_advertising = true;
+    state_->ble_status_line = String("BLE advertising as ") + ble_device_name_;
+    state_->bridge_status_line = state_->ble_status_line;
+    append_activity_event(*state_, "BLE disconnected");
+  }
+}
+
+void MiddlewareLink::enqueueBleLine(const String& line) {
+  if (ble_inbound_count_ >= ble_inbound_lines_.size()) {
+    ble_inbound_lines_[ble_inbound_head_] = line;
+    ble_inbound_head_ = (ble_inbound_head_ + 1) % ble_inbound_lines_.size();
+    return;
+  }
+
+  const size_t index = (ble_inbound_head_ + ble_inbound_count_) % ble_inbound_lines_.size();
+  ble_inbound_lines_[index] = line;
+  ++ble_inbound_count_;
+}
+
+bool MiddlewareLink::dequeueBleLine(String& line) {
+  if (ble_inbound_count_ == 0) {
+    return false;
+  }
+
+  line = ble_inbound_lines_[ble_inbound_head_];
+  ble_inbound_lines_[ble_inbound_head_] = "";
+  ble_inbound_head_ = (ble_inbound_head_ + 1) % ble_inbound_lines_.size();
+  --ble_inbound_count_;
+  return true;
+}
+
+bool MiddlewareLink::sendBleCardputerMessage(const String& message) {
+  if (!ble_started_ || !ble_connected_ || ble_tx_characteristic_ == nullptr) {
+    return false;
+  }
+
+  String framed = message;
+  framed += '\n';
+  const char* raw = framed.c_str();
+  const size_t total_length = framed.length();
+  for (size_t offset = 0; offset < total_length; offset += kBleChunkSize) {
+    const size_t chunk_length = min(kBleChunkSize, total_length - offset);
+    ble_tx_characteristic_->setValue(reinterpret_cast<const uint8_t*>(raw + offset), chunk_length);
+    ble_tx_characteristic_->notify();
+  }
+
+  return true;
+}
+#else
+
+String MiddlewareLink::buildBleAdvertisedName(const DeviceState& state) const {
+  (void)state;
+  return "";
+}
+
+bool MiddlewareLink::isBleControlMessage(const String& message) const {
+  (void)message;
+  return false;
+}
+
+void MiddlewareLink::ensureBleTransport(DeviceState& state) {
+  (void)state;
+}
+
+void MiddlewareLink::drainBleInbound(DeviceState& state) {
+  (void)state;
+}
+
+void MiddlewareLink::onBleIncomingChunk(const uint8_t* data, size_t length) {
+  (void)data;
+  (void)length;
+}
+
+void MiddlewareLink::onBleConnected() {}
+
+void MiddlewareLink::onBleDisconnected() {}
+
+void MiddlewareLink::enqueueBleLine(const String& line) {
+  (void)line;
+}
+
+bool MiddlewareLink::dequeueBleLine(String& line) {
+  (void)line;
+  return false;
+}
+
+bool MiddlewareLink::sendBleCardputerMessage(const String& message) {
+  (void)message;
+  return false;
+}
+#endif
 
 void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload) {
   if (payload.containsKey("state_epoch")) {

@@ -5,6 +5,8 @@
 #include <WebSocketsClient.h>
 
 #include "device_state.h"
+class NimBLECharacteristic;
+class NimBLEServer;
 
 class MiddlewareLink {
  public:
@@ -48,6 +50,32 @@ class MiddlewareLink {
   bool ensureConnection(DeviceState& state);
   void applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload);
   String buildEnvelope(const String& id, const String& type, const JsonVariantConst& payload) const;
+  void ensureBleTransport(DeviceState& state);
+  void drainBleInbound(DeviceState& state);
+  void onBleIncomingChunk(const uint8_t* data, size_t length);
+  void onBleConnected();
+  void onBleDisconnected();
+  void handleIncomingJson(DeviceState& state, const uint8_t* payload, size_t length);
+  bool sendBleCardputerMessage(const String& message);
+  bool isBleControlMessage(const String& message) const;
+  String buildBleAdvertisedName(const DeviceState& state) const;
+  void enqueueBleLine(const String& line);
+  bool dequeueBleLine(String& line);
+
+  friend class MiddlewareBleServerCallbacks;
+  friend class MiddlewareBleRxCallbacks;
+
+  String ble_rx_buffer_;
+  std::array<String, 8> ble_inbound_lines_{};
+  size_t ble_inbound_head_ = 0;
+  size_t ble_inbound_count_ = 0;
+  bool ble_started_ = false;
+  bool ble_connected_ = false;
+  bool ble_status_request_pending_ = false;
+  String ble_device_name_;
+  NimBLEServer* ble_server_ = nullptr;
+  NimBLECharacteristic* ble_rx_characteristic_ = nullptr;
+  NimBLECharacteristic* ble_tx_characteristic_ = nullptr;
 
   String host_;
   String path_;

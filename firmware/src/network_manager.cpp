@@ -9,6 +9,20 @@
 namespace {
 constexpr unsigned long kRetryIntervalMs = 15000;
 constexpr unsigned long kConnectTimeoutMs = 12000;
+bool parseBool(const String& value) {
+  String normalized = value;
+  normalized.trim();
+  normalized.toLowerCase();
+  return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
+}
+String normalizeTransport(String value) {
+  value.trim();
+  value.toLowerCase();
+  if (value == "ble" || value == "hybrid" || value == "wifi") {
+    return value;
+  }
+  return "wifi";
+}
 constexpr int kSdSpiSckPin = 40;
 constexpr int kSdSpiMisoPin = 39;
 constexpr int kSdSpiMosiPin = 14;
@@ -104,6 +118,8 @@ void NetworkManager::loadConfigFromSdCard() {
     return;
   }
 
+  bool loaded_any_config = false;
+
   while (file.available()) {
     String line = file.readStringUntil('\n');
     line = trimCopy(line);
@@ -121,28 +137,49 @@ void NetworkManager::loadConfigFromSdCard() {
 
     if (key == "wifi_ssid") {
       config_.wifi_ssid = value;
+      loaded_any_config = true;
     } else if (key == "wifi_password") {
       config_.wifi_password = value;
+      loaded_any_config = true;
     } else if (key == "middleware_host") {
       config_.middleware_host = value;
+      loaded_any_config = true;
     } else if (key == "middleware_port") {
       config_.middleware_port = static_cast<uint16_t>(value.toInt());
+      loaded_any_config = true;
     } else if (key == "middleware_path") {
       config_.middleware_path = value;
+      loaded_any_config = true;
     } else if (key == "middleware_token") {
       config_.middleware_token = value;
+      loaded_any_config = true;
+    } else if (key == "bridge_transport") {
+      config_.bridge_transport = normalizeTransport(value);
+      loaded_any_config = true;
+    } else if (key == "ble_enabled") {
+      config_.ble_enabled = parseBool(value);
+      loaded_any_config = true;
+    } else if (key == "ble_name") {
+      config_.ble_name = value;
+      loaded_any_config = true;
+    } else if (key == "ble_control_only") {
+      config_.ble_control_only = parseBool(value);
+      loaded_any_config = true;
     }
   }
 
   file.close();
-  config_.sd_config_loaded = config_.wifi_ssid.length() > 0 || config_.middleware_host.length() > 0;
+  config_.sd_config_loaded = loaded_any_config;
   if (config_.sd_config_loaded) {
-    logMessage(String("Loaded SD config for SSID ") + config_.wifi_ssid);
+    if (config_.wifi_ssid.length() > 0) {
+      logMessage(String("Loaded SD config for SSID ") + config_.wifi_ssid);
+    } else {
+      logMessage("Loaded SD config");
+    }
   } else {
     logMessage("Loaded empty SD config");
   }
 }
-
 void NetworkManager::ensureConfigDirectory() {
   if (!SD.exists(kConfigDirectory)) {
     SD.mkdir(kConfigDirectory);
@@ -160,19 +197,26 @@ void NetworkManager::seedConfigTemplateIfMissing() {
   }
 
   file.println("# Cardputer Codex terminal config");
-  file.println("# Edit this file to match your Wi-Fi and middleware settings.");
+  file.println("# Edit this file to match your Wi-Fi, bridge, and BLE settings.");
   file.println("wifi_ssid=");
   file.println("wifi_password=");
   file.println("middleware_host=");
   file.println("middleware_port=8765");
   file.println("middleware_path=/");
   file.println("middleware_token=");
+  file.println("bridge_transport=hybrid");
+  file.println("ble_enabled=true");
+  file.println("ble_name=CardputerCodex");
+  file.println("ble_control_only=true");
   file.close();
 }
 
 void NetworkManager::tick(DeviceState& state) {
   const wl_status_t wifi_status = WiFi.status();
   state.wifi_connected = wifi_status == WL_CONNECTED;
+  state.ble_enabled = config_.ble_enabled;
+  state.ble_name = config_.ble_name.length() > 0 ? config_.ble_name : String("CardputerCodex");
+  state.active_transport = normalizeTransport(config_.bridge_transport);
 
   if (wifi_status != last_wifi_status_) {
     logMessage(String("Wi-Fi status changed: ") + wifiStatusName(wifi_status));

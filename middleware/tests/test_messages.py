@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 
 import unittest
 
@@ -29,6 +30,28 @@ class MessageTests(unittest.TestCase):
 
         self.assertEqual(parsed.auth_token, "secret")
         self.assertEqual(parsed.id, message.id)
+
+    def test_ble_control_messages_stay_single_line(self) -> None:
+        cases = [
+            CardputerMessage(CardputerMessageType.PING, {"text": "line 1\nline 2"}, auth_token="bridge-token"),
+            CardputerMessage(CardputerMessageType.STATUS_REQUEST, {"snapshot": True, "note": "alpha\nbeta"}),
+            CardputerMessage(CardputerMessageType.APPROVAL_RESPONSE, {"text": "line 1\nline 2"}),
+            CardputerMessage(CardputerMessageType.BRIDGE_NOTIFICATION, {"text": "line 1\nline 2"}),
+            CardputerMessage(CardputerMessageType.BRIDGE_QUESTION, {"text": "line 1\nline 2"}),
+            CardputerMessage(CardputerMessageType.BRIDGE_CONFIRMATION, {"text": "line 1\nline 2"}),
+            CardputerMessage(CardputerMessageType.BRIDGE_RESPONSE, {"text": "line 1\nline 2"}),
+        ]
+
+        for message in cases:
+            with self.subTest(message_type=message.type.value):
+                raw = json.dumps(message.to_dict(), ensure_ascii=False)
+                self.assertNotIn("\n", raw)
+                parsed = CardputerMessage.from_dict(json.loads(raw))
+                self.assertEqual(parsed.type, message.type)
+                self.assertEqual(parsed.payload, message.payload)
+                self.assertEqual(parsed.protocol_version, 1)
+                self.assertEqual(parsed.id, message.id)
+                self.assertEqual(parsed.auth_token, message.auth_token)
 
     def test_router_handles_text_prompt(self) -> None:
         router = CardputerRouter()

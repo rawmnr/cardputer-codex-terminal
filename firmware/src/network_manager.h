@@ -13,6 +13,10 @@ struct RuntimeNetworkConfig {
   uint16_t middleware_port = 8765;
   String middleware_path = "/";
   String middleware_token;
+  String bridge_transport = "wifi";
+  bool ble_enabled = false;
+  String ble_name = "CardputerCodex";
+  bool ble_control_only = true;
   bool sd_config_loaded = false;
   bool sd_mounted = false;
 };
