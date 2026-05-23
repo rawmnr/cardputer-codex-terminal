@@ -66,7 +66,10 @@ For local, low-power connectivity.
 
 ### Hybrid Mode
 Simultaneous Wi-Fi and BLE listeners:
-`uv run cardputer-codex-middleware --serve --bridge-transport hybrid`
+```bash
+uv run cardputer-codex-middleware --serve --bridge-transport hybrid
+```
+
 
 ---
 
