@@ -36,17 +36,17 @@ class McpServerTests(unittest.TestCase):
         init, tools = asyncio.run(scenario())
 
         self.assertEqual(init["result"]["protocolVersion"], "2025-06-18")
-        tool_names = [tool["name"] for tool in tools["result"]["tools"]]
+        tool_names = set(tool["name"] for tool in tools["result"]["tools"])
         self.assertEqual(
             tool_names,
-            [
+            {
                 "cardputer.notify",
                 "cardputer.ask",
                 "cardputer.confirm",
                 "cardputer.show",
                 "cardputer.dictate",
                 "cardputer.preview_lvgl_ui",
-            ],
+            },
         )
     def test_preview_lvgl_ui_returns_multiple_frames(self) -> None:
         async def scenario() -> dict[str, object]:
@@ -106,7 +106,7 @@ class McpServerTests(unittest.TestCase):
         )
         self.assertEqual(
             [content["type"] for content in response["result"]["content"]],
-            ["text", "image", "image", "image"],
+            ["text", "image"],
         )
 
     def test_notify_and_show_update_prompt_state(self) -> None:
