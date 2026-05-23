@@ -19,11 +19,6 @@ When the agent requests a tool call (shell/write):
 1.  **Inspect**: View the pending action on screen.
 2.  **Act**: `Enter` to approve; `Del` to abort.
 
-## 3. Approving Actions
-Sometimes Codex will want to run a command or write a file.
-1.  A "Pending Approval" message will appear on the Cardputer.
-2.  Press **Enter** to **Accept**.
-3.  Press **Del** (Backspace) to **Reject**.
 
 ## 4. App Navigation (`Ctrl + M`)
 Switch between specialized UI modes:
@@ -39,4 +34,9 @@ Try these prompts:
 *   "Map out the dependency graph for `middleware/src`."
 
 ---
+
+Happy Hacking!
+
+---
+
 **Next**: See **[Architecture Guide](architecture.md)** for state-sync details.

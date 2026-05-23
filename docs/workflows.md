@@ -11,9 +11,9 @@ You need to perform a complex refactor (e.g., "Port Auth to OAuth2") without tou
 
 ### 1. Initialize Supervisor Mode
 Launch the middleware on your PC, pointing it to your project and enabling the agent supervisor.
+
 ```bash
 uv run cardputer-codex-middleware --serve --real-codex --workspace ./my-project
-```
 ```
 
 ### 2. Dispatch a Worktree Task (Voice)
