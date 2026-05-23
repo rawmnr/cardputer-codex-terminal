@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from .runs import RunMode
 
@@ -15,29 +15,23 @@ class ApprovalMode(StrEnum):
 @dataclass(slots=True, frozen=True)
 class ApprovalPolicy:
     mode: RunMode
-    approval_mode: ApprovalMode
-    allow_write: bool = True
-    allow_exec: bool | str = "ask"
+    approval_mode: ApprovalMode = ApprovalMode.USER
+    allow_write: bool = False
+    allow_exec: bool = False
     allow_git_push: bool = False
-    scope: str | None = None
-    forbidden_paths: tuple[str, ...] = field(default_factory=tuple)
-    require_cardputer_confirm_for: tuple[str, ...] = field(default_factory=tuple)
+    scope: Literal["global", "worktree_only"] = "global"
+    forbidden_paths: list[str] = field(default_factory=list)
+    forbidden_branches: list[str] = field(default_factory=lambda: ["main", "master", "prod", "production", "preprod"])
     auto_revert_on_failure: bool = False
-
+    require_physical_confirmation: bool = False
 
 SAFE_POLICY = ApprovalPolicy(
     mode=RunMode.SAFE,
     approval_mode=ApprovalMode.USER,
     allow_write=True,
-    allow_exec="ask",
+    allow_exec=True,
     allow_git_push=False,
-    require_cardputer_confirm_for=(
-        "git push",
-        "rm",
-        "git clean",
-        "docker compose down",
-        "secrets access",
-    ),
+    require_physical_confirmation=True,
 )
 
 YOLO_WORKTREE_POLICY = ApprovalPolicy(
@@ -47,13 +41,14 @@ YOLO_WORKTREE_POLICY = ApprovalPolicy(
     allow_exec=True,
     allow_git_push=False,
     scope="worktree_only",
-    forbidden_paths=(
+    forbidden_paths=[
         ".git/config",
         ".env",
         "secrets/",
         "production/",
-    ),
+    ],
     auto_revert_on_failure=True,
+    require_physical_confirmation=True,
 )
 
 REVIEW_ONLY_POLICY = ApprovalPolicy(
@@ -61,6 +56,7 @@ REVIEW_ONLY_POLICY = ApprovalPolicy(
     approval_mode=ApprovalMode.NEVER,
     allow_write=False,
     allow_exec=False,
+    require_physical_confirmation=True,
 )
 
 
@@ -75,6 +71,25 @@ class ApprovalPolicyManager:
     def get_policy(self, mode: RunMode) -> ApprovalPolicy:
         return self.policies.get(mode, SAFE_POLICY)
 
+    def evaluate_request_for_device(self, device_policy: dict[str, Any], request_data: dict[str, Any]) -> tuple[bool | None, str]:
+        """Checks if a specific device is allowed to perform the requested action."""
+        action = request_data.get("action") or request_data.get("command") or request_data.get("title")
+        if not action:
+            return None, "No action/command specified, skipping device check."
+
+        allowed = device_policy.get("allowed_actions", [])
+        denied = device_policy.get("denied_actions", [])
+
+        action_str = str(action).lower()
+        if any(kw.lower() in action_str for kw in denied):
+            return False, f"Action '{action}' is explicitly denied for this device."
+
+        if allowed and not any(kw.lower() in action_str for kw in allowed):
+            return False, f"Action '{action}' is not in the allowed list for this device."
+
+        return None, "Device-level check passed."
+
+
     def evaluate_request(self, policy: ApprovalPolicy, request_data: dict[str, Any]) -> tuple[bool | None, str]:
         """
         Evaluates an approval request against a policy.
@@ -83,12 +98,21 @@ class ApprovalPolicyManager:
         """
         title = str(request_data.get("title") or request_data.get("summary") or request_data.get("command") or "").lower()
         detail = str(request_data.get("detail") or "").lower()
-        
+        branch = str(request_data.get("branch") or "").lower()
+
+        # Branch protection
+        if branch in policy.forbidden_branches:
+            return False, f"Operations on branch '{branch}' always require manual approval (Policy: {policy.mode})."
+
+        # Destructive action physical confirmation check
+        if policy.require_physical_confirmation and self.is_destructive(request_data):
+             return None, "Destructive action requires physical confirmation on Cardputer."
+
         # Determine danger category/action type
-        is_write = any(kw in title or kw in detail for kw in ["write", "create", "delete", "update", "modify", "edit", "save"])
+        is_write = any(kw in title or kw in detail for kw in ["write", "create", "delete", "update", "modify", "edit", "save", "rm ", "remove"])
         is_exec = any(kw in title or kw in detail for kw in ["execute", "run", "command", "bash", "shell"])
         is_git_push = "git push" in title or "git push" in detail
-        
+
         # Check against review_only
         if not policy.allow_write and is_write:
             return False, "Policy REVIEW_ONLY forbids write operations."
@@ -122,3 +146,9 @@ class ApprovalPolicyManager:
 
         # Default to user intervention
         return None, "Policy requires user approval."
+
+    def is_destructive(self, request_data: dict[str, Any]) -> bool:
+        title = str(request_data.get("title") or request_data.get("command") or "").lower()
+        detail = str(request_data.get("detail") or "").lower()
+        destructive_keywords = ["delete", "rm ", "remove", "wipe", "format", "drop table", "truncate"]
+        return any(kw in title or kw in detail for kw in destructive_keywords)
