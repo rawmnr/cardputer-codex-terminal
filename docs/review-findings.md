@@ -385,3 +385,51 @@ These open issues already cover part of the current problem set and should be ke
    - Evidence: status/session/run/approval shapes are duplicated across middleware, firmware, preview, and fixtures.
    - Why new: this is a maintainability issue, not a single bug.
    - Acceptance: device-facing snapshots come from one projection layer and shared fixtures validate it.
+## GitHub issue drafts
+
+These are ready to paste into GitHub if/when the repository is authenticated in a browser session.
+
+### Draft 1
+- **Title:** `[Security] Bridge RBAC blocks legitimate Cardputer messages`
+- **Labels:** `security`, `bug`, `middleware`
+- **Body:** The WebSocket bridge uses a hardcoded simulated device policy that rejects legitimate firmware message types (`text_prompt`, `audio_chunk`, `voice_prompt_ready`, `run_list_request`, `run_detail_request`, `approval_inbox_request`, `bridge_response`). This blocks the core product flow. Replace substring-based device checks with explicit message-type capability rules and add tests for authorized device traffic.
+
+### Draft 2
+- **Title:** `[Protocol] Firmware/middleware protocol version drift`
+- **Labels:** `protocol`, `bug`, `contracts`
+- **Body:** The middleware defaults to protocol version `2`, while firmware, fixtures, and docs still describe `1`. Align firmware, middleware, contracts, and docs under a single source of truth and add a contract test that fails on drift.
+
+### Draft 3
+- **Title:** `[Test] Middleware test suite mixes unittest and pytest`
+- **Labels:** `tests`, `infra`, `bug`
+- **Body:** `middleware/tests/test_security_hardened.py` imports `pytest`, but the documented command uses `unittest` and `pytest` is not a declared dependency. Convert the test to `unittest` or add pytest intentionally and update the docs/commands accordingly.
+
+### Draft 4
+- **Title:** `[Voice] Transcription backend selection needs explicit wiring`
+- **Labels:** `voice`, `enhancement`, `middleware`
+- **Body:** A `FasterWhisperVoiceTranscriber` exists, but the middleware defaults to mock transcription and exposes no CLI/config switch to select the backend or Whisper model/device options. Add explicit runtime selection and tests for voice prompt finalization.
+
+### Draft 5
+- **Title:** `[Runs] Worker run startup should submit actual work`
+- **Labels:** `runs`, `enhancement`, `middleware`
+- **Body:** `/run worker` creates a run and starts/resumes a thread, but no task prompt is submitted to Codex. Either submit a prompt when a worker run starts or rename the command so it is clear that it only creates a session.
+
+### Draft 6
+- **Title:** `[Firmware] mDNS auto-discovery is advertised but missing`
+- **Labels:** `firmware`, `networking`, `enhancement`
+- **Body:** Firmware logs that it is auto-discovering the bridge when no host is configured, but there is no mDNS query path. Either implement mDNS discovery or remove the promise and require an explicit middleware host.
+
+### Draft 7
+- **Title:** `[Firmware] Approval responses should carry the approval id`
+- **Labels:** `firmware`, `approvals`, `bug`
+- **Body:** Approval state is cleared before the response is sent, so the middleware cannot reliably correlate replies. Preserve the approval id and include it in the approval response envelope.
+
+### Draft 8
+- **Title:** `[Firmware] Voice target cycling is unreachable`
+- **Labels:** `firmware`, `ux`, `bug`
+- **Body:** The voice target cycles on `UiAction::None`, but the shell returns early for `None` before dispatching to apps. Bind target cycling to a real action or remove it.
+
+### Draft 9
+- **Title:** `[Design] Centralize projection shapes`
+- **Labels:** `design`, `maintainability`, `middleware`, `firmware`
+- **Body:** Status/session/run/approval payloads are duplicated across middleware, firmware, preview, and fixtures. Centralize device-facing snapshots behind one projection layer and validate them with shared fixtures.
