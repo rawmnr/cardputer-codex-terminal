@@ -127,5 +127,18 @@ If a tool is unavailable locally, report that clearly and include what was not v
 - Keep changes scoped to the requested feature or bug.
 - Do not revert unrelated user changes in the working tree.
 - Prefer existing abstractions over new framework-level changes.
+- When delegating investigations, surgical edits, or reviews, prefer the cavecrew investigator/builder/reviewer subagents from `skill://cavecrew`.
 - Update tests with behavior changes.
 - Treat generated logs, preview files, build outputs, and local config as non-source artifacts unless explicitly asked otherwise.
+## Scratch Log
+
+For refactors that touch multiple files or require design tradeoffs, maintain a short scratch log in `LOG.md` at the repo root while working.
+
+Log only decision-grade notes:
+- assumptions that mattered
+- tradeoffs considered and chosen
+- review findings and fixes
+- things that were ambiguous or underspecified
+- follow-up risks you want the next reader to see
+
+Keep it terse and current; update it as decisions change. Remove or archive it when the work is done if it is no longer useful.
