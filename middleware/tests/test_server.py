@@ -15,7 +15,7 @@ class BridgeServerTests(unittest.TestCase):
     def test_handle_raw_message_routes_and_serializes_events(self) -> None:
         class FakeApp:
             def __init__(self) -> None:
-                self.session = SimpleNamespace(workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr_123")
+                self.session = SimpleNamespace(state_epoch=0, workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr_123")
                 self.config = SimpleNamespace(bridge_token=None)
                 self.received: CardputerMessage | None = None
 
@@ -26,7 +26,7 @@ class BridgeServerTests(unittest.TestCase):
         async def scenario() -> tuple[CardputerMessage | None, list[str]]:
             server = CardputerBridgeServer(FakeApp())
             payload = CardputerMessage(CardputerMessageType.STATUS_REQUEST, {}).to_dict()
-            responses = await server.handle_raw_message(json.dumps(payload))
+            responses, _ = await server.handle_raw_message(json.dumps(payload))
             return server.app.received, responses, payload["id"]  # type: ignore[return-value]
 
         received, responses, request_id = asyncio.run(scenario())
@@ -44,13 +44,26 @@ class BridgeServerTests(unittest.TestCase):
                     },
                     ensure_ascii=False,
                 ),
+                json.dumps(
+                    {
+                        "type": "codex_status",
+                        "payload": {
+                            "kind": "bridge_connected",
+                            "state_epoch": 0,
+                            "workspace_path": "C:/repo",
+                            "branch": "feature/cardputer",
+                            "thread_id": "thr_123",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
             ],
         )
 
     def test_handle_raw_message_rejects_invalid_bridge_token(self) -> None:
         class FakeApp:
             def __init__(self) -> None:
-                self.session = SimpleNamespace(workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr_123")
+                self.session = SimpleNamespace(state_epoch=0, workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr_123")
                 self.config = SimpleNamespace(bridge_token="secret")
                 self.received: CardputerMessage | None = None
 
@@ -60,8 +73,8 @@ class BridgeServerTests(unittest.TestCase):
 
         async def scenario() -> tuple[CardputerMessage | None, list[str]]:
             server = CardputerBridgeServer(FakeApp())
-            payload = CardputerMessage(CardputerMessageType.STATUS_REQUEST, {}, auth_token="wrong").to_dict()
-            responses = await server.handle_raw_message(json.dumps(payload))
+            payload = CardputerMessage(CardputerMessageType.HELLO, {}, auth_token="wrong").to_dict()
+            responses, _ = await server.handle_raw_message(json.dumps(payload))
             return server.app.received, responses, payload["id"]  # type: ignore[return-value]
 
         received, responses, request_id = asyncio.run(scenario())
@@ -70,6 +83,52 @@ class BridgeServerTests(unittest.TestCase):
         self.assertEqual(
             responses,
             [json.dumps({"type": "ack", "payload": {"id": request_id, "ok": False}}, ensure_ascii=False)],
+        )
+
+    def test_handle_raw_message_sends_hello_ack_after_authentication(self) -> None:
+        class FakeApp:
+            def __init__(self) -> None:
+                self.session = SimpleNamespace(state_epoch=0, workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr_123")
+                self.config = SimpleNamespace(bridge_token="secret")
+
+        async def scenario() -> tuple[list[str], str]:
+            server = CardputerBridgeServer(FakeApp())
+            message = CardputerMessage(CardputerMessageType.HELLO, {}, auth_token="secret")
+            payload = message.to_dict()
+            responses, _ = await server.handle_raw_message(json.dumps(payload))
+            return responses, payload["id"]
+
+        responses, request_id = asyncio.run(scenario())
+
+        self.assertEqual(
+            responses,
+            [
+                json.dumps(
+                    {
+                        "type": "hello_ack",
+                        "payload": {
+                            "server": "cardputer-codex-middleware",
+                            "version": "0.2.0",
+                            "features": ["multi_run", "worktree_manager", "safe_mode", "yolo_worktree", "mcp", "websocket_audio", "ble_control"],
+                        },
+                        "id": f"ack-{request_id}",
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "type": "codex_status",
+                        "payload": {
+                            "kind": "bridge_connected",
+                            "state_epoch": 0,
+                            "workspace_path": "C:/repo",
+                            "branch": "feature/cardputer",
+                            "thread_id": "thr_123",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            ],
         )
 
 

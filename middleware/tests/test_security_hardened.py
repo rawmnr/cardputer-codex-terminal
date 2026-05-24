@@ -1,33 +1,55 @@
-import pytest
-from cardputer_codex_terminal.policies import ApprovalPolicyManager, ApprovalMode, RunMode, ApprovalPolicy
-from cardputer_codex_terminal.config import AppConfig
+from __future__ import annotations
 
-def test_yolo_branch_protection():
-    manager = ApprovalPolicyManager()
-    yolo_policy = manager.get_policy(RunMode.YOLO_WORKTREE)
-    
-    # Mock request on a sensitive branch (logic to be implemented in evaluate_request)
-    request_data = {
-        "command": "rm -rf /",
-        "branch": "main"
-    }
-    
-    # We expect this to be rejected or require user approval even in YOLO
-    approved, reason = manager.evaluate_request(yolo_policy, request_data)
-    assert approved is not True
-    assert "main" in reason.lower() or "forbidden" in reason.lower()
+import unittest
 
-def test_device_rbac():
-    manager = ApprovalPolicyManager()
-    
-    # Mock a device policy that only allows 'status'
-    device_policy = {
-        "allowed_actions": ["status"],
-        "denied_actions": ["approve"]
-    }
-    
-    request_approve = {"action": "approve", "device_id": "limited-device"}
-    # This should be rejected by the manager (logic to be added)
-    approved, reason = manager.evaluate_request_for_device(device_policy, request_approve)
-    assert approved is False
-    assert "not allowed" in reason.lower() or "denied" in reason.lower()
+from cardputer_codex_terminal.messages import CardputerMessageType
+from cardputer_codex_terminal.policies import ApprovalPolicyManager, RunMode
+
+
+class SecurityHardenedTests(unittest.TestCase):
+    def test_yolo_branch_protection(self) -> None:
+        manager = ApprovalPolicyManager()
+        yolo_policy = manager.get_policy(RunMode.YOLO_WORKTREE)
+
+        request_data = {
+            "command": "rm -rf /",
+            "branch": "main",
+        }
+
+        approved, reason = manager.evaluate_request(yolo_policy, request_data)
+        self.assertIsNot(approved, True)
+        self.assertTrue("main" in reason.lower() or "forbidden" in reason.lower())
+
+    def test_device_rbac(self) -> None:
+        manager = ApprovalPolicyManager()
+        device_policy = {
+            "allowed_message_types": ["status_request"],
+            "denied_message_types": ["approval_response"],
+        }
+
+        approved, reason = manager.evaluate_request_for_device(
+            device_policy,
+            {"message_type": "approval_response", "device_id": "limited-device"},
+        )
+        self.assertFalse(approved)
+        self.assertTrue("not allowed" in reason.lower() or "denied" in reason.lower())
+
+    def test_device_rbac_allows_legitimate_cardputer_messages(self) -> None:
+        manager = ApprovalPolicyManager()
+        device_policy = {
+            "allowed_message_types": [m.value for m in CardputerMessageType if m != CardputerMessageType.HELLO_ACK],
+        }
+
+        for message_type in (
+            CardputerMessageType.TEXT_PROMPT,
+            CardputerMessageType.AUDIO_CHUNK,
+            CardputerMessageType.VOICE_PROMPT_READY,
+            CardputerMessageType.RUN_LIST_REQUEST,
+            CardputerMessageType.RUN_DETAIL_REQUEST,
+            CardputerMessageType.APPROVAL_INBOX_REQUEST,
+            CardputerMessageType.BRIDGE_RESPONSE,
+        ):
+            with self.subTest(message_type=message_type.value):
+                approved, reason = manager.evaluate_request_for_device(device_policy, {"message_type": message_type.value})
+                self.assertIsNone(approved)
+                self.assertIn("passed", reason.lower())

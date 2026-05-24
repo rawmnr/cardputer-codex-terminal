@@ -405,7 +405,7 @@ class MiddlewareAppTests(unittest.TestCase):
 
         sent, observer = asyncio.run(scenario())
 
-        self.assertTrue(sent)
+        self.assertEqual(sent, [])
         self.assertIs(observer, sentinel)
 
     def test_display_snapshot_updates_preview_event_channel(self) -> None:

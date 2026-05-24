@@ -123,7 +123,7 @@ Use stdio for normal real-Codex runs:
 
 ```bash
 uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
-uv run cardputer-codex-middleware --serve --real-codex --bridge-token <shared-secret>
+CARDPUTER_BRIDGE_TOKEN=<shared-secret> uv run cardputer-codex-middleware --serve --real-codex
 ```
 
 Use WebSocket only when you explicitly start a local app-server listener:

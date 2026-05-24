@@ -27,12 +27,16 @@ class FakeSerialBridge:
     def __init__(self, server: CardputerBridgeServer) -> None:
         self.server = server
         self.sent_frames: list[str] = []
+        self.bridge_connected_sent = False
 
     async def send(self, envelope: dict[str, Any]) -> list[str]:
         raw = json.dumps(envelope, ensure_ascii=False)
         self.sent_frames.append(raw)
-        return await self.server.handle_raw_message(raw)
-
+        responses, self.bridge_connected_sent = await self.server.handle_raw_message(
+            raw,
+            bridge_connected_sent=self.bridge_connected_sent,
+        )
+        return responses
 
 class FakeCodexTransport(MockCodexTransport):
     def __init__(self) -> None:
@@ -50,7 +54,7 @@ class ContractTests(unittest.TestCase):
 
         class FakeApp:
             def __init__(self) -> None:
-                self.session = SimpleNamespace(workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr_123")
+                self.session = SimpleNamespace(state_epoch=0, workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr_123")
                 self.config = SimpleNamespace(bridge_token=None)
 
             async def handle_cardputer_message(self, _: CardputerMessage) -> list[Event]:
@@ -78,6 +82,19 @@ class ContractTests(unittest.TestCase):
                     {
                         "type": EventType.STATUS_SNAPSHOT.value,
                         "payload": {"workspace_path": "C:/repo", "branch": "feature/cardputer", "thread_id": "thr_123"},
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "type": "codex_status",
+                        "payload": {
+                            "kind": "bridge_connected",
+                            "state_epoch": 0,
+                            "workspace_path": "C:/repo",
+                            "branch": "feature/cardputer",
+                            "thread_id": "thr_123",
+                        },
                     },
                     ensure_ascii=False,
                 ),

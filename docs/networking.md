@@ -18,7 +18,7 @@ Use a Tailscale-style overlay VPN with ESP32-compatible embedded integration (e.
 
 Until automated, protect the Supervisor bridge with a shared secret:
 1. Set `bridge_token` in `/cardputer-codex/config.ini` on the SD card.
-2. Match the token in the Middleware CLI: `--bridge-token <secret>`.
+2. Export `CARDPUTER_BRIDGE_TOKEN=<secret>` for the Middleware CLI, or set `CARDPUTER_BRIDGE_TOKEN_FILE=/path/to/token`.
 
 
 ## Topology

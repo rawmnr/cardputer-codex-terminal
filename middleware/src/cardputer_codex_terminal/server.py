@@ -10,6 +10,8 @@ from websockets.exceptions import ConnectionClosed
 from .bus import EventFilter
 from .core import MiddlewareApp
 from .events import Event, EventType
+from .policies import CARDPUTER_DEVICE_ALLOWED_MESSAGE_TYPES
+
 from .messages import CardputerMessage, CardputerMessageType
 
 _DISCONNECT_EXCEPTIONS = (
@@ -86,13 +88,15 @@ class CardputerBridgeServer:
                 return
             except Exception:
                 return
+
+        bridge_connected_sent = False
         try:
-            await websocket.send(self._bridge_connected_message())
-
             push_task = asyncio.create_task(push_loop())
-
             async for raw_message in websocket:
-                responses = await self.handle_raw_message(raw_message)
+                responses, bridge_connected_sent = await self.handle_raw_message(
+                    raw_message,
+                    bridge_connected_sent=bridge_connected_sent,
+                )
                 for response in responses:
                     try:
                         await websocket.send(response)
@@ -107,7 +111,12 @@ class CardputerBridgeServer:
                     await push_task
             await self.app.event_bus.unsubscribe(subscriber_id)
 
-    async def handle_raw_message(self, raw_message: str) -> list[str]:
+    async def handle_raw_message(
+        self,
+        raw_message: str,
+        *,
+        bridge_connected_sent: bool = False,
+    ) -> tuple[list[str], bool]:
         payload = json.loads(raw_message)
         if not isinstance(payload, dict):
             raise ValueError("Cardputer messages must be JSON objects.")
@@ -119,62 +128,72 @@ class CardputerBridgeServer:
             message = CardputerMessage.from_dict(payload)
         except Exception:
             if request_id_str is not None:
-                return [self._ack(request_id_str, False)]
+                return [self._ack(request_id_str, False)], bridge_connected_sent
             raise
 
+        expected_token = self.app.config.bridge_token
+        if expected_token is not None and message.auth_token != expected_token:
+            return [self._ack(message.id, False)], bridge_connected_sent
+
         if message.type == CardputerMessageType.HELLO:
-            return [
+            responses = [
                 json.dumps(
                     {
                         "type": "hello_ack",
                         "payload": {
                             "server": "cardputer-codex-middleware",
                             "version": "0.2.0",
-                            "features": ["multi_run", "worktree_manager", "safe_mode", "yolo_worktree", "mcp", "websocket_audio", "ble_control"],
+                            "features": [
+                                "multi_run",
+                                "worktree_manager",
+                                "safe_mode",
+                                "yolo_worktree",
+                                "mcp",
+                                "websocket_audio",
+                                "ble_control",
+                            ],
                         },
                         "id": f"ack-{message.id}",
                     },
                     ensure_ascii=False,
                 )
             ]
+            if not bridge_connected_sent:
+                responses.append(self._bridge_connected_message())
+                bridge_connected_sent = True
+            return responses, bridge_connected_sent
 
-        # Device security check
-        # For now, we assume all devices with correct bridge_token are allowed
-        # Future: implement device-id pairing and DB of trusted_devices
-
-        expected_token = self.app.config.bridge_token
-        if expected_token is not None and message.auth_token != expected_token:
-            return [
-                self._ack(message.id, False),
-            ]
-
-        # Temporary device policy (simulated pairing)
         simulated_device_policy = {
-            "allowed_actions": ["status", "approve", "reject", "interrupt", "voice_prompt", "ping", "hello"],
-            "denied_actions": ["change_policy", "enable_yolo_global"]
+            "allowed_message_types": sorted(CARDPUTER_DEVICE_ALLOWED_MESSAGE_TYPES),
         }
 
-        # Device RBAC check
-        # Device RBAC check
-        request_info = {"action": message.type.value, "title": message.payload.get("title", "")}
+        request_info = {"message_type": message.type.value, "title": message.payload.get("title", "")}
 
-        # Handle cases where app doesn't have policy_manager (e.g. some tests)
         policy_manager = getattr(self.app, "policy_manager", None)
         if policy_manager is not None:
             denied, reason = policy_manager.evaluate_request_for_device(simulated_device_policy, request_info)
             if denied is False:
-                 return [
+                return [
                     self._ack(message.id, False),
-                    json.dumps({"type": "error", "payload": {"message": reason}}, ensure_ascii=False)
-                ]
+                    json.dumps({"type": "error", "payload": {"message": reason}}, ensure_ascii=False),
+                ], bridge_connected_sent
         try:
             events = await self.app.handle_cardputer_message(message)
         except Exception:
-            return [self._ack(message.id, False)]
+            return [self._ack(message.id, False)], bridge_connected_sent
 
-        return [self._ack(message.id, True)] + [json.dumps(event.to_dict(), ensure_ascii=False) for event in events]
+        responses = [self._ack(message.id, True)] + [json.dumps(event.to_dict(), ensure_ascii=False) for event in events]
+        if not bridge_connected_sent:
+            responses.append(self._bridge_connected_message())
+            bridge_connected_sent = True
+        return responses, bridge_connected_sent
 
     async def iter_responses(self, messages: AsyncIterator[str]) -> AsyncIterator[str]:
+        bridge_connected_sent = False
         async for raw_message in messages:
-            for response in await self.handle_raw_message(raw_message):
+            responses, bridge_connected_sent = await self.handle_raw_message(
+                raw_message,
+                bridge_connected_sent=bridge_connected_sent,
+            )
+            for response in responses:
                 yield response

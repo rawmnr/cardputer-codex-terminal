@@ -22,7 +22,7 @@ Ce document résume l'état du dépôt cardputer-codex-terminal au moment de la 
   - uv sync
   - uv run cardputer-codex-middleware --help
   - uv run cardputer-codex-middleware --serve
-  - uv run cardputer-codex-middleware --serve --bridge-token <shared-secret>
+  - export CARDPUTER_BRIDGE_TOKEN=<shared-secret> && uv run cardputer-codex-middleware --serve
   - uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
   - uv run python -m unittest discover -s tests -v
 

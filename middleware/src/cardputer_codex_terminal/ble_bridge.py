@@ -140,28 +140,43 @@ class CardputerBleBridge:
         kind = str(event.payload.get("kind") or "")
         return kind in BLE_FORWARD_KINDS
 
-    async def _process_incoming_line(self, line: str, outbound: asyncio.Queue[str]) -> None:
+    async def _process_incoming_line(
+        self,
+        line: str,
+        outbound: asyncio.Queue[str],
+        connection_state: dict[str, bool],
+        connection_lock: asyncio.Lock,
+    ) -> None:
         try:
-            responses = await self._server.handle_raw_message(line)
+            async with connection_lock:
+                responses, connection_state["bridge_connected_sent"] = await self._server.handle_raw_message(
+                    line,
+                    bridge_connected_sent=connection_state["bridge_connected_sent"],
+                )
         except Exception as exc:
             self._log(f"BLE bridge dropped malformed line: {exc}")
             return
         for response in responses:
             await outbound.put(response)
 
-    def _schedule_incoming_line(self, line: str, outbound: asyncio.Queue[str]) -> None:
-        task = asyncio.create_task(self._process_incoming_line(line, outbound))
+    def _schedule_incoming_line(
+        self,
+        line: str,
+        outbound: asyncio.Queue[str],
+        connection_state: dict[str, bool],
+        connection_lock: asyncio.Lock,
+    ) -> None:
+        task = asyncio.create_task(self._process_incoming_line(line, outbound, connection_state, connection_lock))
         self._pending_inbound.add(task)
         task.add_done_callback(self._pending_inbound.discard)
         task.add_done_callback(self._log_task_exception)
 
-    def _log_task_exception(self, task: asyncio.Task[None]) -> None:
-        with contextlib.suppress(asyncio.CancelledError):
-            exc = task.exception()
-            if exc is not None:
-                self._log(f"BLE bridge task failed: {exc}")
-
-    def _notification_handler(self, outbound: asyncio.Queue[str]) -> Callable[[Any, bytearray], None]:
+    def _notification_handler(
+        self,
+        outbound: asyncio.Queue[str],
+        connection_state: dict[str, bool],
+        connection_lock: asyncio.Lock,
+    ) -> Callable[[Any, bytearray], None]:
         buffer = bytearray()
 
         def handler(_: Any, data: bytearray) -> None:
@@ -173,7 +188,7 @@ class CardputerBleBridge:
                 raw_line = buffer[:newline_index].decode("utf-8", errors="replace").strip()
                 del buffer[: newline_index + 1]
                 if raw_line:
-                    self._schedule_incoming_line(raw_line, outbound)
+                    self._schedule_incoming_line(raw_line, outbound, connection_state, connection_lock)
 
         return handler
 
@@ -221,10 +236,12 @@ class CardputerBleBridge:
         if factory is None:
             raise RuntimeError("bleak is required to use the BLE bridge.")
 
+        connection_state: dict[str, bool] = {"bridge_connected_sent": False}
+        connection_lock = asyncio.Lock()
+
         self._log(f"BLE bridge: connecting to {getattr(device, 'name', None) or getattr(device, 'address', 'unknown')}.")
         async with factory(device) as client:
-            await client.start_notify(TX_UUID, self._notification_handler(outbound))
-            await outbound.put(self._server._bridge_connected_message())
+            await client.start_notify(TX_UUID, self._notification_handler(outbound, connection_state, connection_lock))
 
             writer_task = asyncio.create_task(self._writer_loop(client, outbound))
             event_task = asyncio.create_task(self._event_loop(outbound, subscriber_id))

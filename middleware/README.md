@@ -38,14 +38,14 @@ uv sync
 ## 🚦 Usage
 
 ### 1. Running the Bridge Server
-To connect a physical Cardputer, start the WebSocket bridge. Use a `bridge_token` to secure remote access.
+To connect a physical Cardputer, start the WebSocket bridge. Use `CARDPUTER_BRIDGE_TOKEN` to secure remote access.
 
 ```bash
 # Basic local serve
 uv run cardputer-codex-middleware --serve
 
 # Secure remote serve
-uv run cardputer-codex-middleware --serve --bridge-token <shared-secret>
+CARDPUTER_BRIDGE_TOKEN=<shared-secret> uv run cardputer-codex-middleware --serve
 ```
 
 ### 2. Integrating with Real Codex
@@ -56,7 +56,7 @@ For production use, connect the middleware to the Codex app-server via the stabl
 uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
 
 # Run the bridge server with real Codex integration
-uv run cardputer-codex-middleware --serve --real-codex --bridge-token <shared-secret>
+CARDPUTER_BRIDGE_TOKEN=<shared-secret> uv run cardputer-codex-middleware --serve --real-codex
 ```
 
 ### 3. Local Development & Preview

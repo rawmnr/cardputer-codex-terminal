@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
 
+from .messages import CardputerMessageType
 from .runs import RunMode
+
+CARDPUTER_DEVICE_ALLOWED_MESSAGE_TYPES = frozenset(
+    message_type.value for message_type in CardputerMessageType if message_type != CardputerMessageType.HELLO_ACK
+)
+
 
 
 class ApprovalMode(StrEnum):
@@ -73,19 +79,23 @@ class ApprovalPolicyManager:
 
     def evaluate_request_for_device(self, device_policy: dict[str, Any], request_data: dict[str, Any]) -> tuple[bool | None, str]:
         """Checks if a specific device is allowed to perform the requested action."""
-        action = request_data.get("action") or request_data.get("command") or request_data.get("title")
-        if not action:
-            return None, "No action/command specified, skipping device check."
+        message_type = str(
+            request_data.get("message_type")
+            or request_data.get("type")
+            or request_data.get("action")
+            or ""
+        ).lower()
+        if not message_type:
+            return None, "No message type specified, skipping device check."
 
-        allowed = device_policy.get("allowed_actions", [])
-        denied = device_policy.get("denied_actions", [])
+        allowed = {str(item).lower() for item in device_policy.get("allowed_message_types", [])}
+        denied = {str(item).lower() for item in device_policy.get("denied_message_types", [])}
 
-        action_str = str(action).lower()
-        if any(kw.lower() in action_str for kw in denied):
-            return False, f"Action '{action}' is explicitly denied for this device."
+        if message_type in denied:
+            return False, f"Message type '{message_type}' is explicitly denied for this device."
 
-        if allowed and not any(kw.lower() in action_str for kw in allowed):
-            return False, f"Action '{action}' is not in the allowed list for this device."
+        if allowed and message_type not in allowed:
+            return False, f"Message type '{message_type}' is not in the allowed list for this device."
 
         return None, "Device-level check passed."
 

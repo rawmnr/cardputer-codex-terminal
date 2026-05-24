@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import socket
 import sys
 from ipaddress import ip_address
+from pathlib import Path
 
 try:
     from zeroconf import IPVersion, ServiceInfo
@@ -22,6 +24,7 @@ from .messages import CardputerMessage, CardputerMessageType
 from .persistence import DEFAULT_STATE_PATH
 from .preview import DevPreviewServer
 from .server import CardputerBridgeServer
+
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,10 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--preview", action="store_true", help="Run the local browser preview and mirror files.")
     parser.add_argument("--preview-host", default="127.0.0.1")
     parser.add_argument("--preview-port", type=int, default=8787)
-    parser.add_argument("--bridge-token", default=None, help="Shared token required by the Cardputer bridge.")
     parser.add_argument("--mcp", action="store_true", help="Run as a stdio MCP server for Codex and keep the bridge listener alive.")
     parser.add_argument("--state-path", default=None, help="Path to local run persistence JSON file.")
     return parser
+
 
 
 def _is_loopback_host(host: str) -> bool:
@@ -56,9 +59,25 @@ def _is_loopback_host(host: str) -> bool:
         return False
 
 
+def _read_bridge_token_from_file(path: str) -> str:
+    token = Path(path).expanduser().read_text(encoding="utf-8").strip()
+    if not token:
+        raise SystemExit(f"Bridge token file '{path}' is empty.")
+    return token
+
+def _resolve_bridge_token() -> str | None:
+    token = os.environ.get("CARDPUTER_BRIDGE_TOKEN", "").strip()
+    if token:
+        return token
+    token_file = os.environ.get("CARDPUTER_BRIDGE_TOKEN_FILE")
+    if token_file:
+        return _read_bridge_token_from_file(token_file)
+    return None
+
 async def run_async(args: argparse.Namespace) -> int:
-    if (args.serve or args.mcp) and not _is_loopback_host(args.host) and not args.bridge_token:
-        raise SystemExit("Refusing to expose the Cardputer bridge on a non-loopback host without --bridge-token.")
+    bridge_token = _resolve_bridge_token()
+    if (args.serve or args.mcp) and not _is_loopback_host(args.host) and not bridge_token:
+        raise SystemExit("Refusing to expose the Cardputer bridge on a non-loopback host without CARDPUTER_BRIDGE_TOKEN.")
     if args.mcp and args.real_codex:
         raise SystemExit("--mcp runs the middleware as a Codex-side MCP server and cannot be combined with --real-codex.")
 
@@ -71,7 +90,7 @@ async def run_async(args: argparse.Namespace) -> int:
             codex_transport=codex_transport,
             codex_command=(args.codex_command, "app-server"),
             use_mock_codex=codex_transport == "mock",
-            bridge_token=args.bridge_token,
+            bridge_token=bridge_token,
             workspace_path=args.workspace,
             branch=args.branch,
             thread_id=args.thread_id,
