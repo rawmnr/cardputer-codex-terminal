@@ -6,7 +6,7 @@ Ce document résume l'état du dépôt cardputer-codex-terminal au moment de la 
 
 - Middleware (Windows, Python) : structure et CLI présentes dans `middleware/`. Mode `--serve` pour le pont WebSocket et mode `--mcp` pour l'interface de tooling over stdio. Transport Codex recommandé : `StdioCodexAppServerTransport`.
 - Firmware (M5 Cardputer ADV) : code source dans `firmware/src/` avec gestion clavier, push-to-talk, capture micro (I2S/PDM), rendu écran et lien vers le middleware. Le firmware produit une `.bin` flashable via PlatformIO.
-- Intégration : le firmware dialogue avec le middleware via des enveloppes JSON versionnées (protocol version = 1). Le middleware conserve l'index de sessions et renvoie des snapshots pour la Pager app.
+- Intégration : le firmware dialogue avec le middleware via des enveloppes JSON versionnées (protocol version = 2). Le middleware conserve l'index de sessions et renvoie des snapshots pour la Pager app.
 
 ## Ce qui est implémenté (vérifié dans le dépôt source)
 
@@ -14,7 +14,7 @@ Ce document résume l'état du dépôt cardputer-codex-terminal au moment de la 
 - Push-to-talk : logique de tenue d'appui (hold) sur `Space`, démarrage et arrêt de l'enregistrement, capture micro via M5.Mic (16000 Hz) et envoi d'événements vers le middleware.
 - Bridge firmware : configuration via `/cardputer-codex/config.ini` sur la carte SD, support de `bridge_token` pour sécuriser le serveur middleware si exposé.
 - Pager et MCP : hooks pour afficher approbations, notifications et sélection de réponses sur la Cardputer ; le middleware expose des outils `cardputer.notify`, `cardputer.ask`, `cardputer.confirm`, `cardputer.show`.
-- Tests middleware : tests unitaires disponibles sous `middleware/tests/` (framework `unittest`).
+- Tests middleware : tests unitaires disponibles sous `middleware/tests/` (framework `pytest`).
 
 ## Commandes de build & d'exécution (rapide)
 
@@ -24,7 +24,7 @@ Ce document résume l'état du dépôt cardputer-codex-terminal au moment de la 
   - uv run cardputer-codex-middleware --serve
   - export CARDPUTER_BRIDGE_TOKEN=<shared-secret> && uv run cardputer-codex-middleware --serve
   - uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
-  - uv run python -m unittest discover -s tests -v
+  - uv run pytest tests -v
 
 - Firmware
   - cd firmware

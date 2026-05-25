@@ -28,7 +28,7 @@ class StringWriter {
 
 String buildCardputerEnvelope(const String& id, const String& type, const JsonVariantConst& payload, const String& auth_token) {
   DynamicJsonDocument doc(kJsonCapacity);
-  doc["protocol_version"] = 1;
+  doc["protocol_version"] = kCardputerProtocolVersion;
   doc["id"] = id;
   doc["type"] = type;
   doc["payload"] = payload;

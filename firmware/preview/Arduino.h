@@ -223,13 +223,15 @@ enum WStype_t {
 
 class WebSocketsClient {
  public:
+  bool connected = false;
+  std::vector<std::string> sent_messages;
   void begin(const char*, uint16_t, const char* = "/", const char* = "ws") {}
   void onEvent(void (*)(WStype_t, uint8_t*, size_t)) {}
   void setReconnectInterval(uint32_t) {}
   void loop() {}
-  bool sendTXT(String&) { return true; }
-  bool sendTXT(const char*) { return true; }
-  bool isConnected() { return false; }
+  bool sendTXT(String& message) { sent_messages.push_back(message); return true; }
+  bool sendTXT(const char* message) { sent_messages.push_back(message ? message : ""); return true; }
+  bool isConnected() { return connected; }
   void enableHeartbeat(uint32_t, uint32_t, uint8_t) {}
 };
 #endif

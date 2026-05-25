@@ -1,0 +1,238 @@
+[
+  {
+    "name": "status_snapshot_v1",
+    "type": "status_snapshot",
+    "v": "1.0.0",
+    "payload": {
+      "last": "File written",
+      "run": null,
+      "session_id": "session-000001",
+      "status": "idle",
+      "title": "My Session",
+      "usage": 42
+    }
+  },
+  {
+    "name": "session_status_v1",
+    "type": "session_status",
+    "v": "1.0.0",
+    "payload": {
+      "active_run_id": "run-000001",
+      "active_session_id": "session-000001",
+      "approval_detail": null,
+      "approval_id": null,
+      "approval_title": null,
+      "branch": "feature/cardputer",
+      "bridge_prompt_channel": null,
+      "bridge_prompt_danger": null,
+      "bridge_prompt_detail": null,
+      "bridge_prompt_kind": null,
+      "bridge_prompt_options": [],
+      "bridge_prompt_selected_index": 0,
+      "bridge_prompt_title": null,
+      "bridge_prompt_urgency": null,
+      "codex_usage_percent": 42,
+      "codex_usage_reset_line": "",
+      "codex_usage_resets_at": 0,
+      "codex_usage_secondary_percent": -1,
+      "codex_usage_secondary_resets_at": 0,
+      "codex_usage_secondary_window_minutes": 0,
+      "codex_usage_window_minutes": 0,
+      "interrupt_supported": true,
+      "kind": "session_status",
+      "last_event": "File written",
+      "runs": [
+        {
+          "badge_mode": "SAFE",
+          "base_branch": "main",
+          "branch": "feature/x",
+          "current_step": "Implementing feature X",
+          "danger_summary": "",
+          "diff_summary": null,
+          "last_event": "File written",
+          "merge_ready": false,
+          "mode": "safe",
+          "pending_approval": {
+            "approval_id": "app-7",
+            "channel": null,
+            "danger": true,
+            "detail": "danger",
+            "options": [],
+            "selected_index": 0,
+            "timeout_seconds": null,
+            "title": "Allow write?",
+            "urgency": null
+          },
+          "role": "worker",
+          "run_id": "run-000001",
+          "session_id": null,
+          "staleness_reason": "",
+          "state_epoch": 0,
+          "status": "running",
+          "test_summary": null,
+          "thread_id": "thread-123",
+          "workspace_path": ".",
+          "worktree_exists": true,
+          "worktree_path": "/tmp/wt"
+        }
+      ],
+      "sessions": [
+        {
+          "branch": "feature/cardputer",
+          "bridge_prompt_channel": null,
+          "bridge_prompt_danger": null,
+          "bridge_prompt_detail": null,
+          "bridge_prompt_kind": null,
+          "bridge_prompt_options": [],
+          "bridge_prompt_selected_index": 0,
+          "bridge_prompt_title": null,
+          "bridge_prompt_urgency": null,
+          "codex_usage_percent": 42,
+          "codex_usage_reset_line": "",
+          "codex_usage_resets_at": 0,
+          "codex_usage_secondary_percent": -1,
+          "codex_usage_secondary_resets_at": 0,
+          "codex_usage_secondary_window_minutes": 0,
+          "codex_usage_window_minutes": 0,
+          "events": [],
+          "last_event": "File written",
+          "pending_approval_detail": null,
+          "pending_approval_id": null,
+          "pending_approval_timeout_seconds": null,
+          "pending_approval_title": null,
+          "run_id": null,
+          "session_id": "session-000001",
+          "state_epoch": 0,
+          "status": "idle",
+          "thread_id": "thr_123",
+          "title": "My Session",
+          "voice_intent": "ask",
+          "voice_target": "active_run",
+          "workspace_path": "C:/repo"
+        }
+      ],
+      "state_epoch": 0,
+      "status": "idle",
+      "thread_id": "thr_123",
+      "title": "My Session",
+      "workspace_path": "C:/repo"
+    }
+  },
+  {
+    "name": "run_list_v1",
+    "type": "run_list",
+    "v": "1.0.0",
+    "payload": {
+      "active_run_id": "run-000001",
+      "runs": [
+        {
+          "approval_id": "app-7",
+          "approval_title": "Allow write?",
+          "branch": "feature/x",
+          "danger_level": "high",
+          "id": "run-000001",
+          "last": "File written",
+          "merge_ready": false,
+          "mode": "safe",
+          "status": "running",
+          "thread_id": "thread-123",
+          "title": "Implementing feat...",
+          "warn": "",
+          "wt": "ok"
+        }
+      ]
+    }
+  },
+  {
+    "name": "run_detail_v1",
+    "type": "run_detail",
+    "v": "1.0.0",
+    "payload": {
+      "actions": [
+        {
+          "id": "approve_once",
+          "label": "Approve once"
+        },
+        {
+          "id": "reject",
+          "label": "Reject"
+        },
+        {
+          "id": "stop",
+          "label": "Stop"
+        },
+        {
+          "id": "collect_diff",
+          "label": "Diff"
+        },
+        {
+          "id": "run_tests",
+          "label": "Tests"
+        },
+        {
+          "id": "generate_merge_report",
+          "label": "Report"
+        },
+        {
+          "id": "open_voice_reply",
+          "label": "Voice reply"
+        }
+      ],
+      "approval": {
+        "branch": "feature/x",
+        "danger": true,
+        "danger_level": "high",
+        "detail": "danger",
+        "id": "app-7",
+        "mode": "safe",
+        "options": [],
+        "run_id": "run-000001",
+        "run_title": "Implementing feat...",
+        "status": "running",
+        "thread_id": "thread-123",
+        "title": "Allow write?"
+      },
+      "badge": "SAFE",
+      "branch": "feature/x",
+      "danger": "",
+      "diff": null,
+      "id": "run-000001",
+      "last": "File written",
+      "merge_ready": false,
+      "mode": "safe",
+      "role": "worker",
+      "session_id": null,
+      "stale": "",
+      "status": "running",
+      "step": "Implementing feature X",
+      "test": null,
+      "thread_id": "thread-123",
+      "workspace_path": ".",
+      "wt": true
+    }
+  },
+  {
+    "name": "approval_inbox_v1",
+    "type": "approval_inbox",
+    "v": "1.0.0",
+    "payload": {
+      "approvals": [
+        {
+          "branch": "feature/x",
+          "danger": true,
+          "danger_level": "high",
+          "detail": "danger",
+          "id": "app-7",
+          "mode": "safe",
+          "options": [],
+          "run_id": "run-000001",
+          "run_title": "Implementing feat...",
+          "status": "running",
+          "thread_id": "thread-123",
+          "title": "Allow write?"
+        }
+      ],
+      "count": 1
+    }
+  }
+]

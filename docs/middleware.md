@@ -9,10 +9,10 @@ uv sync
 uv run cardputer-codex-middleware
 uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
 uv run cardputer-codex-middleware --mcp
-uv run python -m unittest discover -s tests -v
+uv run pytest tests -v
 ```
 
-Cardputer-facing messages use a versioned envelope. The current protocol version is `1`.
+Cardputer-facing messages use a versioned envelope. The current protocol version is `2`.
 Each request includes a stable `id`, and the middleware replies with an `ack` frame so the sender can correlate replies with pending requests.
 When the bridge is exposed beyond loopback, the server can require a shared `bridge_token` and the firmware must embed the same token in its outgoing envelopes.
 The middleware also owns the Codex session index and a parallel `RunIndex`; `status_request` snapshots now return both `session_index` and a `runs` list so the Pager can browse active and recent sessions without storing the model on-device.

@@ -8,6 +8,8 @@
 #include <ArduinoJson.h>
 
 #include "apps.h"
+#include "app_shell.h"
+#include "middleware_link.h"
 #include "network_manager.h"
 #include "fakes/fake_clock.h"
 #include "fakes/fake_display.h"
@@ -16,6 +18,7 @@
 #include "input_router.h"
 #include "protocol.h"
 #include "terminal_snapshot.h"
+
 
 namespace {
 int g_failures = 0;
@@ -241,7 +244,21 @@ bool test_protocol_contracts() {
   return g_failures == 0;
 }
 
+bool test_approval_response_includes_id() {
+  AppShell app;
+  app.begin();
+  app.bridge().debugClient().connected = true;
+  const bool sent = app.bridge().sendApprovalResponse(true, "approval-123");
+  EXPECT_TRUE(sent);
+  EXPECT_TRUE(!app.bridge().debugClient().sent_messages.empty());
+  const std::string& message = app.bridge().debugClient().sent_messages.back();
+  EXPECT_TRUE(message.find("\"type\":\"approval_response\"") != std::string::npos);
+  EXPECT_TRUE(message.find("\"approval_id\":\"approval-123\"") != std::string::npos);
+  return g_failures == 0;
+}
+
 bool test_keyboard_contracts() {
+
   const std::string raw = readFile(fixturePath("keyboard_events.json"));
   if (raw.empty()) {
     return false;
@@ -579,6 +596,8 @@ int main() {
   try {
     std::cout << "running protocol contracts\n";
     test_protocol_contracts();
+    std::cout << "running approval response contract\n";
+    test_approval_response_includes_id();
     std::cout << "running protocol edge cases\n";
     test_protocol_edge_cases();
     std::cout << "running BLE state surface\n";

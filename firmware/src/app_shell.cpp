@@ -696,6 +696,7 @@ void AppShell::handleApprovalDecision(bool approved) {
   }
 
   const String outcome = approved ? "Approval accepted" : "Approval rejected";
+  const String approval_id = state_.approval_id;
   state_.approval_pending = false;
   state_.approval_id = "";
   state_.approval_title = "";
@@ -704,7 +705,7 @@ void AppShell::handleApprovalDecision(bool approved) {
   state_.codex_state = CodexState::Idle;
   state_.ui_mode = UiMode::Menu;
   state_.status_line = outcome;
-  bridge_.sendApprovalResponse(approved);
+  bridge_.sendApprovalResponse(approved, approval_id);
   append_activity_event(state_, outcome);
   render();
 }

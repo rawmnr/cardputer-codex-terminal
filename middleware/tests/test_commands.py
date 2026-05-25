@@ -9,8 +9,9 @@ from unittest.mock import patch
 from cardputer_codex_terminal.config import AppConfig
 from cardputer_codex_terminal.core import MiddlewareApp
 from cardputer_codex_terminal.events import EventType
-from cardputer_codex_terminal.runs import AgentRun, DiffSummary, RunMode, RunRole, RunStatus, TestSummary
+from cardputer_codex_terminal.runs import AgentRun, DiffSummary, RunMode, RunRole, RunStatus, TestSummary as RunTestSummary
 from cardputer_codex_terminal.supervisor import CodexHandle
+
 from cardputer_codex_terminal.worktree import WorktreeInfo
 
 
@@ -201,7 +202,7 @@ class CommandTests(unittest.TestCase):
                 )
                 with (
                     patch.object(app.worktree_manager, "collect_diff", return_value=DiffSummary(files_changed=2, insertions=10, deletions=3, summary="feat: something")),
-                    patch.object(app.worktree_manager, "run_tests", return_value=TestSummary(tests_run=5, passed=4, failed=1, summary="5 tests, 1 failed")),
+                    patch.object(app.worktree_manager, "run_tests", return_value=RunTestSummary(tests_run=5, passed=4, failed=1, summary="5 tests, 1 failed")),
                     patch.object(app.worktree_manager, "generate_merge_report", return_value="merge report text"),
                 ):
                     diff_event = (await app.command_router.collect_diff(run))[0].to_dict()

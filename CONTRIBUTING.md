@@ -20,7 +20,7 @@ Please open an **Issue** first to discuss any major architectural changes or new
 ### 2. Pull Requests
 Once a direction is agreed upon, you are welcome to submit a Pull Request. 
 
-*   **Middleware**: Contributions are welcome in Python. Please ensure all tests pass using `uv run python -m unittest discover`.
+*   **Middleware**: Contributions are welcome in Python. Please ensure all tests pass with `cd middleware && uv sync --dev && uv run pytest tests -v`.
 *   **Firmware**: Contributions are welcome in C++ (Arduino/PlatformIO). Please ensure the code compiles and adheres to the memory constraints of the ESP32-S3.
 
 ### 3. Development Workflow

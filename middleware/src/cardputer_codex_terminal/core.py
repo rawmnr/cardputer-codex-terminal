@@ -62,7 +62,7 @@ class MiddlewareApp:
         self.worktree_manager = WorktreeManager(Path(self.config.workspace_path))
         self.persistence = RunPersistenceStore(self.config.state_path)
         self.run_index, self._persistence_report = self.persistence.load(self.worktree_manager)
-        self.projection = CardputerProjection(self.run_index)
+        self.projection = CardputerProjection(self.session_index, self.run_index)
         self.command_router = OrchestrationCommandRouter(self)
         self.session = self.session_index.ensure_active(
             workspace_path=self.config.workspace_path,
@@ -633,67 +633,9 @@ class MiddlewareApp:
                 proj = self.projection.build_status_snapshot(self.session)
                 return [Event(EventType.STATUS_SNAPSHOT, proj["payload"])]
 
-            sessions = []
-            for s in self.session_index.ordered_sessions()[:10]:
-                sd = s.to_dict()
-                # Prune and limit events to the most recent 5
-                if "events" in sd and isinstance(sd["events"], list):
-                    pruned_events = []
-                    for ev in sd["events"][-5:]:
-                        ev_type = ev.get("type", "")
-                        ev_payload = ev.get("payload", {})
-                        # Only keep what the firmware uses: content/text/message/kind
-                        # Note: we collapse it into a simpler structure for the firmware's convenience if possible,
-                        # but keeping the existing structure is safer to avoid firmware changes.
-                        # The firmware uses: doc["payload"]["content"] | doc["payload"]["text"] | doc["payload"]["message"] | ""
-                        # and event_payload["kind"]
-                        p = {}
-                        for k in ("content", "text", "message", "kind"):
-                            if k in ev_payload:
-                                p[k] = ev_payload[k]
-                        pruned_events.append({"type": ev_type, "payload": p})
-                    sd["events"] = pruned_events
-                sessions.append(sd)
-
-            runs = [run.to_dict() for run in self.run_index.ordered_runs()[:10]]
-            event = Event(
-                EventType.CODEX_STATUS,
-                {
-                    "kind": "session_status",
-                    "active_session_id": self.session_index.active_session_id,
-                    "active_run_id": self.run_index.active_run_id,
-                    "workspace_path": self.session.workspace_path,
-                    "branch": self.session.branch,
-                    "thread_id": self.session.thread_id,
-                    "title": self.session.title,
-                    "status": self.session.status,
-                    "last_event": self.session.last_event,
-                    "state_epoch": self.session.state_epoch,
-                    "codex_usage_percent": self.session.codex_usage_percent,
-                    "codex_usage_secondary_percent": self.session.codex_usage_secondary_percent,
-                    "codex_usage_window_minutes": self.session.codex_usage_window_minutes,
-                    "codex_usage_secondary_window_minutes": self.session.codex_usage_secondary_window_minutes,
-                    "codex_usage_resets_at": self.session.codex_usage_resets_at,
-                    "codex_usage_secondary_resets_at": self.session.codex_usage_secondary_resets_at,
-                    "codex_usage_reset_line": self.session.codex_usage_reset_line,
-                    "approval_id": self.session.pending_approval_id,
-                    "approval_title": self.session.pending_approval_title,
-                    "approval_detail": self.session.pending_approval_detail,
-                    "sessions": sessions,
-                    "runs": runs,
-                    "interrupt_supported": True,
-                    "bridge_prompt_kind": self.session.bridge_prompt_kind,
-                    "bridge_prompt_title": self.session.bridge_prompt_title,
-                    "bridge_prompt_detail": self.session.bridge_prompt_detail,
-                    "bridge_prompt_channel": self.session.bridge_prompt_channel,
-                    "bridge_prompt_urgency": self.session.bridge_prompt_urgency,
-                    "bridge_prompt_danger": self.session.bridge_prompt_danger,
-                    "bridge_prompt_options": list(self.session.bridge_prompt_options),
-                    "bridge_prompt_selected_index": self.session.bridge_prompt_selected_index,
-                },
-            )
-            self._notify([event])
-            return [event]
+            proj = self.projection.build_session_status(self.session)
+            self._notify([Event(EventType.CODEX_STATUS, proj["payload"])])
+            return [Event(EventType.CODEX_STATUS, proj["payload"])]
 
         if message.type == CardputerMessageType.RUN_LIST_REQUEST:
             proj = self.projection.build_run_list()

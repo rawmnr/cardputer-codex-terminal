@@ -2,7 +2,7 @@
   {
     "name": "status_request_snapshot",
     "envelope": {
-      "protocol_version": 1,
+      "protocol_version": 2,
       "id": "status-1",
       "type": "status_request",
       "payload": {
@@ -13,7 +13,7 @@
   {
     "name": "text_prompt_with_auth",
     "envelope": {
-      "protocol_version": 1,
+      "protocol_version": 2,
       "id": "prompt-1",
       "type": "text_prompt",
       "payload": {
@@ -25,7 +25,7 @@
   {
     "name": "utf8_text_prompt",
     "envelope": {
-      "protocol_version": 1,
+      "protocol_version": 2,
       "id": "utf8-1",
       "type": "text_prompt",
       "payload": {
@@ -36,11 +36,23 @@
   {
     "name": "long_text_prompt",
     "envelope": {
-      "protocol_version": 1,
+      "protocol_version": 2,
       "id": "long-1",
       "type": "text_prompt",
       "payload": {
         "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "name": "approval_response_with_id",
+    "envelope": {
+      "protocol_version": 2,
+      "id": "approval-1",
+      "type": "approval_response",
+      "payload": {
+        "approved": true,
+        "approval_id": "approval-123"
       }
     }
   }

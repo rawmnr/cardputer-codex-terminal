@@ -17,6 +17,10 @@ dependencies = [
     "bleak>=0.22.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
 [project.scripts]
 cardputer-codex-middleware = "cardputer_codex_terminal.cli:main"
 

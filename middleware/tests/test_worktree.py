@@ -2,8 +2,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from cardputer_codex_terminal.runs import AgentRun, DiffSummary, RunMode, RunStatus, TestSummary
+from cardputer_codex_terminal.runs import AgentRun, DiffSummary, RunMode, RunStatus, TestSummary as RunTestSummary
 from cardputer_codex_terminal.worktree import WorktreeError, WorktreeInfo, WorktreeManager
+
 
 
 class TestWorktreeManager(unittest.TestCase):
@@ -91,10 +92,9 @@ class TestWorktreeManager(unittest.TestCase):
         self.assertEqual(summary.passed, 3)
         self.assertEqual(summary.skipped, 0)
 
-    def test_generate_merge_report(self):
         run = AgentRun("run-000001", workspace_path="/fake/repo", worktree_path="/fake/repo/wt1", branch="feature/x", mode=RunMode.YOLO_WORKTREE, status=RunStatus.DONE)
         run.diff_summary = DiffSummary(files_changed=2, insertions=10, deletions=5, summary="feat: X")
-        run.test_summary = TestSummary(tests_run=5, passed=4, failed=1, summary="5 tests, 1 failed")
+        run.test_summary = RunTestSummary(tests_run=5, passed=4, failed=1, summary="5 tests, 1 failed")
         run.merge_ready = True
 
         report = self.manager.generate_merge_report(run)

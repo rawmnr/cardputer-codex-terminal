@@ -5,7 +5,7 @@ This project turns the M5Stack Cardputer ADV into a physical terminal for OpenAI
 ## Core Mandates
 
 - **Surgical Updates:** When modifying the firmware, ensure that changes are compatible with the existing `DeviceState` and `MiddlewareLink` abstractions.
-- **Protocol Integrity:** The message contract between firmware and middleware is versioned (`PROTOCOL_VERSION = 1`). Any changes to message types in `middleware/src/cardputer_codex_terminal/messages.py` must be mirrored in `firmware/src/middleware_link.cpp/h`.
+- **Protocol Integrity:** The message contract between firmware and middleware is versioned (`PROTOCOL_VERSION = 2`). Any changes to message types in `middleware/src/cardputer_codex_terminal/messages.py` must be mirrored in `firmware/src/middleware_link.cpp/h`.
 - **Windows Context:** The middleware is designed for Windows. Use `uv` for Python dependency management.
 
 ## Project Structure
@@ -28,7 +28,7 @@ This project turns the M5Stack Cardputer ADV into a physical terminal for OpenAI
 The middleware uses `uv` for environment management.
 - **Install dependencies:** `cd middleware && uv sync`
 - **Run the service:** `uv run cardputer-codex-middleware --serve`
-- **Run tests:** `uv run python -m unittest discover -s tests -v`
+- **Run tests:** `cd middleware && uv sync --dev && uv run pytest tests -v`
 - **CLI help:** `uv run cardputer-codex-middleware --help`
 
 ### Firmware (C++/PlatformIO)

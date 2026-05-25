@@ -90,7 +90,7 @@ tool_timeout_sec = 120
 
 The Cardputer message contract is versioned to ensure compatibility between firmware and middleware.
 
-*   **Current Protocol Version**: `1`
+*   **Current Protocol Version**: `2`
 *   **Message Envelope**: All messages follow a structured JSON-RPC-style envelope.
 *   **Reliability**: Requests include a unique `id`. The middleware responds with an `ack` frame before the semantic response to allow callers to track pending requests.
 
@@ -114,8 +114,8 @@ codex app-server generate-json-schema --out ./schemas
 ```
 
 ### Running Tests
-The middleware is tested using `unittest`.
+The middleware is tested using `pytest`.
 
 ```bash
-uv run python -m unittest discover -s tests -v
+uv run pytest tests -v
 ```

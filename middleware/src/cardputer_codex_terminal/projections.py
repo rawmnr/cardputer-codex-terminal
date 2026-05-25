@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .runs import AgentRun, DiffSummary, RunIndex, RunStatus, TestSummary
-from .session import SessionState
+from .session import SessionIndex, SessionState
 
 
 def _trim(text: str, limit: int) -> str:
@@ -14,7 +14,8 @@ def _trim(text: str, limit: int) -> str:
 
 
 class CardputerProjection:
-    def __init__(self, run_index: RunIndex):
+    def __init__(self, session_index: SessionIndex, run_index: RunIndex):
+        self.session_index = session_index
         self.run_index = run_index
         self.version = "1.0.0"
 
@@ -31,6 +32,64 @@ class CardputerProjection:
                 "last": _trim(session.last_event, 32),
                 "usage": session.codex_usage_percent,
                 "run": self._project_run_brief(run) if run else None,
+            },
+        }
+
+    def build_session_status(self, session: SessionState) -> dict[str, Any]:
+        sessions = []
+        for item in self.session_index.ordered_sessions()[:10]:
+            snapshot = item.to_dict()
+            if isinstance(snapshot.get("bridge_prompt_options"), tuple):
+                snapshot["bridge_prompt_options"] = list(snapshot["bridge_prompt_options"])
+            if "events" in snapshot and isinstance(snapshot["events"], list):
+                pruned_events = []
+                for event in snapshot["events"][-5:]:
+                    event_type = event.get("type", "")
+                    event_payload = event.get("payload", {})
+                    payload: dict[str, Any] = {}
+                    for key in ("content", "text", "message", "kind"):
+                        if key in event_payload:
+                            payload[key] = event_payload[key]
+                    pruned_events.append({"type": event_type, "payload": payload})
+                snapshot["events"] = pruned_events
+            sessions.append(snapshot)
+
+        runs = [run.to_dict() for run in self.run_index.ordered_runs()[:10]]
+        return {
+            "type": "session_status",
+            "v": self.version,
+            "payload": {
+                "kind": "session_status",
+                "active_session_id": self.session_index.active_session_id,
+                "active_run_id": self.run_index.active_run_id,
+                "workspace_path": session.workspace_path,
+                "branch": session.branch,
+                "thread_id": session.thread_id,
+                "title": session.title,
+                "status": session.status,
+                "last_event": session.last_event,
+                "state_epoch": session.state_epoch,
+                "codex_usage_percent": session.codex_usage_percent,
+                "codex_usage_secondary_percent": session.codex_usage_secondary_percent,
+                "codex_usage_window_minutes": session.codex_usage_window_minutes,
+                "codex_usage_secondary_window_minutes": session.codex_usage_secondary_window_minutes,
+                "codex_usage_resets_at": session.codex_usage_resets_at,
+                "codex_usage_secondary_resets_at": session.codex_usage_secondary_resets_at,
+                "codex_usage_reset_line": session.codex_usage_reset_line,
+                "approval_id": session.pending_approval_id,
+                "approval_title": session.pending_approval_title,
+                "approval_detail": session.pending_approval_detail,
+                "sessions": sessions,
+                "runs": runs,
+                "interrupt_supported": True,
+                "bridge_prompt_kind": session.bridge_prompt_kind,
+                "bridge_prompt_title": session.bridge_prompt_title,
+                "bridge_prompt_detail": session.bridge_prompt_detail,
+                "bridge_prompt_channel": session.bridge_prompt_channel,
+                "bridge_prompt_urgency": session.bridge_prompt_urgency,
+                "bridge_prompt_danger": session.bridge_prompt_danger,
+                "bridge_prompt_options": list(session.bridge_prompt_options),
+                "bridge_prompt_selected_index": session.bridge_prompt_selected_index,
             },
         }
 

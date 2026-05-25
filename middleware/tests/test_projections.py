@@ -1,14 +1,15 @@
 import unittest
 
-from cardputer_codex_terminal.runs import ApprovalRequest, DiffSummary, RunIndex, RunMode, RunRole, RunStatus, TestSummary
-from cardputer_codex_terminal.session import SessionState
 from cardputer_codex_terminal.projections import CardputerProjection
+from cardputer_codex_terminal.runs import ApprovalRequest, DiffSummary, RunIndex, RunMode, RunRole, RunStatus, TestSummary as RunTestSummary
+from cardputer_codex_terminal.session import SessionIndex, SessionState
 
 
 class TestProjections(unittest.TestCase):
     def setUp(self):
+        self.session_index = SessionIndex()
         self.run_index = RunIndex()
-        self.projection = CardputerProjection(self.run_index)
+        self.projection = CardputerProjection(self.session_index, self.run_index)
         self.session = SessionState(session_id="session-001")
 
     def test_build_run_list(self):
@@ -17,9 +18,9 @@ class TestProjections(unittest.TestCase):
 
         proj = self.projection.build_run_list()
         self.assertEqual(proj["type"], "run_list")
+        self.assertEqual(proj["v"], self.projection.version)
         self.assertEqual(len(proj["payload"]["runs"]), 2)
 
-        # Ordered by run_id reverse (newest first)
         runs = proj["payload"]["runs"]
         self.assertEqual(runs[0]["id"], "run-000002")
         self.assertEqual(runs[0]["mode"], "yolo_worktree")
@@ -38,7 +39,7 @@ class TestProjections(unittest.TestCase):
         )
         run.thread_id = "thread-123"
         run.diff_summary = DiffSummary(files_changed=2, insertions=10, deletions=5, summary="feat: X")
-        run.test_summary = TestSummary(tests_run=5, passed=4, failed=1, summary="5 tests, 1 fail")
+        run.test_summary = RunTestSummary(tests_run=5, passed=4, failed=1, summary="5 tests, 1 fail")
         run.danger_summary = "SAFE"
         run.badge_mode = "SAFE"
         run.merge_ready = True
@@ -46,6 +47,7 @@ class TestProjections(unittest.TestCase):
 
         proj = self.projection.build_run_detail(run.run_id)
         self.assertEqual(proj["type"], "run_detail")
+        self.assertEqual(proj["v"], self.projection.version)
         payload = proj["payload"]
         self.assertEqual(payload["id"], run.run_id)
         self.assertEqual(payload["step"], "Implementing feature X")
@@ -67,6 +69,7 @@ class TestProjections(unittest.TestCase):
 
         proj = self.projection.build_run_detail(run.run_id)
         payload = proj["payload"]
+        self.assertEqual(proj["v"], self.projection.version)
         self.assertEqual(payload["approval"]["id"], "app-7")
         self.assertIn({"id": "approve_once", "label": "Approve once"}, payload["actions"])
         self.assertIn({"id": "reject", "label": "Reject"}, payload["actions"])
@@ -82,6 +85,7 @@ class TestProjections(unittest.TestCase):
 
         proj = self.projection.build_approval_inbox()
         approvals = proj["payload"]["approvals"]
+        self.assertEqual(proj["v"], self.projection.version)
         self.assertEqual(len(approvals), 2)
         self.assertEqual(approvals[0]["id"], "app-1")
         self.assertEqual(approvals[0]["danger_level"], "high")
@@ -95,9 +99,30 @@ class TestProjections(unittest.TestCase):
 
         proj = self.projection.build_status_snapshot(self.session)
         self.assertEqual(proj["type"], "status_snapshot")
+        self.assertEqual(proj["v"], self.projection.version)
         self.assertEqual(proj["payload"]["title"], "My Session")
         self.assertEqual(proj["payload"]["usage"], 42)
         self.assertEqual(proj["payload"]["run"]["id"], run.run_id)
+
+    def test_build_session_status(self):
+        session = self.session_index.ensure_active(workspace_path="C:/repo", branch="feature/cardputer", thread_id="thr-123", title="My Session")
+        session.last_event = "File written"
+        session.codex_usage_percent = 42
+        run = self.run_index.create_run(role=RunRole.WORKER, mode=RunMode.SAFE, status=RunStatus.RUNNING)
+        run.current_step = "Implementing feature X"
+        run.branch = "feature/x"
+        run.last_event = "File written"
+        run.thread_id = "thread-123"
+        run.worktree_path = "/tmp/wt"
+        run.pending_approval = ApprovalRequest(approval_id="app-7", title="Allow write?", detail="danger", danger=True)
+
+        proj = self.projection.build_session_status(session)
+        self.assertEqual(proj["type"], "session_status")
+        self.assertEqual(proj["v"], self.projection.version)
+        self.assertEqual(proj["payload"]["active_session_id"], session.session_id)
+        self.assertEqual(proj["payload"]["active_run_id"], run.run_id)
+        self.assertEqual(proj["payload"]["sessions"][0]["session_id"], session.session_id)
+        self.assertEqual(proj["payload"]["runs"][0]["run_id"], run.run_id)
 
 
 if __name__ == "__main__":

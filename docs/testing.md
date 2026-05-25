@@ -39,7 +39,7 @@ Run the host middleware suite:
 
 ```bash
 cd middleware
-uv run python -m unittest discover -s tests -v
+uv run pytest tests -v
 ```
 
 These tests use fake serial bridges and fake Codex transports; no real serial device or Codex call is required.

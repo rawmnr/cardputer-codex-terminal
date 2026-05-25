@@ -40,4 +40,4 @@ Use the helper scripts in `scripts/` when you want deterministic, repeatable ste
 - Treat `middleware_host` as a real Windows/LAN/VPN address, not `127.0.0.1`.
 - Keep `bridge_token` and `middleware_token` aligned when the bridge is reachable off-loopback.
 - Use physical approval paths for destructive actions.
-- Prefer `uv run python -m unittest discover -s tests -v` in `middleware/` and `python -m platformio run` in `firmware/`.
+- Prefer `uv run pytest tests -v` in `middleware/` and `python -m platformio run` in `firmware/`.

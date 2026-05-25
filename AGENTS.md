@@ -40,15 +40,15 @@ uv run cardputer-codex-middleware --serve
 uv run cardputer-codex-middleware --serve --bridge-token <shared-secret>
 uv run cardputer-codex-middleware --real-codex --prompt "Hello Codex"
 uv run cardputer-codex-middleware --preview
-uv run python -m unittest discover -s tests -v
+uv run pytest tests -v
 ```
 
 Important details:
 
 - Package source lives in `middleware/src/cardputer_codex_terminal/`.
-- Tests live in `middleware/tests/` and use `unittest`.
+- Tests live in `middleware/tests/` and use `pytest`.
 - Cardputer-facing messages use the versioned envelope in `messages.py`.
-- Current protocol version is `1`.
+- Current protocol version is `2`.
 - Preserve the message contract unless you also update tests, firmware serialization, and docs.
 - Real Codex integration should use `StdioCodexAppServerTransport` by default.
 - `LocalWebSocketCodexTransport` is for loopback debug / advanced use only.
@@ -109,7 +109,8 @@ Before finishing middleware work, run:
 
 ```bash
 cd middleware
-uv run python -m unittest discover -s tests -v
+uv sync --dev
+uv run pytest tests -v
 ```
 
 Before finishing firmware work, run:

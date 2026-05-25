@@ -42,6 +42,9 @@ class MiddlewareLink {
   );
   bool sendInterrupt(const String& thread_id);
   bool sendStatusRequest();
+#ifdef NATIVE_BUILD
+  WebSocketsClient& debugClient() { return client_; }
+#endif
 
  private:
   static void handleWebSocketEvent(WStype_t type, uint8_t* payload, size_t length);

@@ -26,7 +26,7 @@
 
 ## Smoke Tests
 
-- Run `uv run python -m unittest discover -s tests -v` in `middleware/`.
+- Run `uv run pytest tests -v` in `middleware/`.
 - Run `python -m platformio run` in `firmware/`.
 - If the build passes but the device is blank, re-check the firmware bin path and the launcher target.
 
