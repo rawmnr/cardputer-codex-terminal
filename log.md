@@ -6,3 +6,4 @@
 - Firmware approval responses must carry the approval ID; native coverage now exercises `sendApprovalResponse(true, "approval-123")`.
 - Device-facing projection shape is centralized in `CardputerProjection`; `core.py` delegates session status assembly to the projection layer.
 - The duplicate `bleak` dependency entry was removed; pytest collection warnings from `TestSummary` imports were aliased away.
+- Repository guidance now requires reading `LOG.md` before refactors, updating it after meaningful decisions, updating it again before commits, and replacing stale decisions instead of letting them accumulate.
