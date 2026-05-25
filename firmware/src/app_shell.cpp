@@ -395,11 +395,9 @@ void AppShell::handleCommand(const String& command) {
   }
 }
 
-void AppShell::tick() {
+void AppShell::tickUi() {
   state_.battery_percent = M5Cardputer.Power.getBatteryLevel();
   state_.battery_voltage_mv = M5Cardputer.Power.getBatteryVoltage();
-  network_.tick(state_);
-  bridge_.tick(state_);
 
   if (active_app_ != nullptr) {
     active_app_->tick(state_);
@@ -420,6 +418,16 @@ void AppShell::tick() {
                                                      : DisplayPowerState::LowPower;
     applyDisplayBrightness(target_brightness, target_state);
   }
+}
+
+void AppShell::tickBackground() {
+  network_.tick(state_);
+  bridge_.tick(state_);
+}
+
+void AppShell::tick() {
+  tickBackground();
+  tickUi();
 }
 
 void AppShell::render() {
@@ -730,6 +738,23 @@ void AppShell::handleBridgePromptDecision(bool accepted) {
   render();
 }
 
+void AppShell::handleBleStatus(bool connected, bool advertising, const String& message) {
+  noteInteraction();
+  state_.ble_connected = connected;
+  state_.ble_advertising = advertising;
+  if (message.length() > 0) {
+    state_.ble_status_line = message;
+    state_.bridge_status_line = message;
+    append_activity_event(state_, message);
+  }
+  // If we are not connected, we should likely set advertising status.
+  if (!connected) {
+      state_.ble_advertising = true;
+      state_.ble_status_line = message;
+      state_.bridge_status_line = message;
+  }
+  render();
+}
 bool AppShell::isPushToCodexActive() const {
   return state_.active_app == AppId::PushToCodex;
 }

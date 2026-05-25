@@ -21,6 +21,8 @@ class AppShell {
   void begin();
   void handleCommand(const String& command);
   void tick();
+  void tickUi();
+  void tickBackground();
   void render();
   void handleTextInput(const String& typed, bool submit, bool backspace);
   void handleAction(UiAction action);
@@ -29,6 +31,7 @@ class AppShell {
   bool hasPendingBridgePrompt() const;
   void handleApprovalDecision(bool approved);
   void handleBridgePromptDecision(bool accepted);
+  void handleBleStatus(bool connected, bool advertising, const String& message);
 #if USE_LVGL_UI
   void handleUiKey(lv_key_t key, bool pressed);
 #endif

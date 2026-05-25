@@ -1,5 +1,6 @@
 #include "middleware_link.h"
 #include "protocol.h"
+#include "runtime/firmware_runtime.h"
 
 #include <memory>
 #include <mbedtls/base64.h>
@@ -520,29 +521,17 @@ void MiddlewareLink::onBleIncomingChunk(const uint8_t* data, size_t length) {
 }
 
 void MiddlewareLink::onBleConnected() {
-  ble_connected_ = true;
-  ble_status_request_pending_ = true;
-  NimBLEDevice::getAdvertising()->stop();
-  if (state_ != nullptr) {
-    state_->ble_connected = true;
-    state_->ble_advertising = false;
-    state_->ble_status_line = String("BLE connected: ") + ble_device_name_;
-    state_->bridge_status_line = state_->ble_status_line;
-    append_activity_event(*state_, state_->ble_status_line);
+  if (runtime_ != nullptr) {
+    runtime_->postEvent(AppEvent::bleStatus(millis(), true, false, String("BLE connected: ") + ble_device_name_));
   }
 }
 
 void MiddlewareLink::onBleDisconnected() {
-  ble_connected_ = false;
-  ble_rx_buffer_ = "";
-  if (state_ != nullptr) {
-    state_->ble_connected = false;
-    state_->ble_advertising = true;
-    state_->ble_status_line = String("BLE advertising as ") + ble_device_name_;
-    state_->bridge_status_line = state_->ble_status_line;
-    append_activity_event(*state_, "BLE disconnected");
+  if (runtime_ != nullptr) {
+    runtime_->postEvent(AppEvent::bleStatus(millis(), false, true, "BLE disconnected"));
   }
 }
+
 
 void MiddlewareLink::enqueueBleLine(const String& line) {
   if (ble_inbound_count_ >= ble_inbound_lines_.size()) {
@@ -628,6 +617,9 @@ bool MiddlewareLink::sendBleCardputerMessage(const String& message) {
   return false;
 }
 #endif
+void MiddlewareLink::setRuntime(FirmwareRuntime* runtime) {
+  runtime_ = runtime;
+}
 
 void MiddlewareLink::applyIncomingEvent(DeviceState& state, const String& event_type, JsonObjectConst payload) {
   if (event_type == "hello_ack") {

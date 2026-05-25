@@ -5,6 +5,7 @@
 #include <ESPmDNS.h>
 
 #include "device_config.h"
+#include "runtime/resource_guard.h"
 
 namespace {
 constexpr unsigned long kRetryIntervalMs = 15000;
@@ -72,10 +73,15 @@ const RuntimeNetworkConfig& NetworkManager::config() const {
 }
 
 void NetworkManager::logMessage(const String& message) {
-  if (!config_.sd_mounted) {
+  const ResourceGuard::ScopedLock spi_guard(ResourceGuard::Kind::Spi, 25);
+  if (!spi_guard.acquired() || !config_.sd_mounted) {
     return;
   }
 
+  logMessageLocked(message);
+}
+
+void NetworkManager::logMessageLocked(const String& message) {
   ensureConfigDirectory();
 
   File file = SD.open(kLogPath, FILE_APPEND);
@@ -98,6 +104,11 @@ void NetworkManager::loadConfigFromSdCard() {
   config_.sd_mounted = false;
   config_.sd_config_loaded = false;
 
+  const ResourceGuard::ScopedLock spi_guard(ResourceGuard::Kind::Spi, 25);
+  if (!spi_guard.acquired()) {
+    return;
+  }
+
   SPI.begin(kSdSpiSckPin, kSdSpiMisoPin, kSdSpiMosiPin, kSdSpiCsPin);
   if (!SD.begin(kSdSpiCsPin, SPI, 25000000)) {
     return;
@@ -106,10 +117,10 @@ void NetworkManager::loadConfigFromSdCard() {
   config_.sd_mounted = true;
   ensureConfigDirectory();
   seedConfigTemplateIfMissing();
-  logMessage("SD card mounted");
+  logMessageLocked("SD card mounted");
 
   if (!SD.exists(kConfigPath)) {
-    logMessage("Config file not found, template seeded");
+    logMessageLocked("Config file not found, template seeded");
     return;
   }
 
@@ -172,12 +183,12 @@ void NetworkManager::loadConfigFromSdCard() {
   config_.sd_config_loaded = loaded_any_config;
   if (config_.sd_config_loaded) {
     if (config_.wifi_ssid.length() > 0) {
-      logMessage(String("Loaded SD config for SSID ") + config_.wifi_ssid);
+      logMessageLocked(String("Loaded SD config for SSID ") + config_.wifi_ssid);
     } else {
-      logMessage("Loaded SD config");
+      logMessageLocked("Loaded SD config");
     }
   } else {
-    logMessage("Loaded empty SD config");
+    logMessageLocked("Loaded empty SD config");
   }
 }
 void NetworkManager::ensureConfigDirectory() {

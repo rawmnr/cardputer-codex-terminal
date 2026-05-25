@@ -57,6 +57,27 @@ The phase also adds the shared widget foundation for the app screens, including 
 | display_task | Text rendering, status, approvals |
 | power_task | Battery, sleep, CPU frequency |
 
+## Phase B Runtime Ownership
+
+- `ui_task`: owns `AppShell`, rendering, LVGL, and all visible state transitions.
+- `network_task`: owns Wi-Fi bring-up, bridge polling, and background Codex transport ticks.
+- `keyboard_task`: owns `M5Cardputer.update()` and raw key polling, then posts bounded events for the UI task.
+- `ui_task` drains events and applies app actions/text input; queue overflow drops the newest low-priority event and increments diagnostics.
+
+## Resource Ownership
+
+| Resource | Owner | Guard |
+| --- | --- | --- |
+| LVGL/display state | `ui_task` | implicit UI-thread ownership |
+| SPI/SD writes | `network_task` and log/config helpers | `ResourceGuard::Kind::Spi` |
+| I2C keyboard polling | `keyboard_task` | `ResourceGuard::Kind::I2c` |
+| Bridge transport state | `network_task` | runtime shell mutex while mutating shell state |
+
+## Diagnostics
+
+- Runtime metrics log free heap, queue drops, lock contention, and task stack high-water marks.
+- SD logging uses the SPI guard, so SD writes no longer happen inline with rendering.
+- The LVGL flush path now takes the SPI guard so display updates fail closed instead of colliding with SD access.
 ## User Interface
 
 - App selection is menu-driven, opened with `Ctrl-M`, not a persistent tab bar.

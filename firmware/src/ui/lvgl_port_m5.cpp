@@ -1,4 +1,5 @@
 #include "lvgl_port.h"
+#include "runtime/resource_guard.h"
 
 #if USE_LVGL_UI && defined(ARDUINO)
 #include <M5Cardputer.h>
@@ -84,6 +85,11 @@ void LvglPort::flushArea(const lv_area_t* area, const uint8_t* px_map) {
   const int32_t width = area->x2 - area->x1 + 1;
   const int32_t height = area->y2 - area->y1 + 1;
   if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  const ResourceGuard::ScopedLock spi_guard(ResourceGuard::Kind::Spi, 5);
+  if (!spi_guard.acquired()) {
     return;
   }
 

@@ -100,6 +100,14 @@ class String : public std::string {
     return res == npos ? -1 : (int)res;
   }
 
+  int indexOf(const char* needle, size_t from = 0) const {
+    if (needle == nullptr || *needle == '\0') {
+      return from <= length() ? static_cast<int>(from) : -1;
+    }
+    const size_t res = find(needle, from);
+    return res == npos ? -1 : static_cast<int>(res);
+  }
+
   String operator+(const String& other) const {
     String res = *this;
     res.append(other);

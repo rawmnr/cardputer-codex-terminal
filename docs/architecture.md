@@ -80,6 +80,7 @@ Codex MCP tool call -> Windows middleware -> Cardputer prompt or notification ->
 - Treat the firmware as a binary deliverable first; source layout should always compile to a M5 Launcher-compatible `.bin`.
 - For development, prefer the browser preview and mirrored files under `.cardputer-dev/` before flashing the firmware.
 - The firmware should publish `display_snapshot` events so the preview can track the real on-device screen text when hardware is connected.
+- The firmware now runs a small runtime coordinator with separate UI, network/background, and keyboard tasks; the UI task owns visible state and rendering, while background work publishes through bounded events instead of mutating the screen directly.
 
 ## Glossary
 

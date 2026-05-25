@@ -38,6 +38,7 @@ class NetworkManager {
   void seedConfigTemplateIfMissing();
   void connect(DeviceState& state);
   static String trimCopy(String value);
+  void logMessageLocked(const String& message);
 
   unsigned long last_attempt_ms_ = 0;
   unsigned long connect_started_ms_ = 0;

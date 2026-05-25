@@ -18,6 +18,12 @@
 #include "input_router.h"
 #include "protocol.h"
 #include "terminal_snapshot.h"
+#include "runtime/app_event.h"
+#include "runtime/resource_guard.h"
+
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 
 namespace {
@@ -392,14 +398,79 @@ bool test_ble_state_surface() {
 bool test_runtime_network_config_surface() {
   RuntimeNetworkConfig config;
 
-  EXPECT_EQ(config.bridge_transport, String("hybrid"));
-  EXPECT_TRUE(config.ble_enabled);
+  EXPECT_EQ(config.bridge_transport, String("wifi"));
+  EXPECT_TRUE(!config.ble_enabled);
   EXPECT_EQ(config.ble_name, String("CardputerCodex"));
   EXPECT_TRUE(config.ble_control_only);
 
   return g_failures == 0;
 }
 
+bool test_app_event_queue_overflow() {
+  AppEventQueue<2> queue;
+  EXPECT_TRUE(queue.push(AppEvent::action(1, UiAction::Menu)));
+
+  String long_text(140, 'a');
+  AppEvent truncated = AppEvent::textInput(2, long_text, false, false);
+  EXPECT_TRUE(truncated.truncated);
+  EXPECT_TRUE(truncated.text_length < long_text.length());
+
+  EXPECT_TRUE(queue.push(AppEvent::textInput(3, "x", false, false)));
+  EXPECT_TRUE(!queue.push(AppEvent::log(4, "dropped")));
+  EXPECT_EQ(queue.droppedCount(), static_cast<uint32_t>(1));
+
+  AppEvent event;
+  EXPECT_TRUE(queue.pop(event));
+  EXPECT_EQ(event.type, AppEvent::Type::UiAction);
+  EXPECT_TRUE(queue.pop(event));
+  EXPECT_EQ(event.type, AppEvent::Type::TextInput);
+  EXPECT_TRUE(!queue.pop(event));
+
+  return g_failures == 0;
+}
+
+bool test_resource_guard_contention() {
+  ResourceGuard::begin();
+
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool ready = false;
+  bool release = false;
+
+  std::thread holder([&]() {
+    auto lock = ResourceGuard::lock(ResourceGuard::Kind::Spi, 5);
+    EXPECT_TRUE(lock.acquired());
+    {
+      std::lock_guard<std::mutex> guard(mutex);
+      ready = true;
+    }
+    cv.notify_one();
+
+    std::unique_lock<std::mutex> wait_lock(mutex);
+    cv.wait(wait_lock, [&]() { return release; });
+  });
+
+  {
+    std::unique_lock<std::mutex> wait_lock(mutex);
+    cv.wait(wait_lock, [&]() { return ready; });
+  }
+
+  auto blocked = ResourceGuard::lock(ResourceGuard::Kind::Spi, 0);
+  EXPECT_TRUE(!blocked.acquired());
+
+  const ResourceGuard::Stats stats = ResourceGuard::stats();
+  EXPECT_TRUE(stats.spi_timeouts > 0);
+  EXPECT_TRUE(stats.spi_contention > 0);
+
+  {
+    std::lock_guard<std::mutex> guard(mutex);
+    release = true;
+  }
+  cv.notify_one();
+  holder.join();
+
+  return g_failures == 0;
+}
 bool test_buddy_app_flows() {
   BuddyApp app;
   DeviceState state;
@@ -604,6 +675,10 @@ int main() {
     test_ble_state_surface();
     std::cout << "running runtime network config surface\n";
     test_runtime_network_config_surface();
+    std::cout << "running app event queue overflow\n";
+    test_app_event_queue_overflow();
+    std::cout << "running resource guard contention\n";
+    test_resource_guard_contention();
     std::cout << "running keyboard contracts\n";
     test_keyboard_contracts();
     std::cout << "running buddy app flows\n";

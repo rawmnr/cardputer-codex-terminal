@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WebSocketsClient.h>
+class FirmwareRuntime;
+class FirmwareRuntime;
 
 #include "device_state.h"
 class NimBLECharacteristic;
@@ -65,6 +67,10 @@ class MiddlewareLink {
   String buildBleAdvertisedName(const DeviceState& state) const;
   void enqueueBleLine(const String& line);
   bool dequeueBleLine(String& line);
+  void setRuntime(FirmwareRuntime* runtime);
+
+private:
+  FirmwareRuntime* runtime_ = nullptr;
 
   friend class MiddlewareBleServerCallbacks;
   friend class MiddlewareBleRxCallbacks;
