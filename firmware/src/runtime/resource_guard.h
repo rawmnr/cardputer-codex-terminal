@@ -21,6 +21,8 @@ class ResourceGuard {
     uint32_t i2c_timeouts = 0;
     uint32_t spi_contention = 0;
     uint32_t i2c_contention = 0;
+    uint32_t spi_max_hold_ms = 0;
+    uint32_t i2c_max_hold_ms = 0;
   };
 
   class ScopedLock {
@@ -51,10 +53,12 @@ class ResourceGuard {
     void moveFrom(ScopedLock& other) {
       kind_ = other.kind_;
       acquired_ = other.acquired_;
+      acquired_at_ms_ = other.acquired_at_ms_;
 #if !defined(ARDUINO) || defined(NATIVE_BUILD)
       mutex_ = other.mutex_;
 #endif
       other.acquired_ = false;
+      other.acquired_at_ms_ = 0;
 #if !defined(ARDUINO) || defined(NATIVE_BUILD)
       other.mutex_ = nullptr;
 #endif
@@ -74,14 +78,18 @@ class ResourceGuard {
 
       const TickType_t timeout_ticks = timeout_ms == portMAX_DELAY ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
       acquired_ = xSemaphoreTake(*mutex, timeout_ticks) == pdTRUE;
-      if (!acquired_) {
+      if (acquired_) {
+        acquired_at_ms_ = millis();
+      } else {
         ResourceGuard::recordContention(kind);
       }
 #else
       std::timed_mutex* mutex = &ResourceGuard::mutexFor(kind);
       mutex_ = mutex;
       acquired_ = mutex_->try_lock_for(std::chrono::milliseconds(timeout_ms));
-      if (!acquired_) {
+      if (acquired_) {
+        acquired_at_ms_ = millis();
+      } else {
         ResourceGuard::recordContention(kind);
       }
 #endif
@@ -103,11 +111,15 @@ class ResourceGuard {
       }
       mutex_ = nullptr;
 #endif
+      const uint32_t held_ms = acquired_at_ms_ == 0 ? 0 : static_cast<uint32_t>(millis() - acquired_at_ms_);
+      ResourceGuard::recordHold(kind_, held_ms);
+      acquired_at_ms_ = 0;
       acquired_ = false;
     }
 
     Kind kind_ = Kind::Spi;
     bool acquired_ = false;
+    uint32_t acquired_at_ms_ = 0;
 #if !defined(ARDUINO) || defined(NATIVE_BUILD)
     std::timed_mutex* mutex_ = nullptr;
 #endif
@@ -128,6 +140,8 @@ class ResourceGuard {
     snapshot.i2c_timeouts = i2c_timeouts_.load();
     snapshot.spi_contention = spi_contention_.load();
     snapshot.i2c_contention = i2c_contention_.load();
+    snapshot.spi_max_hold_ms = spi_max_hold_ms_.load();
+    snapshot.i2c_max_hold_ms = i2c_max_hold_ms_.load();
     return snapshot;
   }
 
@@ -136,6 +150,8 @@ class ResourceGuard {
     i2c_timeouts_ = 0;
     spi_contention_ = 0;
     i2c_contention_ = 0;
+    spi_max_hold_ms_ = 0;
+    i2c_max_hold_ms_ = 0;
   }
 
  private:
@@ -169,10 +185,28 @@ class ResourceGuard {
     }
   }
 
+  static void recordHold(Kind kind, uint32_t held_ms) {
+    if (held_ms == 0) {
+      return;
+    }
+    auto update_max = [held_ms](std::atomic<uint32_t>& target) {
+      uint32_t current = target.load();
+      while (held_ms > current && !target.compare_exchange_weak(current, held_ms)) {
+      }
+    };
+    if (kind == Kind::Spi) {
+      update_max(spi_max_hold_ms_);
+    } else {
+      update_max(i2c_max_hold_ms_);
+    }
+  }
+
   inline static std::atomic<uint32_t> spi_timeouts_{0};
   inline static std::atomic<uint32_t> i2c_timeouts_{0};
   inline static std::atomic<uint32_t> spi_contention_{0};
   inline static std::atomic<uint32_t> i2c_contention_{0};
+  inline static std::atomic<uint32_t> spi_max_hold_ms_{0};
+  inline static std::atomic<uint32_t> i2c_max_hold_ms_{0};
 
 #if defined(ARDUINO) && !defined(NATIVE_BUILD)
   inline static SemaphoreHandle_t spi_mutex_ = nullptr;

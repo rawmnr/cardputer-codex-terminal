@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <array>
 #include <iostream>
 
 #ifndef USE_LVGL_UI
@@ -17,6 +18,18 @@ class LvglPort {
   void pushKey(lv_key_t key, bool pressed);
   bool ready() const;
   lv_group_t* group() const;
+  struct DisplayMetrics {
+    uint32_t flush_count = 0;
+    uint32_t flush_failures = 0;
+    uint32_t flush_bytes = 0;
+    uint32_t flush_total_us = 0;
+    uint32_t flush_max_us = 0;
+    uint32_t buffer_bytes = 0;
+    uint32_t free_internal_heap = 0;
+    bool double_buffered = false;
+    bool ready = false;
+  };
+  const DisplayMetrics& metrics() const { return metrics_; }
 
  private:
   struct KeyEvent {
@@ -40,7 +53,13 @@ class LvglPort {
   lv_display_t* display_ = nullptr;
   lv_indev_t* keypad_ = nullptr;
   lv_group_t* group_ = nullptr;
+#if defined(ARDUINO) && !defined(NATIVE_BUILD)
+  lv_color_t* buffer_a_ = nullptr;
+  lv_color_t* buffer_b_ = nullptr;
+  size_t buffer_bytes_ = 0;
+#else
   std::array<lv_color_t, kBufferPixels> buffer_{};
+#endif
 #if !defined(ARDUINO) || defined(NATIVE_BUILD)
   std::array<uint16_t, kScreenWidth * kScreenHeight> full_framebuffer_{};
 #endif
@@ -48,6 +67,7 @@ class LvglPort {
   size_t key_head_ = 0;
   size_t key_tail_ = 0;
   unsigned long last_tick_ms_ = 0;
+  DisplayMetrics metrics_{};
 
  public:
 #if !defined(ARDUINO) || defined(NATIVE_BUILD)

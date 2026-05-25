@@ -9,6 +9,7 @@ constexpr unsigned long kDisplayLowPowerAfterMs = 120000;
 constexpr uint8_t kDisplayActiveBrightness = 128;
 constexpr uint8_t kDisplayDimBrightness = 32;
 constexpr uint8_t kDisplayLowPowerBrightness = 8;
+constexpr size_t kAppCount = 8;
 
 String trimmed_copy(const String& input) {
   String output = input;
@@ -82,6 +83,7 @@ void AppShell::begin() {
   display_brightness_ = 0xFF;
   display_power_state_ = DisplayPowerState::LowPower;
   last_display_trace_ = "";
+  state_.runtime = {};
   state_.firmware_name = "cardputer-codex-terminal";
   state_.active_app = AppId::Buddy;
   state_.ui_mode = UiMode::Home;
@@ -405,6 +407,16 @@ void AppShell::tickUi() {
 
 #if USE_LVGL_UI
   lvgl_screen_.tick();
+  const auto& display_metrics = lvgl_screen_.metrics();
+  state_.runtime.display.flush_count = display_metrics.flush_count;
+  state_.runtime.display.flush_failures = display_metrics.flush_failures;
+  state_.runtime.display.flush_bytes = display_metrics.flush_bytes;
+  state_.runtime.display.flush_total_us = display_metrics.flush_total_us;
+  state_.runtime.display.flush_max_us = display_metrics.flush_max_us;
+  state_.runtime.display.buffer_bytes = display_metrics.buffer_bytes;
+  state_.runtime.display.free_internal_heap = display_metrics.free_internal_heap;
+  state_.runtime.display.double_buffered = display_metrics.double_buffered;
+  state_.runtime.display.ready = display_metrics.ready;
 #endif
 
   const unsigned long now = millis();
@@ -423,6 +435,16 @@ void AppShell::tickUi() {
 void AppShell::tickBackground() {
   network_.tick(state_);
   bridge_.tick(state_);
+}
+
+void AppShell::updateRuntimeDiagnostics(const RuntimeDiagnostics& diagnostics) {
+  state_.runtime.keyboard = diagnostics.keyboard;
+  state_.runtime.bus = diagnostics.bus;
+  state_.runtime.event_queue_dropped = diagnostics.event_queue_dropped;
+}
+
+const RuntimeDiagnostics& AppShell::runtimeDiagnostics() const {
+  return state_.runtime;
 }
 
 void AppShell::tick() {
@@ -602,13 +624,13 @@ void AppShell::handleAction(UiAction action) {
 
   if (state_.menu.app_menu_open) {
     if (action == UiAction::Up) {
-      state_.menu.app_menu_selected = state_.menu.app_menu_selected == 0 ? 7 : state_.menu.app_menu_selected - 1;
+      state_.menu.app_menu_selected = state_.menu.app_menu_selected == 0 ? kAppCount - 1 : state_.menu.app_menu_selected - 1;
       render();
       return;
     }
 
     if (action == UiAction::Down) {
-      state_.menu.app_menu_selected = (state_.menu.app_menu_selected + 1) % 8;
+      state_.menu.app_menu_selected = (state_.menu.app_menu_selected + 1) % kAppCount;
       render();
       return;
     }
@@ -853,7 +875,7 @@ void AppShell::switchTo(AppId app_id) {
 }
 
 void AppShell::setActiveTab(size_t tab_index) {
-  const AppId app_id = appForTab(tab_index % 8);
+  const AppId app_id = appForTab(tab_index % kAppCount);
   switchTo(app_id);
 }
 
@@ -880,7 +902,7 @@ size_t AppShell::tabIndexForApp(AppId app_id) const {
 }
 
 AppId AppShell::appForTab(size_t tab_index) const {
-  switch (tab_index % 8) {
+  switch (tab_index % kAppCount) {
     case 0:
       return AppId::Buddy;
     case 1:

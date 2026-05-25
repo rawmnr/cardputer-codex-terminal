@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include <atomic>
 
+#ifndef CARDPUTER_KEYBOARD_IRQ_PIN
+#define CARDPUTER_KEYBOARD_IRQ_PIN -1
+#endif
+
 #if defined(ARDUINO) && !defined(NATIVE_BUILD)
 #include <M5Cardputer.h>
 #include <freertos/FreeRTOS.h>
@@ -26,6 +30,13 @@ class FirmwareRuntime {
     if (event_mutex_ == nullptr) {
       event_mutex_ = xSemaphoreCreateMutex();
     }
+    if (keyboard_irq_sem_ == nullptr && CARDPUTER_KEYBOARD_IRQ_PIN >= 0) {
+      keyboard_irq_sem_ = xSemaphoreCreateBinary();
+#if CARDPUTER_KEYBOARD_IRQ_PIN >= 0
+      pinMode(CARDPUTER_KEYBOARD_IRQ_PIN, INPUT_PULLUP);
+      attachInterruptArg(digitalPinToInterrupt(CARDPUTER_KEYBOARD_IRQ_PIN), keyboardIsrEntry, this, FALLING);
+#endif
+    }
 
     shell_.begin();
     lockShell([&]() { shell_.render(); });
@@ -36,6 +47,7 @@ class FirmwareRuntime {
   }
 
   void loop() { vTaskDelay(pdMS_TO_TICKS(250)); }
+  void enqueueEvent(const AppEvent& event) { postEvent(event); }
 
  private:
   struct ShellLock {
@@ -78,6 +90,7 @@ class FirmwareRuntime {
 
   static FirmwareRuntime* instanceFrom(void* self) { return static_cast<FirmwareRuntime*>(self); }
 
+  static void keyboardIsrEntry(void* self) { instanceFrom(self)->keyboardIsr(); }
   static void uiTaskEntry(void* self) { instanceFrom(self)->uiTask(); }
   static void backgroundTaskEntry(void* self) { instanceFrom(self)->backgroundTask(); }
   static void keyboardTaskEntry(void* self) { instanceFrom(self)->keyboardTask(); }
@@ -91,6 +104,7 @@ class FirmwareRuntime {
   }
 
   void postEvent(const AppEvent& event) {
+    ++keyboard_event_count_;
     EventLock lock(event_mutex_);
     if (!lock) {
       ++dropped_events_;
@@ -141,8 +155,14 @@ class FirmwareRuntime {
 
   void keyboardTask() {
     for (;;) {
-      pollKeyboard();
-      vTaskDelay(pdMS_TO_TICKS(5));
+      if (keyboard_irq_sem_ != nullptr) {
+        const BaseType_t signaled = xSemaphoreTake(keyboard_irq_sem_, pdMS_TO_TICKS(10));
+        (void)signaled;
+        pollKeyboard();
+      } else {
+        pollKeyboard();
+        vTaskDelay(pdMS_TO_TICKS(5));
+      }
     }
   }
 
@@ -182,9 +202,20 @@ class FirmwareRuntime {
     }
   }
 
+  void keyboardIsr() {
+    if (keyboard_irq_sem_ != nullptr) {
+      BaseType_t higher_priority_woken = pdFALSE;
+      ++keyboard_irq_count_;
+      xSemaphoreGiveFromISR(keyboard_irq_sem_, &higher_priority_woken);
+      portYIELD_FROM_ISR(higher_priority_woken);
+    }
+  }
+
   void pollKeyboard() {
+    ++keyboard_poll_count_;
     const ResourceGuard::ScopedLock i2c_guard(ResourceGuard::Kind::I2c, 2);
     if (!i2c_guard.acquired()) {
+      ++keyboard_i2c_failures_;
       return;
     }
 
@@ -339,6 +370,24 @@ class FirmwareRuntime {
     const ResourceGuard::Stats guard_stats = ResourceGuard::stats();
     const uint32_t free_heap = ESP.getFreeHeap();
 
+    RuntimeDiagnostics diagnostics;
+    diagnostics.bus.spi_timeouts = guard_stats.spi_timeouts;
+    diagnostics.bus.i2c_timeouts = guard_stats.i2c_timeouts;
+    diagnostics.bus.spi_contention = guard_stats.spi_contention;
+    diagnostics.bus.i2c_contention = guard_stats.i2c_contention;
+    diagnostics.bus.spi_max_hold_ms = guard_stats.spi_max_hold_ms;
+    diagnostics.bus.i2c_max_hold_ms = guard_stats.i2c_max_hold_ms;
+    diagnostics.keyboard.irq_count = keyboard_irq_count_.load();
+    diagnostics.keyboard.poll_count = keyboard_poll_count_.load();
+    diagnostics.keyboard.event_count = keyboard_event_count_.load();
+    diagnostics.keyboard.i2c_failures = keyboard_i2c_failures_.load();
+    diagnostics.event_queue_dropped = dropped_events_.load();
+    RuntimeDiagnostics snapshot;
+    lockShell([&]() {
+      shell_.updateRuntimeDiagnostics(diagnostics);
+      snapshot = shell_.runtimeDiagnostics();
+    });
+
     EventLock lock(event_mutex_);
     const size_t queue_size = lock ? events_.size() : 0;
     const uint32_t dropped = dropped_events_.load();
@@ -354,6 +403,28 @@ class FirmwareRuntime {
     Serial.print(guard_stats.spi_timeouts);
     Serial.print(" i2c_to=");
     Serial.print(guard_stats.i2c_timeouts);
+    Serial.print(" kb_irq=");
+    Serial.print(diagnostics.keyboard.irq_count);
+    Serial.print(" kb_poll=");
+    Serial.print(diagnostics.keyboard.poll_count);
+    Serial.print(" kb_evt=");
+    Serial.print(diagnostics.keyboard.event_count);
+    Serial.print(" kb_i2c=");
+    Serial.print(diagnostics.keyboard.i2c_failures);
+    Serial.print(" flush=");
+    Serial.print(snapshot.display.flush_count);
+    Serial.print(" flush_fail=");
+    Serial.print(snapshot.display.flush_failures);
+    Serial.print(" flush_max=");
+    Serial.print(snapshot.display.flush_max_us);
+    Serial.print(" buf=");
+    Serial.print(snapshot.display.buffer_bytes);
+    Serial.print(" free=");
+    Serial.print(snapshot.display.free_internal_heap);
+    Serial.print(" dbuf=");
+    Serial.print(snapshot.display.double_buffered ? 1 : 0);
+    Serial.print(" ready=");
+    Serial.print(snapshot.display.ready ? 1 : 0);
     Serial.print(" ui_stack=");
     Serial.print(ui_task_ != nullptr ? uxTaskGetStackHighWaterMark(ui_task_) : 0);
     Serial.print(" bg_stack=");
@@ -368,6 +439,7 @@ class FirmwareRuntime {
   AppEventQueue<64> events_;
   SemaphoreHandle_t shell_mutex_ = nullptr;
   SemaphoreHandle_t event_mutex_ = nullptr;
+  SemaphoreHandle_t keyboard_irq_sem_ = nullptr;
   TaskHandle_t ui_task_ = nullptr;
   TaskHandle_t background_task_ = nullptr;
   TaskHandle_t keyboard_task_ = nullptr;
@@ -380,6 +452,10 @@ class FirmwareRuntime {
   bool space_hold_started_ = false;
   unsigned long space_pressed_at_ms_ = 0;
   unsigned long last_metrics_log_ms_ = 0;
+  std::atomic<uint32_t> keyboard_irq_count_{0};
+  std::atomic<uint32_t> keyboard_poll_count_{0};
+  std::atomic<uint32_t> keyboard_event_count_{0};
+  std::atomic<uint32_t> keyboard_i2c_failures_{0};
   std::atomic<uint32_t> dropped_events_{0};
   String prev_word_;
 };

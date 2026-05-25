@@ -192,6 +192,41 @@ struct ApprovalInboxState {
   ApprovalsScreen screen = ApprovalsScreen::Inbox;
 };
 
+struct DisplayDiagnostics {
+  uint32_t flush_count = 0;
+  uint32_t flush_failures = 0;
+  uint32_t flush_bytes = 0;
+  uint32_t flush_total_us = 0;
+  uint32_t flush_max_us = 0;
+  uint32_t buffer_bytes = 0;
+  uint32_t free_internal_heap = 0;
+  bool double_buffered = false;
+  bool ready = false;
+};
+
+struct KeyboardDiagnostics {
+  uint32_t irq_count = 0;
+  uint32_t poll_count = 0;
+  uint32_t event_count = 0;
+  uint32_t i2c_failures = 0;
+};
+
+struct BusDiagnostics {
+  uint32_t spi_timeouts = 0;
+  uint32_t i2c_timeouts = 0;
+  uint32_t spi_contention = 0;
+  uint32_t i2c_contention = 0;
+  uint32_t spi_max_hold_ms = 0;
+  uint32_t i2c_max_hold_ms = 0;
+};
+
+struct RuntimeDiagnostics {
+  DisplayDiagnostics display;
+  KeyboardDiagnostics keyboard;
+  BusDiagnostics bus;
+  uint32_t event_queue_dropped = 0;
+};
+
 struct DeviceState {
   static constexpr size_t kActivityLogSize = 8;
 
@@ -240,6 +275,7 @@ struct DeviceState {
   String wifi_ip;
   String network_status_line;
   String status_line;
+  RuntimeDiagnostics runtime;
   String codex_usage_label;
   String codex_usage_detail_line;
   PagerViewState pager;

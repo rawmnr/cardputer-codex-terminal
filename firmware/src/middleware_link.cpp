@@ -522,13 +522,14 @@ void MiddlewareLink::onBleIncomingChunk(const uint8_t* data, size_t length) {
 
 void MiddlewareLink::onBleConnected() {
   if (runtime_ != nullptr) {
-    runtime_->postEvent(AppEvent::bleStatus(millis(), true, false, String("BLE connected: ") + ble_device_name_));
+    const String message = String("BLE connected: ") + ble_device_name_;
+    runtime_->enqueueEvent(AppEvent::bleStatus(millis(), true, false, message.c_str()));
   }
 }
 
 void MiddlewareLink::onBleDisconnected() {
   if (runtime_ != nullptr) {
-    runtime_->postEvent(AppEvent::bleStatus(millis(), false, true, "BLE disconnected"));
+    runtime_->enqueueEvent(AppEvent::bleStatus(millis(), false, true, "BLE disconnected"));
   }
 }
 

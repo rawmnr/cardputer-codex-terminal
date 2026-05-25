@@ -1,6 +1,7 @@
 #include "lvgl_port.h"
 
 #if USE_LVGL_UI && (!defined(ARDUINO) || defined(NATIVE_BUILD))
+#include <chrono>
 
 namespace {
 LvglPort* g_port = nullptr;
@@ -12,6 +13,7 @@ void LvglPort::begin() {
   keypad_ = nullptr;
   key_head_ = 0;
   key_tail_ = 0;
+  metrics_ = {};
   buffer_.fill(lv_color_black());
   full_framebuffer_.fill(0);
 
@@ -26,6 +28,7 @@ void LvglPort::begin() {
 
   display_ = lv_display_create(kScreenWidth, kScreenHeight);
   if (display_ == nullptr) {
+    metrics_.ready = false;
     return;
   }
 
@@ -33,6 +36,8 @@ void LvglPort::begin() {
   lv_display_set_buffers(display_, buffer_.data(), nullptr, sizeof(buffer_), LV_DISPLAY_RENDER_MODE_PARTIAL);
   lv_display_set_flush_cb(display_, flushCb);
   lv_display_set_default(display_);
+  metrics_.buffer_bytes = static_cast<uint32_t>(sizeof(buffer_));
+  metrics_.double_buffered = false;
 
   group_ = lv_group_create();
   if (group_ == nullptr) {
@@ -47,6 +52,7 @@ void LvglPort::begin() {
   lv_indev_set_type(keypad_, LV_INDEV_TYPE_KEYPAD);
   lv_indev_set_read_cb(keypad_, readCb);
   lv_indev_set_group(keypad_, group_);
+  metrics_.ready = true;
 }
 
 void LvglPort::tick() {
@@ -116,6 +122,7 @@ void LvglPort::flushArea(const lv_area_t* area, const uint8_t* px_map) {
   }
 
   const uint16_t* src = reinterpret_cast<const uint16_t*>(px_map);
+  const auto start = std::chrono::steady_clock::now();
   for (int32_t y = 0; y < height; ++y) {
     for (int32_t x = 0; x < width; ++x) {
       const int32_t dst_x = area->x1 + x;
@@ -124,6 +131,15 @@ void LvglPort::flushArea(const lv_area_t* area, const uint8_t* px_map) {
         full_framebuffer_[dst_y * kScreenWidth + dst_x] = src[y * width + x];
       }
     }
+  }
+
+  const uint32_t bytes = static_cast<uint32_t>(width * height * static_cast<int32_t>(sizeof(lv_color_t)));
+  const uint32_t elapsed_us = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
+  ++metrics_.flush_count;
+  metrics_.flush_bytes += bytes;
+  metrics_.flush_total_us += elapsed_us;
+  if (elapsed_us > metrics_.flush_max_us) {
+    metrics_.flush_max_us = elapsed_us;
   }
 }
 

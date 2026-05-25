@@ -154,6 +154,7 @@ const uint16_t* LvglScreen::framebuffer() const {
 
 void LvglScreen::begin() {
   port_.begin();
+  navigation_ = {};
   if (!port_.ready()) {
     return;
   }
@@ -256,8 +257,8 @@ void LvglScreen::syncMenuState(const DeviceState& state) {
     return;
   }
 
-  const bool modal_open = state.approval_pending || state.bridge_prompt_kind != BridgePromptKind::None;
-  const bool menu_open = state.menu.app_menu_open && !modal_open;
+  const bool modal_open = navigation_.modal_open;
+  const bool menu_open = navigation_.menu_open && !modal_open;
   if (menu_open != last_menu_open_) {
     if (menu_open) {
       lv_obj_clear_flag(tabs_, LV_OBJ_FLAG_HIDDEN);
@@ -278,8 +279,8 @@ void LvglScreen::syncMenuState(const DeviceState& state) {
 }
 
 void LvglScreen::syncModalState(const DeviceState& state) {
-  const bool approval_open = state.approval_pending;
-  const bool bridge_modal_open = state.bridge_prompt_kind != BridgePromptKind::None;
+  const bool approval_open = navigation_.overlay == OverlayKind::Approval;
+  const bool bridge_modal_open = navigation_.overlay == OverlayKind::BridgePrompt;
 
   if (!approval_open && !bridge_modal_open) {
     modal_.setVisible(false);
@@ -362,8 +363,7 @@ void LvglScreen::syncContentScreen(const DeviceState& state) {
     return;
   }
 
-  const bool modal_open = state.approval_pending || state.bridge_prompt_kind != BridgePromptKind::None;
-  const bool content_open = !state.menu.app_menu_open && !modal_open;
+  const bool content_open = navigation_.content_open;
   LvglAppScreen* desired_screen = content_open
                                     ? screenForApp(state.active_app,
                                                    buddy_screen_,
@@ -405,6 +405,7 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
     begin();
   }
 
+  updateNavigationState(state);
   syncMenuState(state);
   syncModalState(state);
   syncPttState(state);
@@ -574,6 +575,26 @@ void LvglScreen::renderShell(const DeviceState& state, App& app, const String& i
 
 void LvglScreen::pushKey(uint32_t key, bool pressed) {
   port_.pushKey(static_cast<lv_key_t>(key), pressed);
+}
+
+void LvglScreen::updateNavigationState(const DeviceState& state) {
+  navigation_.previous = navigation_.current;
+  navigation_.app = state.active_app;
+  navigation_.menu_open = state.menu.app_menu_open;
+  navigation_.modal_open = state.approval_pending || state.bridge_prompt_kind != BridgePromptKind::None;
+  navigation_.overlay = state.approval_pending ? OverlayKind::Approval
+                                              : state.bridge_prompt_kind != BridgePromptKind::None ? OverlayKind::BridgePrompt
+                                                                                                    : OverlayKind::None;
+  if (navigation_.modal_open) {
+    navigation_.current = ScreenId::Modal;
+  } else if (navigation_.menu_open) {
+    navigation_.current = ScreenId::Menu;
+  } else if (state.active_app != AppId::Buddy) {
+    navigation_.current = ScreenId::Content;
+  } else {
+    navigation_.current = ScreenId::Home;
+  }
+  navigation_.content_open = navigation_.current == ScreenId::Content;
 }
 
 void LvglScreen::tick() {

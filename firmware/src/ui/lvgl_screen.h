@@ -32,8 +32,21 @@ class LvglScreen {
   void pushKey(uint32_t key, bool pressed);
   void tick();
   const uint16_t* framebuffer() const;
+  const LvglPort::DisplayMetrics& metrics() const { return port_.metrics(); }
 
  private:
+  enum class ScreenId : uint8_t { Home, Menu, Content, Modal };
+  enum class OverlayKind : uint8_t { None, Approval, BridgePrompt };
+  struct NavigationState {
+    ScreenId current = ScreenId::Home;
+    ScreenId previous = ScreenId::Home;
+    OverlayKind overlay = OverlayKind::None;
+    AppId app = AppId::Buddy;
+    bool menu_open = false;
+    bool content_open = false;
+    bool modal_open = false;
+  };
+
   static constexpr size_t kNoSelection = static_cast<size_t>(-1);
   static const char* const kTabMap[];
 
@@ -41,6 +54,8 @@ class LvglScreen {
   static size_t tabIndexForApp(AppId app_id);
   static const char* tabLabel(size_t index);
   static void onTabEvent(lv_event_t* event);
+
+  void updateNavigationState(const DeviceState& state);
 
   void syncMenuState(const DeviceState& state);
   void syncModalState(const DeviceState& state);
@@ -71,6 +86,7 @@ class LvglScreen {
   lv_obj_t* focus_ = nullptr;
   lv_obj_t* footer_ = nullptr;
   lv_obj_t* tabs_ = nullptr;
+  NavigationState navigation_{};
   String last_title_;
   String last_active_app_;
   String last_status_;

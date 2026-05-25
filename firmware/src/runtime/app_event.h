@@ -25,11 +25,18 @@ struct AppEvent {
     BleStatus,
   };
 
+  enum class KeyAction : uint8_t {
+    Press = 0,
+    Release = 1,
+    Repeat = 2,
+  };
 
   Type type = Type::None;
   uint32_t timestamp_ms = 0;
   UiAction ui_action = UiAction::None;
   bool pressed = false;
+  KeyAction key_action = KeyAction::Press;
+  uint8_t key_repeat = 0;
   bool submit = false;
   bool backspace = false;
   bool truncated = false;
@@ -44,12 +51,14 @@ struct AppEvent {
     return event;
   }
 
-  static AppEvent keyboard(uint32_t timestamp_ms, uint16_t key_code, bool key_pressed) {
+  static AppEvent keyboard(uint32_t timestamp_ms, uint16_t key_code, bool key_pressed, bool repeated = false) {
     AppEvent event;
     event.type = Type::KeyboardKey;
     event.timestamp_ms = timestamp_ms;
     event.value = key_code;
     event.pressed = key_pressed;
+    event.key_action = repeated ? KeyAction::Repeat : (key_pressed ? KeyAction::Press : KeyAction::Release);
+    event.key_repeat = repeated ? 1 : 0;
     return event;
   }
 

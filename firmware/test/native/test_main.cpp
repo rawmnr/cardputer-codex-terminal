@@ -429,6 +429,25 @@ bool test_app_event_queue_overflow() {
   return g_failures == 0;
 }
 
+bool test_app_event_keyboard_metadata() {
+  const AppEvent press = AppEvent::keyboard(11, 42, true);
+  EXPECT_EQ(press.type, AppEvent::Type::KeyboardKey);
+  EXPECT_TRUE(press.pressed);
+  EXPECT_EQ(press.value, static_cast<uint16_t>(42));
+  EXPECT_EQ(press.key_action, AppEvent::KeyAction::Press);
+  EXPECT_EQ(press.key_repeat, static_cast<uint8_t>(0));
+
+  const AppEvent release = AppEvent::keyboard(12, 42, false);
+  EXPECT_TRUE(!release.pressed);
+  EXPECT_EQ(release.key_action, AppEvent::KeyAction::Release);
+
+  const AppEvent repeat = AppEvent::keyboard(13, 42, true, true);
+  EXPECT_EQ(repeat.key_action, AppEvent::KeyAction::Repeat);
+  EXPECT_EQ(repeat.key_repeat, static_cast<uint8_t>(1));
+
+  return g_failures == 0;
+}
+
 bool test_resource_guard_contention() {
   ResourceGuard::begin();
 
@@ -468,6 +487,9 @@ bool test_resource_guard_contention() {
   }
   cv.notify_one();
   holder.join();
+
+  const ResourceGuard::Stats final_stats = ResourceGuard::stats();
+  EXPECT_TRUE(final_stats.spi_max_hold_ms > 0);
 
   return g_failures == 0;
 }
@@ -677,6 +699,8 @@ int main() {
     test_runtime_network_config_surface();
     std::cout << "running app event queue overflow\n";
     test_app_event_queue_overflow();
+    std::cout << "running app event keyboard metadata\n";
+    test_app_event_keyboard_metadata();
     std::cout << "running resource guard contention\n";
     test_resource_guard_contention();
     std::cout << "running keyboard contracts\n";

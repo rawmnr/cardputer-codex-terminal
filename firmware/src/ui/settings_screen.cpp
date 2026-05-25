@@ -105,12 +105,45 @@ void SettingsScreen::sync(const DeviceState& state) {
       break;
     case 1:
       detail = state.bridge_status_line.length() > 0 ? state.bridge_status_line : String("(idle)");
+      detail += "\nSPI to ";
+      detail += state.runtime.bus.spi_timeouts;
+      detail += " max ";
+      detail += state.runtime.bus.spi_max_hold_ms;
+      detail += "ms";
+      detail += "\nI2C to ";
+      detail += state.runtime.bus.i2c_timeouts;
+      detail += " max ";
+      detail += state.runtime.bus.i2c_max_hold_ms;
+      detail += "ms";
       break;
     case 2:
       detail = "Ctrl-M menu\nFn+;/. move\nEnter select\nDel back\nSpace PTT";
+      detail += "\nKB irq ";
+      detail += state.runtime.keyboard.irq_count;
+      detail += " poll ";
+      detail += state.runtime.keyboard.poll_count;
+      detail += " evt ";
+      detail += state.runtime.keyboard.event_count;
       break;
     case 3:
       detail = state.firmware_name;
+      detail += "\nFlush ";
+      detail += state.runtime.display.flush_count;
+      detail += " fail ";
+      detail += state.runtime.display.flush_failures;
+      detail += " max ";
+      detail += state.runtime.display.flush_max_us;
+      detail += "us";
+      detail += "\nBuf ";
+      detail += state.runtime.display.buffer_bytes;
+      detail += " free ";
+      detail += state.runtime.display.free_internal_heap;
+      detail += " dbuf ";
+      detail += state.runtime.display.double_buffered ? 1 : 0;
+      detail += " ready ";
+      detail += state.runtime.display.ready ? 1 : 0;
+      detail += " drop ";
+      detail += state.runtime.event_queue_dropped;
       break;
     default:
       detail = "";

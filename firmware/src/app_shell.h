@@ -24,6 +24,8 @@ class AppShell {
   void tickUi();
   void tickBackground();
   void render();
+  void updateRuntimeDiagnostics(const RuntimeDiagnostics& diagnostics);
+  const RuntimeDiagnostics& runtimeDiagnostics() const;
   void handleTextInput(const String& typed, bool submit, bool backspace);
   void handleAction(UiAction action);
   void handlePushToTalk(bool pressed);

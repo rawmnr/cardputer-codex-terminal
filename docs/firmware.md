@@ -16,19 +16,19 @@ cardputer-codex-terminal.bin
 
 ## UI Backends
 
-Phase 1 of the LVGL migration uses two PlatformIO environments:
+Phase C uses three build targets:
 
-- `cardputer_codex` builds the LVGL-backed proof-of-concept UI.
-- `cardputer_codex_legacy` keeps the existing text renderer as the fallback.
+- `cardputer_codex` builds hardware with LVGL enabled.
+- `preview` runs the native LVGL preview with a mirrored framebuffer.
+- `native_tests` keeps logic tests on the text path.
 
-The active path is controlled by the `USE_LVGL_UI` build flag.
+`USE_LVGL_UI` selects the runtime UI backend. Hardware runs retained-mode LVGL screens; preview mirrors the same screen tree; text mode remains the fallback path for non-UI tests.
 
-The shell remains the source of truth for app and menu state; the LVGL layer mirrors that state and keeps focus/selection visible without doing a second, conflicting state transition.
-The display lifecycle now uses active, dimmed, and low-power brightness levels, and any key press restores a safe visible brightness instead of dropping the panel to black.
-Approval requests and bridge prompts are rendered as LVGL modals with a shared dialog widget; notification prompts can be dismissed with `Enter` or `Del`.
-Push-to-talk now has a dedicated LVGL recording panel that shows armed, recording, ready, and error states along with the peak level and capture progress details.
-Phase 6 now routes every app through its own native LVGL screen via the `LvglAppScreen` interface, with Buddy, Push, Pager, Usage, MCP Bridge, and Settings each owning their content area while the legacy text renderer remains the fallback path behind `USE_LVGL_UI=0`.
-The phase also adds the shared widget foundation for the app screens, including the list/detail and value-row patterns needed for the theme and future BLE work.
+The shell stays source of truth for app/menu state. LVGL mirrors that state, keeps focus/selection visible, and never performs a second, conflicting transition.
+The display lifecycle uses active, dimmed, and low-power brightness levels, and any key press restores visible brightness instead of blacking the panel out.
+Approval requests and bridge prompts are LVGL modals with shared dialog widgets; notification prompts dismiss with `Enter` or `Del`.
+Push-to-talk has a dedicated LVGL recording panel that shows armed, recording, ready, and error states plus peak level and capture progress.
+Each app owns its retained-mode screen via `LvglAppScreen`; Buddy, Push, Pager, Usage, MCP Bridge, and Settings each own their content area.
 
 ## Packaging Assumptions
 
@@ -57,11 +57,11 @@ The phase also adds the shared widget foundation for the app screens, including 
 | display_task | Text rendering, status, approvals |
 | power_task | Battery, sleep, CPU frequency |
 
-## Phase B Runtime Ownership
+## Phase C Runtime Ownership
 
 - `ui_task`: owns `AppShell`, rendering, LVGL, and all visible state transitions.
 - `network_task`: owns Wi-Fi bring-up, bridge polling, and background Codex transport ticks.
-- `keyboard_task`: owns `M5Cardputer.update()` and raw key polling, then posts bounded events for the UI task.
+- `keyboard_task`: owns I2C keyboard access, IRQ wakeups when available, and bounded event posting for the UI task.
 - `ui_task` drains events and applies app actions/text input; queue overflow drops the newest low-priority event and increments diagnostics.
 
 ## Resource Ownership
@@ -75,7 +75,7 @@ The phase also adds the shared widget foundation for the app screens, including 
 
 ## Diagnostics
 
-- Runtime metrics log free heap, queue drops, lock contention, and task stack high-water marks.
+- Runtime metrics log free heap, queue drops, SPI/I2C contention, keyboard IRQ/poll counts, display flush timings, and task stack high-water marks.
 - SD logging uses the SPI guard, so SD writes no longer happen inline with rendering.
 - The LVGL flush path now takes the SPI guard so display updates fail closed instead of colliding with SD access.
 ## User Interface

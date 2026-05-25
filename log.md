@@ -10,3 +10,6 @@
 - Phase B firmware split uses a UI/background task boundary with a bounded in-memory event queue for keyboard-driven actions; the queue is a ring buffer to keep native/preview builds simple.
 - SPI/I2C access is guarded with a small scoped lock helper; SD logging and LVGL flush now take the SPI guard instead of touching shared bus state directly.
 - Phase B finalized: runtime task isolation, I2C/SPI resource protection, queue overflow policy, and BLE callback safety using AppEvents. All tests passed.
+
+- Phase C UI/performance refactor chose retained-mode LVGL double buffering on hardware, with native preview mirroring and a polling fallback for keyboard IRQ because the verified interrupt pin is still unknown. Runtime diagnostics now surface display flush, keyboard, and bus metrics in Settings.
+- `FirmwareRuntime` now exposes a narrow `enqueueEvent()` wrapper for cross-task event injection; BLE callbacks use that instead of touching the queue directly.
