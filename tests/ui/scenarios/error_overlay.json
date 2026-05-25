@@ -1,0 +1,8 @@
+{
+  "name": "error_overlay",
+  "active_app": 4,
+  "steps": [
+    { "type": "command", "value": "/notify Simulator error: bridge disconnected", "label": "open" },
+    { "type": "action", "value": "select", "label": "dismiss" }
+  ]
+}

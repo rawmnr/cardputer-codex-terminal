@@ -1,0 +1,7 @@
+{
+  "name": "terminal_typing",
+  "active_app": 1,
+  "steps": [
+    { "type": "text", "value": "Hello Codex", "label": "typed" }
+  ]
+}

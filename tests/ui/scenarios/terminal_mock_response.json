@@ -1,0 +1,32 @@
+{
+  "name": "terminal_mock_response",
+  "active_app": 1,
+  "steps": [
+    {
+      "type": "event",
+      "value": "wifi_connecting",
+      "label": "wifi_connecting"
+    },
+    {
+      "type": "event",
+      "value": "wifi_connected",
+      "label": "wifi_connected"
+    },
+    {
+      "type": "event",
+      "value": "codex_request_started",
+      "label": "codex_request_started"
+    },
+    {
+      "type": "event",
+      "value": "token_chunk",
+      "text": "Token chunk: The simulator can show long response text without truncation.",
+      "label": "token_chunk"
+    },
+    {
+      "type": "event",
+      "value": "codex_response_completed",
+      "label": "codex_response_completed"
+    }
+  ]
+}

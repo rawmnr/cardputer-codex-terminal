@@ -68,9 +68,13 @@ def run_lvgl_preview(
     """
     if binary_path is None:
         candidates = [
+            workspace_root / "firmware" / ".pio" / "build" / "simulator" / "program.exe",
             workspace_root / "firmware" / ".pio" / "build" / "preview" / "program.exe",
+            workspace_root / "firmware" / "simulator.exe",
             workspace_root / "firmware" / "preview.exe",
+            workspace_root / "firmware" / ".pio" / "build" / "simulator" / "program",
             workspace_root / "firmware" / ".pio" / "build" / "preview" / "program",
+            workspace_root / "firmware" / "simulator",
             workspace_root / "firmware" / "preview",
         ]
         for candidate in candidates:
@@ -80,7 +84,7 @@ def run_lvgl_preview(
 
     if binary_path is None or not binary_path.exists():
         raise RuntimeError(
-            "LVGL preview binary not found. Please build the 'preview' environment in the firmware directory."
+            "LVGL simulator binary not found. Please build the 'simulator' or 'preview' environment in the firmware directory."
         )
 
     fixture_data: dict[str, Any] = {}
@@ -92,7 +96,7 @@ def run_lvgl_preview(
             fixture_data = json.loads(fixture_file.read_text(encoding="utf-8"))
 
     app_id = _screen_label_to_app_id(screen)
-    if app_id is not None:
+    if app_id is not None and "active_app" not in fixture_data:
         fixture_data["active_app"] = app_id
 
     if actions:

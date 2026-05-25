@@ -32,8 +32,27 @@ python -m platformio run -e preview
 ```
 
 The preview fixtures under `firmware/preview/fixtures/` and the shared golden fixtures under `tests/contracts/terminal_snapshots/` are used to validate terminal rendering and key UI states.
+## 4. UI simulator regression loop
 
-## 4. Middleware unit and integration tests
+Run the SDL3 host simulator and compare screenshot baselines from the repo root:
+
+```bash
+./scripts/test-ui-sim.sh
+```
+
+Update approved baselines intentionally:
+
+```bash
+./scripts/update-ui-baselines.sh
+```
+
+Set `SDL3_DIR` to the `x86_64-w64-mingw32` root from `SDL3-devel-3.4.8-mingw` when building on Windows with the bundled toolchain.
+
+Scenario JSON lives under `tests/ui/scenarios/`; PNG baselines live under `tests/ui/baselines/`; failure artifacts land in `tests/ui/artifacts/`.
+
+
+## 5. Middleware unit and integration tests
+
 
 Run the host middleware suite:
 
@@ -44,7 +63,8 @@ uv run pytest tests -v
 
 These tests use fake serial bridges and fake Codex transports; no real serial device or Codex call is required.
 
-## 5. Shared protocol contract tests
+## 6. Shared protocol contract tests
+
 
 The shared JSON contracts live under `tests/contracts/`.
 
@@ -54,7 +74,7 @@ The shared JSON contracts live under `tests/contracts/`.
 
 Both the firmware native runner and the middleware contract tests consume the same fixtures.
 
-## 6. HIL smoke tests
+## 7. HIL smoke tests
 
 Hardware-in-the-loop checks stay narrow and optional/manual/nightly:
 

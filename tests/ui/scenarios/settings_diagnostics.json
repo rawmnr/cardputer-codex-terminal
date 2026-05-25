@@ -1,0 +1,7 @@
+{
+  "name": "settings_diagnostics",
+  "active_app": 5,
+  "steps": [
+    { "type": "command", "value": "/status Diagnostics nominal", "label": "settings" }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "home_to_terminal",
+  "active_app": 0,
+  "steps": [
+    { "type": "command", "value": "/app push", "label": "terminal" }
+  ]
+}

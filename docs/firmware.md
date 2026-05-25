@@ -16,10 +16,11 @@ cardputer-codex-terminal.bin
 
 ## UI Backends
 
-Phase C uses three build targets:
+Phase C uses four build targets:
 
 - `cardputer_codex` builds hardware with LVGL enabled.
 - `preview` runs the native LVGL preview with a mirrored framebuffer.
+- `simulator` is the SDL3-backed host simulator target used by the visual regression loop.
 - `native_tests` keeps logic tests on the text path.
 
 `USE_LVGL_UI` selects the runtime UI backend. Hardware runs retained-mode LVGL screens; preview mirrors the same screen tree; text mode remains the fallback path for non-UI tests.

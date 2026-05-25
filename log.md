@@ -13,3 +13,5 @@
 
 - Phase C UI/performance refactor chose retained-mode LVGL double buffering on hardware, with native preview mirroring and a polling fallback for keyboard IRQ because the verified interrupt pin is still unknown. Runtime diagnostics now surface display flush, keyboard, and bus metrics in Settings.
 - `FirmwareRuntime` now exposes a narrow `enqueueEvent()` wrapper for cross-task event injection; BLE callbacks use that instead of touching the queue directly.
+- Phase D simulator now builds against SDL3, not SDL2. The Windows host package is `SDL3-devel-3.4.8-mingw`; the build script copies `libSDL3.dll.a` into the repo-local MinGW search path and drops `SDL3.dll` beside the simulator binary so the regression loop can run without manual linker setup.
+- `tests/ui/scenarios/terminal_mock_response.json` now drives the host simulator through event-style network states (`wifi_connecting`, `codex_request_started`, `token_chunk`, etc.) so the screenshot loop covers streamed response UI, not just typed commands.

@@ -1,0 +1,8 @@
+{
+  "name": "boot_to_home",
+  "active_app": 0,
+  "steps": [
+    { "type": "wait", "ticks": 4, "label": "boot" },
+    { "type": "command", "value": "/status Boot complete", "label": "home" }
+  ]
+}
