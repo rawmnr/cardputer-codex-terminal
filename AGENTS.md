@@ -135,6 +135,8 @@ If a tool is unavailable locally, report that clearly and include what was not v
 
 For refactors that touch multiple files or require design tradeoffs, maintain a short scratch log in `LOG.md` at the repo root while working.
 
+Before starting, read `LOG.md` for prior decisions.
+
 Log only decision-grade notes:
 - assumptions that mattered
 - tradeoffs considered and chosen
@@ -142,4 +144,6 @@ Log only decision-grade notes:
 - things that were ambiguous or underspecified
 - follow-up risks you want the next reader to see
 
-Keep it terse and current; update it as decisions change. Remove or archive it when the work is done if it is no longer useful.
+Update the log after each meaningful decision, and update it again before commits.
+
+Keep it terse and current. Delete stale decisions and replace them with the new one when the old note is no longer true. Remove or archive it when the work is done if it is no longer useful.
